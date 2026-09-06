@@ -1,0 +1,15 @@
+{
+  "name": "bre-ai",
+  "version": "3.0.0",
+  "description": "Bre AI - Kecerdasan Buatan Tanpa Batas by Amirun Rayan Ariandi",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "author": "Amirun Rayan Ariandi",
+  "license": "MIT"
+}

@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bre AI - Enterprise Proxy Router & Control Center</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+    body {
+      background: #08090d;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    /* Top Sticky Navigation Bar */
+    .top-nav {
+      position: sticky;
+      top: 0;
+      background: rgba(13, 16, 23, 0.96);
+      backdrop-filter: blur(14px);
+      border-bottom: 1px solid #1e2433;
+      padding: 14px 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 1000;
+      box-shadow: 0 4px 25px rgba(0,0,0,0.5);
+    }
+    .brand-title {
+      font-weight: 700;
+      font-size: 18px;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .brand-badge {
+      font-size: 11px;
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+    }
+    .top-actions {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    
+    /* Main Layout */
+    .main-container {
+      max-width: 1050px;
+      width: 100%;
+      margin: 28px auto;
+      padding: 0 20px 80px 20px;
+      flex: 1;
+    }
+    
+    /* Tab Bar */
+    .tab-bar {
+      display: flex;
+      gap: 6px;
+      border-bottom: 1px solid #1e2433;
+      margin-bottom: 24px;
+      padding-bottom: 2px;
+      overflow-x: auto;
+    }
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      padding: 10px 18px;
+      font-size: 14px;
+      font-weight: 500;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .tab-btn:hover {
+      color: #fff;
+      background: #141824;
+    }
+    .tab-btn.active {
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.12);
+      font-weight: 600;
+    }
+    
+    /* Preset Bar */
+    .presets-bar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+      padding: 12px 16px;
+      background: #0f121a;
+      border: 1px solid #1e2433;
+      border-radius: 10px;
+      align-items: center;
+    }
+    .preset-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #64748b;
+      margin-right: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .preset-btn {
+      background: #161b26;
+      border: 1px solid #232a3b;
+      color: #cbd5e1;
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .preset-btn:hover {
+      background: #232a3b;
+      color: #38bdf8;
+      border-color: #38bdf8;
+    }
+    
+    /* Card Elements */
+    .card {
+      background: #10131a;
+      border: 1px solid #1e2433;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+    }
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .card-title {
+      font-size: 17px;
+      font-weight: 600;
+      color: #f8fafc;
+    }
+    .card-subtitle {
+      font-size: 13px;
+      color: #64748b;
+      margin-top: 4px;
+      line-height: 1.4;
+    }
+    
+    /* Provider Cards */
+    .provider-box {
+      background: #0a0c12;
+      border: 1px solid #202738;
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 20px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .provider-box:hover {
+      border-color: #333e56;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+    .provider-box-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      border-bottom: 1px solid #1a202c;
+      padding-bottom: 12px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    
+    /* Form Inputs */
+    .form-group {
+      margin-bottom: 18px;
+    }
+    .form-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: #94a3b8;
+      margin-bottom: 6px;
+    }
+    .form-hint {
+      font-size: 12px;
+      color: #64748b;
+      margin-top: 5px;
+      line-height: 1.4;
+    }
+    .input-text, .input-select, .input-textarea {
+      width: 100%;
+      background: #06070a;
+      border: 1px solid #232a3b;
+      color: #f1f5f9;
+      padding: 11px 14px;
+      border-radius: 8px;
+      font-size: 14px;
+      outline: none;
+      transition: all 0.2s;
+    }
+    .input-text:focus, .input-select:focus, .input-textarea:focus {
+      border-color: #38bdf8;
+      box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
+    }
+    .input-textarea {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    
+    /* Grid Utilities */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+    .grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 16px; }
+    @media (max-width: 768px) {
+      .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+    }
+    
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s;
+      text-decoration: none;
+    }
+    .btn-save {
+      background: #0284c7;
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35);
+    }
+    .btn-save:hover {
+      background: #0369a1;
+      box-shadow: 0 6px 20px rgba(2, 132, 199, 0.45);
+    }
+    .btn-outline {
+      background: transparent;
+      color: #cbd5e1;
+      border: 1px solid #232a3b;
+    }
+    .btn-outline:hover {
+      background: #141824;
+      color: #fff;
+      border-color: #384259;
+    }
+    .btn-ping {
+      background: rgba(56, 189, 248, 0.1);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      font-size: 12px;
+      padding: 5px 12px;
+    }
+    .btn-ping:hover {
+      background: #0284c7;
+      color: #fff;
+    }
+    .btn-danger {
+      background: rgba(239, 68, 68, 0.12);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.25);
+      font-size: 12px;
+      padding: 5px 12px;
+    }
+    .btn-danger:hover {
+      background: #ef4444;
+      color: #fff;
+    }
+    
+    /* Badges */
+    .ping-badge {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 4px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .ping-badge.ok { background: rgba(34, 197, 94, 0.15); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.3); }
+    .ping-badge.fail { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+    .ping-badge.testing { background: rgba(234, 179, 8, 0.15); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.3); }
+
+    /* Login Overlay */
+    .login-overlay {
+      position: fixed;
+      inset: 0;
+      background: #06070a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      padding: 20px;
+    }
+    .login-card {
+      background: #10131a;
+      border: 1px solid #1e2433;
+      border-radius: 14px;
+      padding: 36px;
+      width: 100%;
+      max-width: 420px;
+      text-align: center;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+    }
+    
+    /* Toast System */
+    .toast-hub {
+      position: fixed;
+      top: 24px;
+      right: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      z-index: 10000;
+    }
+    .toast {
+      background: #161b26;
+      border: 1px solid #283348;
+      color: #fff;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      animation: toastIn 0.25s ease;
+      transition: opacity 0.3s;
+    }
+    .toast.ok { border-color: #22c55e; color: #86efac; }
+    .toast.err { border-color: #ef4444; color: #fca5a5; }
+    @keyframes toastIn { from { transform: translateY(-10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  </style>
+</head>
+<body>
+
+<!-- Login Overlay Screen -->
+<div class="login-overlay" id="loginOverlay">
+  <div class="login-card">
+    <div style="font-size: 28px; font-weight: 700; color: #fff; margin-bottom: 6px;">⚡ Bre AI Panel</div>
+    <p style="color: #64748b; font-size: 14px; margin-bottom: 24px;">Proxy Router & Master Configuration</p>
+    <form onsubmit="event.preventDefault();doLogin()">
+      <div class="form-group" style="text-align: left;">
+        <label class="form-label">Password Panel</label>
+        <input type="password" id="pwInput" class="input-text" placeholder="Masukkan Password Admin" required>
+      </div>
+      <button type="submit" class="btn btn-save" style="width: 100%; padding: 12px; margin-top: 10px;">Buka Panel Kontrol</button>
+    </form>
+    <a href="/" style="display: block; margin-top: 20px; color: #64748b; font-size: 13px; text-decoration: none;">← Kembali ke Chat Utama</a>
+  </div>
+</div>
+
+<!-- Main App Container -->
+<div id="appContainer" style="display: none; flex-direction: column; min-height: 100vh;">
+  
+  <!-- Always-Visible Sticky Header with Save Button -->
+  <header class="top-nav">
+    <div class="brand-title">
+      ⚡ Bre AI Control Center
+      <span class="brand-badge">9Router Enterprise Proxy</span>
+    </div>
+    <div class="top-actions">
+      <a href="/" class="btn btn-outline" style="padding: 8px 16px; font-size: 13px;">Chat Utama</a>
+      <button class="btn btn-save" onclick="saveAllConfig()">💾 Simpan Semua Pengaturan</button>
+    </div>
+  </header>
+
+  <main class="main-container">
+    
+    <!-- Tab Navigation -->
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="switchTab('tabProviders', this)">🔌 Endpoints & Routing</button>
+      <button class="tab-btn" onclick="switchTab('tabEngine', this)">⚙️ Global Engine</button>
+      <button class="tab-btn" onclick="switchTab('tabSecurity', this)">🛡️ Keamanan & Klien API</button>
+      <button class="tab-btn" onclick="switchTab('tabTester', this)">📊 Live Model Tester</button>
+      <button class="tab-btn" onclick="switchTab('tabBackup', this)">📦 Backup & Restore</button>
+    </div>
+
+    <!-- TAB 1: PROVIDERS & ROUTING -->
+    <div id="tabProviders" class="tab-content">
+      
+      <!-- Preset Quick Templates -->
+      <div class="presets-bar">
+        <span class="preset-label">Template Cepat:</span>
+        <button class="preset-btn" onclick="addPreset('inception')">⚡ Inception Labs</button>
+        <button class="preset-btn" onclick="addPreset('openai')">🟢 OpenAI</button>
+        <button class="preset-btn" onclick="addPreset('groq')">⚡ Groq (Ultra Fast)</button>
+        <button class="preset-btn" onclick="addPreset('deepseek')">🔵 DeepSeek</button>
+        <button class="preset-btn" onclick="addPreset('openrouter')">🌐 OpenRouter</button>
+        <button class="preset-btn" onclick="addPreset('together')">🤝 Together AI</button>
+        <button class="preset-btn" onclick="addPreset('ollama')">💻 Ollama (Local)</button>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Daftar Endpoint AI (Multi-Provider Router)</div>
+            <div class="card-subtitle">Atur upstream endpoint AI, pemetaan alias model, uji latensi ping, dan rotasi kunci API (Load Balancing).</div>
+          </div>
+          <button class="btn btn-outline" onclick="addProvider()">+ Tambah Provider Manual</button>
+        </div>
+        
+        <div id="providersList"></div>
+      </div>
+    </div>
+
+    <!-- TAB 2: GLOBAL ENGINE -->
+    <div id="tabEngine" class="tab-content" style="display: none;">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Konfigurasi Inti AI</div>
+            <div class="card-subtitle">Instruksi dasar dan batasan parameter model secara global.</div>
+          </div>
+          <div style="display: flex; gap: 6px;">
+            <button class="btn btn-outline" style="font-size: 12px; padding: 4px 10px;" onclick="applyPromptPreset('master')">Prompt Standar</button>
+            <button class="btn btn-outline" style="font-size: 12px; padding: 4px 10px;" onclick="applyPromptPreset('dev')">Developer / Code</button>
+            <button class="btn btn-outline" style="font-size: 12px; padding: 4px 10px;" onclick="applyPromptPreset('speed')">Ringkas & Cepat</button>
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Master System Prompt (Identitas & Karakter Mutlak AI)</label>
+          <textarea id="cfgPrompt" class="input-textarea" rows="8"></textarea>
+          <div class="form-hint">System prompt ini akan disuntikkan ke setiap percakapan untuk mengunci persona Bre AI ciptaan Amirun Rayan Ariandi.</div>
+        </div>
+        
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Default Temperature (Kreativitas: 0.0 - 2.0)</label>
+            <input type="number" id="cfgTemp" class="input-text" step="0.05" min="0" max="2">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Default Top-P (0.0 - 1.0)</label>
+            <input type="number" id="cfgTopP" class="input-text" step="0.05" min="0" max="1">
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Frequency Penalty (-2.0 s/d 2.0)</label>
+            <input type="number" id="cfgFreqPenalty" class="input-text" step="0.1" min="-2" max="2" placeholder="0.0">
+            <div class="form-hint">Mencegah pengulangan kata yang sama.</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Presence Penalty (-2.0 s/d 2.0)</label>
+            <input type="number" id="cfgPresPenalty" class="input-text" step="0.1" min="-2" max="2" placeholder="0.0">
+            <div class="form-hint">Mendorong model membahas topik baru.</div>
+          </div>
+        </div>
+        
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Default Max Output Tokens</label>
+            <input type="number" id="cfgMaxTokens" class="input-text" placeholder="16384">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Paksa Mode Streaming</label>
+            <select id="cfgStream" class="input-select">
+              <option value="auto">Ikuti Request Client (Auto)</option>
+              <option value="true">Paksa Streaming (Force Active)</option>
+              <option value="false">Matikan Streaming (Force Disabled)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: SECURITY & CLIENT KEYS -->
+    <div id="tabSecurity" class="tab-content" style="display: none;">
+      <div class="card">
+        <div class="card-title">Kredensial Admin & Master Client Key</div>
+        <div class="card-subtitle" style="margin-bottom: 20px;">Ganti password login admin dan buat API Key untuk integrasi aplikasi pihak ketiga (NextChat, Cherry Studio, Cline, dll).</div>
+        
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Ganti Password Admin</label>
+            <input type="password" id="cfgNewPw" class="input-text" placeholder="Kosongkan jika tidak ingin mengubah password">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Master Client API Key (Opsional)</label>
+            <div style="display: flex; gap: 8px;">
+              <input type="text" id="cfgClientKey" class="input-text" placeholder="sk-bre-ai-master-key...">
+              <button class="btn btn-outline" style="white-space: nowrap;" onclick="generateRandomKey()">🎲 Generate</button>
+            </div>
+            <div class="form-hint">Gunakan key ini untuk menghubungkan aplikasi desktop/web eksternal ke proxy Bre AI Anda.</div>
+          </div>
+        </div>
+        
+        <div class="grid-2" style="margin-top: 10px;">
+          <div class="form-group">
+            <label class="form-label">Maksimal Request Per IP (Rate Limit)</label>
+            <input type="number" id="cfgRateMax" class="input-text" placeholder="5">
+            <div class="form-hint">Batas request sebelum IP diblokir sementara (Anti-Spam).</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Rentang Waktu Blokir (Detik)</label>
+            <input type="number" id="cfgRateWin" class="input-text" placeholder="30">
+            <div class="form-hint">Lama waktu blokir dalam hitungan detik (HTTP 429).</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 4: LIVE MODEL TESTER -->
+    <div id="tabTester" class="tab-content" style="display: none;">
+      <div class="card">
+        <div class="card-title">Live Model Query & Latency Inspector</div>
+        <div class="card-subtitle" style="margin-bottom: 20px;">Uji respon dan kecepatan model AI langsung dari panel admin tanpa membuka tab chat.</div>
+        
+        <div class="grid-2" style="margin-bottom: 16px;">
+          <div class="form-group">
+            <label class="form-label">Pilih Model Uji</label>
+            <select id="testModelSelect" class="input-select"></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Pesan Uji</label>
+            <input type="text" id="testPromptInput" class="input-text" value="Hai Bre AI, perkenalkan dirimu secara singkat.">
+          </div>
+        </div>
+        
+        <div style="display: flex; gap: 10px; margin-bottom: 16px;">
+          <button class="btn btn-save" id="btnRunTest" onclick="runLiveTest()">⚡ Kirim Query Uji</button>
+          <button class="btn btn-outline" onclick="clearLiveOutput()">Bersihkan Output</button>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">Output & Respon Server:</label>
+          <div id="testOutputArea" style="background: #06070a; border: 1px solid #1e2433; border-radius: 8px; padding: 14px; min-height: 120px; font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #94a3b8; white-space: pre-wrap;">Tekan 'Kirim Query Uji' untuk melihat respon...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 5: BACKUP & RESTORE -->
+    <div id="tabBackup" class="tab-content" style="display: none;">
+      <div class="card">
+        <div class="card-title">Backup, Restore & Reset Konfigurasi</div>
+        <div class="card-subtitle" style="margin-bottom: 20px;">Cadangkan seluruh konfigurasi proxy Anda, pulihkan dari file JSON, atau reset ke pengaturan awal.</div>
+        
+        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+          <button class="btn btn-outline" onclick="exportConfigJSON()">📥 Download Backup (config.json)</button>
+          <button class="btn btn-outline" onclick="document.getElementById('importFile').click()">📤 Import File Backup</button>
+          <input type="file" id="importFile" accept=".json" style="display: none;" onchange="importConfigFile(event)">
+          <button class="btn btn-danger" onclick="resetToFactoryDefault()">⚠️ Reset Pengaturan Awal</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Secondary Save Button -->
+    <div style="display: flex; justify-content: flex-end; margin-top: 30px;">
+      <button class="btn btn-save" style="padding: 14px 32px; font-size: 15px;" onclick="saveAllConfig()">💾 Simpan Semua Pengaturan</button>
+    </div>
+
+  </main>
+</div>
+
+<!-- Toast Hub -->
+<div id="toastHub" class="toast-hub"></div>
+
+<script src="/admin.js"></script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+{
+  "endpoints": [
+    {
+      "name": "Inception Labs",
+      "url": "https://api.inceptionlabs.ai/v1/chat/completions",
+      "keys": [
+        "sk-your-api-key-here"
+      ],
+      "models": [
+        "mercury-2"
+      ],
+      "mapping": [
+        "gpt-4o:mercury-2",
+        "claude-3-5-sonnet:mercury-2"
+      ],
+      "status": true,
+      "weight": 1
+    }
+  ],
+  "model": "mercury-2",
+  "adminPassword": "admin",
+  "maxTokens": 16384,
+  "temperature": 0.7,
+  "topP": 1,
+  "frequencyPenalty": 0,
+  "presencePenalty": 0,
+  "rateLimitMax": 5,
+  "rateLimitWindow": 30
+}
