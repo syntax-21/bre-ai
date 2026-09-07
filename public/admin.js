@@ -805,8 +805,8 @@ async function runBatchLatencyTest() {
       return `
         <tr>
           <td style="font-weight: 700; font-size: 14px; text-align: center;">${rankBadge}</td>
-          <td style="font-weight: 600; color: #f1f5f9;">${item.name}</td>
-          <td style="color: #94a3b8; font-size: 12px;">${item.model}</td>
+          <td style="font-weight: 600; color: #f1f5f9;">${item.name || item.provider || 'Provider'}</td>
+          <td style="color: #94a3b8; font-size: 12px;">${item.model || '-'}</td>
           <td style="font-family: monospace; font-weight: 600; color: #38bdf8;">${latText}</td>
           <td>${httpBadge}</td>
           <td>${statusBadge} ${item.error ? `<span style="font-size:11px;color:#f87171;margin-left:6px;">(${item.error})</span>` : ''}</td>

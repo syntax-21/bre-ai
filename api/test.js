@@ -22,12 +22,14 @@ module.exports = async (req, res) => {
 
   // BATCH TEST ALL PROVIDERS
   if (body.testAll) {
-    const endpoints = cfg.endpoints || [];
+    const endpoints = (Array.isArray(body.endpoints) && body.endpoints.length) ? body.endpoints : (cfg.endpoints || []);
     const probes = endpoints.map(async ep => {
       const firstKey = ep.keys?.[0] || '';
+      const provName = ep.name || 'Provider';
       if (!firstKey) {
         return {
-          provider: ep.name,
+          name: provName,
+          provider: provName,
           url: ep.url,
           status: 'NO_KEY',
           latencyMs: 9999,
@@ -58,7 +60,8 @@ module.exports = async (req, res) => {
 
         if (r.ok) {
           return {
-            provider: ep.name,
+            name: provName,
+            provider: provName,
             url: ep.url,
             model: testModel,
             status: 'OK',
@@ -68,7 +71,8 @@ module.exports = async (req, res) => {
         } else {
           const errText = await r.text().then(t => t.slice(0, 100));
           return {
-            provider: ep.name,
+            name: provName,
+            provider: provName,
             url: ep.url,
             model: testModel,
             status: 'FAIL',
@@ -79,7 +83,8 @@ module.exports = async (req, res) => {
         }
       } catch (err) {
         return {
-          provider: ep.name,
+          name: provName,
+          provider: provName,
           url: ep.url,
           model: testModel,
           status: 'FAIL',
