@@ -5,9 +5,15 @@ module.exports = (req, res) => {
   const cfg = getConfig();
   
   let allModels = [];
+  let providers = [];
   if (cfg.endpoints) {
     cfg.endpoints.forEach(e => {
       if (e.status !== false) {
+        providers.push({
+          name: e.name || 'Unnamed Provider',
+          defaultModel: e.models?.[0] || '',
+          models: e.models || []
+        });
         if (e.models) allModels.push(...e.models);
         if (e.mapping) {
           const mapStr = Array.isArray(e.mapping) ? e.mapping.join(',') : e.mapping;
@@ -25,8 +31,10 @@ module.exports = (req, res) => {
     name: 'Bre AI',
     version: '4.0 Proxy Router',
     creator: 'Amirun Rayan Ariandi',
+    providers: providers,
     models: [...new Set(allModels)],
     streamEnabled: cfg.streamEnabled !== false,
     status: 'online'
   });
 };
+

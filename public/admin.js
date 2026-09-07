@@ -1,5 +1,10 @@
 let adminToken = '';
 let endpoints = [];
+let clientKeys = [];
+let telegramUsers = [];
+let allLogs = [];
+let metricsTimer = null;
+let logsTimer = null;
 
 const PRESET_TEMPLATES = {
   inception: {
@@ -73,9 +78,13 @@ function switchTab(tabId, btn) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
   btn.classList.add('active');
-  document.getElementById(tabId).style.display = 'block';
+  const target = document.getElementById(tabId);
+  if (target) target.style.display = 'block';
   
   if (tabId === 'tabTester') updateTestModelDropdown();
+  if (tabId === 'tabAnalytics') loadMetrics();
+  if (tabId === 'tabLogs') loadLogs();
+  if (tabId === 'tabTelegram') loadTelegramStatus();
 }
 
 async function doLogin() {
@@ -91,8 +100,11 @@ async function doLogin() {
       adminToken = pw;
       document.getElementById('loginOverlay').style.display = 'none';
       document.getElementById('appContainer').style.display = 'flex';
-      loadConfig();
-      toast('Login berhasil!', 'ok');
+      await loadConfig();
+      loadMetrics();
+      loadLogs();
+      initTimers();
+      toast('Login berhasil! Selamat datang di Bre AI Control Center.', 'ok');
     } else {
       let err = 'Password salah';
       try { const d = await r.json(); if (d.error) err = d.error; } catch(e){}
@@ -100,6 +112,15 @@ async function doLogin() {
     }
   } catch(e) {
     toast('Gagal menghubungi server', 'err');
+  }
+}
+
+function initTimers() {
+  if (document.getElementById('autoRefreshMetrics')?.checked) {
+    if (!metricsTimer) metricsTimer = setInterval(loadMetrics, 5000);
+  }
+  if (document.getElementById('autoRefreshLogs')?.checked) {
+    if (!logsTimer) logsTimer = setInterval(loadLogs, 5000);
   }
 }
 
@@ -114,6 +135,24 @@ async function loadConfig() {
     
     endpoints = c.endpoints || [];
     
+    // Auto Failover
+    const afEl = document.getElementById('cfgAutoFailover');
+    if (afEl) afEl.checked = c.autoFailover !== false;
+
+    // Cache
+    const cacheEl = document.getElementById('cfgCacheEnabled');
+    if (cacheEl) cacheEl.checked = !!c.cacheEnabled;
+    const cacheTtlEl = document.getElementById('cfgCacheTTL');
+    if (cacheTtlEl) cacheTtlEl.value = c.cacheTTL || 3600;
+
+    // Blacklist
+    const blEl = document.getElementById('cfgBlacklist');
+    if (blEl) blEl.value = (c.blacklist || []).join('\n');
+
+    // Multi-Client Keys
+    clientKeys = Array.isArray(c.clientKeys) ? c.clientKeys : [];
+    renderClientKeys();
+
     // Engine
     document.getElementById('cfgPrompt').value = c.systemPrompt || '';
     document.getElementById('cfgTemp').value = c.temperature ?? 0.7;
@@ -128,6 +167,24 @@ async function loadConfig() {
     document.getElementById('cfgRateMax').value = c.rateLimitMax || 5;
     document.getElementById('cfgRateWin').value = c.rateLimitWindow || 30;
     
+    // Telegram Bot
+    const tgEn = document.getElementById('cfgTelegramEnabled');
+    if (tgEn) tgEn.checked = !!c.telegramEnabled;
+    const tgTok = document.getElementById('cfgTelegramToken');
+    if (tgTok) tgTok.value = c.telegramBotToken || '';
+    const tgOwner = document.getElementById('cfgTelegramOwner');
+    if (tgOwner) tgOwner.value = c.telegramOwnerId || '';
+    const tgMode = document.getElementById('cfgTelegramAccessMode');
+    if (tgMode) tgMode.value = c.telegramAccessMode || 'public';
+    const tgWl = document.getElementById('cfgTelegramWhitelist');
+    if (tgWl) tgWl.value = c.telegramAllowedUsers || '';
+
+    telegramUsers = Array.isArray(c.telegramUsers) ? c.telegramUsers : [];
+    renderTelegramUsersTable();
+
+    updateTelegramModelDropdown(c.telegramModel);
+    loadTelegramStatus();
+
     renderProviders();
     updateTestModelDropdown();
   } catch(e) {
@@ -213,17 +270,34 @@ function renderProviders() {
         <div class="form-group" style="margin-bottom:0;">
           <label class="form-label">Model Mapping / Alias (alias:asli)</label>
           <input type="text" class="input-text p-mapping" value="${(ep.mapping || []).join(', ')}" placeholder="claude-3-opus:mercury-2, gpt-4:mercury-2">
-          <div class="form-hint">Format 9router: Jika klien meminta model alias, diteruskan ke model asli.</div>
+          <div class="form-hint">Format: Jika klien meminta model alias, diteruskan ke model asli.</div>
         </div>
       </div>
       
       <div class="form-group" style="margin-bottom:0;">
-        <label class="form-label">API Keys (Multi-Key Round Robin - Satu key per baris)</label>
-        <textarea class="input-textarea p-keys" rows="3" placeholder="sk_key_1&#10;sk_key_2">${(ep.keys || []).join('\n')}</textarea>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <label class="form-label" style="margin-bottom:0;">API Keys (Multi-Key Round Robin - Satu key per baris)</label>
+          <button type="button" class="btn btn-outline" style="font-size:11px; padding:3px 8px;" onclick="toggleKeyMask(${i})" id="keyMaskBtn_${i}">👁️ Tampilkan Kunci</button>
+        </div>
+        <textarea class="input-textarea p-keys masked-key" id="pKeys_${i}" rows="3" placeholder="sk_key_1&#10;sk_key_2">${(ep.keys || []).join('\n')}</textarea>
         <div class="form-hint">Server akan otomatis merotasi kunci (Round-Robin) untuk menghindari rate limit.</div>
       </div>
     </div>
   `).join('');
+}
+
+function toggleKeyMask(i) {
+  const ta = document.getElementById(`pKeys_${i}`);
+  const btn = document.getElementById(`keyMaskBtn_${i}`);
+  if (!ta || !btn) return;
+  const isMasked = ta.classList.contains('masked-key');
+  if (isMasked) {
+    ta.classList.remove('masked-key');
+    btn.textContent = '🔒 Sembunyikan Kunci';
+  } else {
+    ta.classList.add('masked-key');
+    btn.textContent = '👁️ Tampilkan Kunci';
+  }
 }
 
 function addProvider() {
@@ -302,6 +376,358 @@ async function pingProvider(i) {
     }
     toast('Error ping: ' + e.message, 'err');
   }
+}
+
+async function runBatchLatencyTest() {
+  syncProvidersFromUI();
+  const box = document.getElementById('benchmarkLeaderboardBox');
+  const tbody = document.getElementById('benchmarkTableBody');
+  const btn = document.getElementById('btnBatchBenchmark');
+
+  box.style.display = 'block';
+  tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #38bdf8; padding: 24px;">⏳ Menguji semua endpoint secara paralel...</td></tr>`;
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Sedang Menguji...'; }
+
+  try {
+    const r = await fetch('/api/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ testAll: true, endpoints: endpoints })
+    });
+    const data = await r.json();
+    const results = data.results || [];
+
+    if (!results.length) {
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #64748b; padding: 20px;">Tidak ada provider aktif untuk diuji.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = results.map((item, idx) => {
+      let rankBadge = `${idx + 1}`;
+      if (idx === 0) rankBadge = `🥇 1`;
+      else if (idx === 1) rankBadge = `🥈 2`;
+      else if (idx === 2) rankBadge = `🥉 3`;
+
+      let statusBadge = '';
+      if (item.status === 'OK') {
+        if (item.latencyMs < 500) statusBadge = `<span class="ping-badge ok">⚡ Ultra Fast</span>`;
+        else if (item.latencyMs < 1500) statusBadge = `<span class="ping-badge ok">🟢 Normal</span>`;
+        else statusBadge = `<span class="ping-badge testing">🟡 Lambat</span>`;
+      } else {
+        statusBadge = `<span class="ping-badge fail">🔴 Offline/Error</span>`;
+      }
+
+      const latText = item.latencyMs !== null ? `${item.latencyMs} ms` : '-';
+      const httpBadge = item.httpStatus ? `<span class="ping-badge ${item.status === 'OK' ? 'ok' : 'fail'}">${item.httpStatus}</span>` : `<span class="ping-badge fail">Err</span>`;
+
+      return `
+        <tr>
+          <td style="font-weight: 700; font-size: 14px; text-align: center;">${rankBadge}</td>
+          <td style="font-weight: 600; color: #f1f5f9;">${item.name}</td>
+          <td style="color: #94a3b8; font-size: 12px;">${item.model}</td>
+          <td style="font-family: monospace; font-weight: 600; color: #38bdf8;">${latText}</td>
+          <td>${httpBadge}</td>
+          <td>${statusBadge} ${item.error ? `<span style="font-size:11px;color:#f87171;margin-left:6px;">(${item.error})</span>` : ''}</td>
+        </tr>
+      `;
+    }).join('');
+
+    toast('Parallel probe benchmark selesai!', 'ok');
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #f87171; padding: 20px;">Gagal menguji: ${e.message}</td></tr>`;
+    toast('Benchmark gagal: ' + e.message, 'err');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '⚡ Test Semua Provider (Parallel Benchmark)'; }
+  }
+}
+
+async function loadMetrics() {
+  if (!adminToken) return;
+  try {
+    const r = await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
+      body: JSON.stringify({ action: 'get_metrics' })
+    });
+    if (!r.ok) return;
+    const data = await r.json();
+    const m = data.metrics || {};
+
+    const totalReq = m.totalRequests || 0;
+    const successReq = m.successfulRequests || 0;
+    const failReq = m.failedRequests || 0;
+
+    const elTotal = document.getElementById('metricTotalReq');
+    if (elTotal) elTotal.textContent = totalReq.toLocaleString();
+
+    const elSuccessFail = document.getElementById('metricSuccessFail');
+    if (elSuccessFail) elSuccessFail.textContent = `${successReq.toLocaleString()} sukses · ${failReq.toLocaleString()} gagal`;
+
+    const elTokens = document.getElementById('metricTotalTokens');
+    if (elTokens) elTokens.textContent = (m.totalTokens || 0).toLocaleString();
+
+    const elErrRate = document.getElementById('metricErrorRate');
+    if (elErrRate) elErrRate.textContent = m.errorRate || '0.0%';
+
+    const elFailed = document.getElementById('metricFailedReq');
+    if (elFailed) elFailed.textContent = `${failReq.toLocaleString()} error upstream`;
+
+    const elAvgLat = document.getElementById('metricAvgLatency');
+    if (elAvgLat) elAvgLat.textContent = `${m.avgLatencyMs || 0} ms`;
+
+    const elCacheSize = document.getElementById('metricCacheSize');
+    if (elCacheSize) elCacheSize.textContent = `${m.cacheSize || 0} item`;
+
+    // Provider distribution
+    const provContainer = document.getElementById('providerDistributionList');
+    if (provContainer) {
+      const pEntries = Object.entries(m.providerHits || {});
+      if (pEntries.length === 0) {
+        provContainer.innerHTML = '<div style="color: #64748b; font-size: 13px; text-align: center; padding: 20px;">Belum ada trafik upstream terekam.</div>';
+      } else {
+        provContainer.innerHTML = pEntries.map(([prov, count]) => {
+          const pct = totalReq > 0 ? Math.round((count / totalReq) * 100) : 0;
+          return `
+            <div class="bar-row">
+              <div class="bar-label" title="${prov}">${prov}</div>
+              <div class="bar-track">
+                <div class="bar-fill" style="width: ${pct}%;"></div>
+              </div>
+              <div class="bar-val">${count} (${pct}%)</div>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+
+    // Model distribution
+    const modelContainer = document.getElementById('modelDistributionList');
+    if (modelContainer) {
+      const mEntries = Object.entries(m.modelHits || {});
+      if (mEntries.length === 0) {
+        modelContainer.innerHTML = '<div style="color: #64748b; font-size: 13px; text-align: center; padding: 20px;">Belum ada query model terekam.</div>';
+      } else {
+        modelContainer.innerHTML = mEntries.map(([mod, count]) => {
+          const pct = totalReq > 0 ? Math.round((count / totalReq) * 100) : 0;
+          return `
+            <div class="bar-row">
+              <div class="bar-label" title="${mod}">${mod}</div>
+              <div class="bar-track">
+                <div class="bar-fill" style="width: ${pct}%; background: linear-gradient(90deg, #10b981, #06b6d4);"></div>
+              </div>
+              <div class="bar-val">${count} (${pct}%)</div>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+  } catch(e) {
+    console.error('loadMetrics error:', e);
+  }
+}
+
+function toggleAutoRefreshMetrics(el) {
+  if (el.checked) {
+    if (!metricsTimer) metricsTimer = setInterval(loadMetrics, 5000);
+  } else {
+    clearInterval(metricsTimer);
+    metricsTimer = null;
+  }
+}
+
+async function loadLogs() {
+  if (!adminToken) return;
+  try {
+    const r = await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
+      body: JSON.stringify({ action: 'get_logs' })
+    });
+    if (!r.ok) return;
+    const data = await r.json();
+    allLogs = Array.isArray(data.logs) ? data.logs : [];
+    filterLogs();
+  } catch(e) {
+    console.error('loadLogs error:', e);
+  }
+}
+
+function filterLogs() {
+  const query = (document.getElementById('logSearchInput')?.value || '').toLowerCase().trim();
+  const errorOnly = document.getElementById('logFilterErrorOnly')?.checked || false;
+
+  let filtered = allLogs;
+  if (errorOnly) {
+    filtered = filtered.filter(l => l.status >= 400);
+  }
+  if (query) {
+    filtered = filtered.filter(l => {
+      return (l.ip && l.ip.toLowerCase().includes(query)) ||
+             (l.provider && l.provider.toLowerCase().includes(query)) ||
+             (l.model && l.model.toLowerCase().includes(query)) ||
+             (l.error && l.error.toLowerCase().includes(query)) ||
+             String(l.status).includes(query);
+    });
+  }
+  renderLogsTable(filtered);
+}
+
+function renderLogsTable(logs) {
+  const tbody = document.getElementById('logsTableBody');
+  if (!tbody) return;
+  if (!logs || !logs.length) {
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: #64748b; padding: 26px;">Tidak ada log yang sesuai dengan filter.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = logs.map(l => {
+    const d = new Date(l.timestamp);
+    const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' ' +
+                    d.toLocaleDateString([], { day: '2-digit', month: '2-digit' });
+    
+    let statusClass = 'ok';
+    if (l.status >= 500) statusClass = 'fail';
+    else if (l.status >= 400) statusClass = 'testing';
+
+    const cacheBadge = l.cached
+      ? `<span class="ping-badge ok" style="font-size: 11px;">⚡ RAM</span>`
+      : `<span style="color: #64748b;">-</span>`;
+
+    const errDetail = l.error
+      ? `<span style="color: #f87171; font-family: monospace; font-size: 11px;" title="${l.error}">${l.error.length > 50 ? l.error.slice(0, 50) + '...' : l.error}</span>`
+      : `<span style="color: #4ade80; font-size: 11px;">OK</span>`;
+
+    return `
+      <tr>
+        <td style="font-size: 11px; color: #94a3b8; font-family: monospace; white-space: nowrap;">${timeStr}</td>
+        <td style="font-family: monospace; font-size: 12px; color: #cbd5e1;">${l.ip || '127.0.0.1'}</td>
+        <td style="font-weight: 600; color: #38bdf8;">${l.provider || '-'}</td>
+        <td style="font-size: 12px; color: #e2e8f0;">${l.model || '-'}</td>
+        <td><span class="ping-badge ${statusClass}">${l.status}</span></td>
+        <td style="font-family: monospace; font-size: 12px;">${l.latencyMs || 0}ms</td>
+        <td style="font-family: monospace; font-size: 12px;">${l.tokens || 0}</td>
+        <td>${cacheBadge}</td>
+        <td>${errDetail}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+async function clearAdminLogs() {
+  if (!confirm('Hapus seluruh riwayat log permintaan sekarang?')) return;
+  try {
+    const r = await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
+      body: JSON.stringify({ action: 'clear_logs' })
+    });
+    if (r.ok) {
+      allLogs = [];
+      filterLogs();
+      toast('Semua log berhasil dibersihkan', 'ok');
+    }
+  } catch(e) {
+    toast('Gagal membersihkan log: ' + e.message, 'err');
+  }
+}
+
+function toggleAutoRefreshLogs(el) {
+  if (el.checked) {
+    if (!logsTimer) logsTimer = setInterval(loadLogs, 5000);
+  } else {
+    clearInterval(logsTimer);
+    logsTimer = null;
+  }
+}
+
+// Multi-Client Keys CRUD
+function renderClientKeys() {
+  const tbody = document.getElementById('clientKeysTableBody');
+  if (!tbody) return;
+  if (!clientKeys.length) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #64748b; padding: 20px;">Belum ada Client API Key khusus. Buat di atas.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = clientKeys.map((item, i) => {
+    const masked = item.key.slice(0, 10) + '••••••••' + item.key.slice(-4);
+    const isAct = item.enabled !== false;
+    const statusBadge = isAct
+      ? `<span class="ping-badge ok">🟢 Aktif</span>`
+      : `<span class="ping-badge fail">🔴 Dicabut (Revoked)</span>`;
+    
+    const dateStr = item.createdAt ? new Date(item.createdAt).toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
+
+    return `
+      <tr>
+        <td style="font-weight: 600; color: #f1f5f9;">${item.label || 'Klien ' + (i+1)}</td>
+        <td>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <code style="font-family: monospace; color: #38bdf8; background: #06080e; padding: 3px 8px; border-radius: 4px; font-size: 12px;">${masked}</code>
+            <button class="btn btn-outline" style="font-size: 11px; padding: 3px 8px;" onclick="copyClientKey('${item.key}')" title="Salin Full API Key">📋 Salin</button>
+          </div>
+        </td>
+        <td>${statusBadge}</td>
+        <td style="font-size: 12px; color: #94a3b8;">${dateStr}</td>
+        <td style="text-align: right;">
+          <div style="display: inline-flex; gap: 6px;">
+            <button class="btn btn-outline" style="font-size: 11px; padding: 4px 8px;" onclick="toggleClientKey(${i})">
+              ${isAct ? 'Cabut Akses' : 'Aktifkan'}
+            </button>
+            <button class="btn btn-danger" style="font-size: 11px; padding: 4px 8px;" onclick="deleteClientKey(${i})">Hapus</button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function addNewClientKey() {
+  const input = document.getElementById('newClientKeyLabel');
+  const label = (input?.value || '').trim() || `Client App #${clientKeys.length + 1}`;
+  
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let rand = 'sk-bre-';
+  for (let i = 0; i < 32; i++) rand += chars.charAt(Math.floor(Math.random() * chars.length));
+
+  const newObj = {
+    id: 'ck_' + Date.now(),
+    label: label,
+    key: rand,
+    enabled: true,
+    createdAt: new Date().toISOString()
+  };
+
+  clientKeys.unshift(newObj);
+  if (input) input.value = '';
+  renderClientKeys();
+  saveAllConfig();
+  toast(`API Key untuk "${label}" berhasil dibuat & disimpan!`, 'ok');
+}
+
+function toggleClientKey(idx) {
+  if (!clientKeys[idx]) return;
+  clientKeys[idx].enabled = !clientKeys[idx].enabled;
+  renderClientKeys();
+  saveAllConfig();
+  toast(`Status key ${clientKeys[idx].label} diperbarui`, 'ok');
+}
+
+function deleteClientKey(idx) {
+  if (!clientKeys[idx]) return;
+  if (!confirm(`Hapus API Key untuk "${clientKeys[idx].label}"? Klien yang menggunakan key ini tidak dapat lagi mengakses API.`)) return;
+  clientKeys.splice(idx, 1);
+  renderClientKeys();
+  saveAllConfig();
+  toast('Client Key dihapus', 'ok');
+}
+
+function copyClientKey(key) {
+  navigator.clipboard.writeText(key).then(() => {
+    toast('API Key disalin ke clipboard!', 'ok');
+  }).catch(() => {
+    prompt('Salin API Key:', key);
+  });
 }
 
 function applyPromptPreset(type) {
@@ -389,6 +815,11 @@ async function saveAllConfig() {
   const newPw = document.getElementById('cfgNewPw').value.trim();
   const payload = {
     endpoints: endpoints,
+    autoFailover: document.getElementById('cfgAutoFailover') ? document.getElementById('cfgAutoFailover').checked : true,
+    cacheEnabled: document.getElementById('cfgCacheEnabled') ? document.getElementById('cfgCacheEnabled').checked : false,
+    cacheTTL: parseInt(document.getElementById('cfgCacheTTL')?.value) || 3600,
+    blacklist: document.getElementById('cfgBlacklist')?.value.split('\n').map(w => w.trim()).filter(Boolean) || [],
+    clientKeys: clientKeys,
     systemPrompt: document.getElementById('cfgPrompt').value,
     temperature: parseFloat(document.getElementById('cfgTemp').value) || 0.7,
     topP: parseFloat(document.getElementById('cfgTopP').value) || 1.0,
@@ -397,7 +828,14 @@ async function saveAllConfig() {
     maxTokens: parseInt(document.getElementById('cfgMaxTokens').value) || 16384,
     clientApiKey: document.getElementById('cfgClientKey').value.trim(),
     rateLimitMax: parseInt(document.getElementById('cfgRateMax').value) || 5,
-    rateLimitWindow: parseInt(document.getElementById('cfgRateWin').value) || 30
+    rateLimitWindow: parseInt(document.getElementById('cfgRateWin').value) || 30,
+    telegramEnabled: document.getElementById('cfgTelegramEnabled') ? document.getElementById('cfgTelegramEnabled').checked : false,
+    telegramBotToken: document.getElementById('cfgTelegramToken') ? document.getElementById('cfgTelegramToken').value.trim() : '',
+    telegramOwnerId: document.getElementById('cfgTelegramOwner') ? document.getElementById('cfgTelegramOwner').value.trim() : '',
+    telegramAccessMode: document.getElementById('cfgTelegramAccessMode') ? document.getElementById('cfgTelegramAccessMode').value : 'public',
+    telegramAllowedUsers: document.getElementById('cfgTelegramWhitelist') ? document.getElementById('cfgTelegramWhitelist').value.trim() : '',
+    telegramModel: document.getElementById('cfgTelegramModel') ? document.getElementById('cfgTelegramModel').value.trim() : '',
+    telegramUsers: telegramUsers
   };
   
   const streamMode = document.getElementById('cfgStream').value;
@@ -417,6 +855,7 @@ async function saveAllConfig() {
     if (r.ok) {
       if (newPw) adminToken = newPw;
       document.getElementById('cfgNewPw').value = '';
+      loadTelegramStatus();
       toast('✅ Seluruh konfigurasi proxy berhasil disimpan permanen!', 'ok');
     } else {
       toast('❌ Gagal menyimpan konfigurasi', 'err');
@@ -479,7 +918,12 @@ async function resetToFactoryDefault() {
     topP: 1.0,
     maxTokens: 16384,
     rateLimitMax: 5,
-    rateLimitWindow: 30
+    rateLimitWindow: 30,
+    autoFailover: true,
+    cacheEnabled: false,
+    cacheTTL: 3600,
+    blacklist: [],
+    clientKeys: []
   };
   
   const r = await fetch('/api/config', {
@@ -504,3 +948,216 @@ function toast(msg, type='ok') {
     setTimeout(() => t.remove(), 300);
   }, 3000);
 }
+
+// Telegram Bot Controller Functions
+function toggleTelegramTokenMask() {
+  const inp = document.getElementById('cfgTelegramToken');
+  const btn = document.getElementById('btnMaskTelegram');
+  if (!inp || !btn) return;
+  if (inp.type === 'password') {
+    inp.type = 'text';
+    btn.textContent = '🔒 Sembunyikan Token';
+  } else {
+    inp.type = 'password';
+    btn.textContent = '👁️ Tampilkan Token';
+  }
+}
+
+function updateTelegramModelDropdown(selectedModel) {
+  const sel = document.getElementById('cfgTelegramModel');
+  if (!sel) return;
+  const allModels = new Set();
+  endpoints.forEach(ep => {
+    (ep.models || []).forEach(m => allModels.add(m));
+    (ep.mapping || []).forEach(map => {
+      const alias = map.split(':')[0]?.trim();
+      if (alias) allModels.add(alias);
+    });
+  });
+  if (!allModels.size) allModels.add('mercury-2');
+  
+  sel.innerHTML = '<option value="">(Otomatis ikuti Router AI)</option>' +
+    Array.from(allModels).map(m => `<option value="${m}" ${m === selectedModel ? 'selected' : ''}>${m}</option>`).join('');
+}
+
+async function loadTelegramStatus() {
+  if (!adminToken) return;
+  try {
+    const r = await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
+      body: JSON.stringify({ action: 'get_telegram_status' })
+    });
+    if (!r.ok) return;
+    const data = await r.json();
+    const st = data.status || {};
+
+    const dot = document.getElementById('telegramStatusDot');
+    const title = document.getElementById('telegramStatusTitle');
+    const desc = document.getElementById('telegramStatusDesc');
+    const userTag = document.getElementById('telegramBotUsernameTag');
+
+    if (st.running) {
+      if (dot) { dot.className = 'ping-badge ok'; dot.textContent = '🟢 Aktif & Polling'; }
+      if (title) title.textContent = 'Bot Berhasil Terhubung & Siap Melayani';
+      if (desc) desc.textContent = `Aktif polling Telegram API. Sedang melayani ${st.activeConversations || 0} percakapan.`;
+      if (userTag) userTag.textContent = st.botInfo?.username ? `@${st.botInfo.username}` : 'Online';
+    } else if (st.enabled && !st.running) {
+      if (dot) { dot.className = 'ping-badge fail'; dot.textContent = '🔴 Gagal Terhubung'; }
+      if (title) title.textContent = 'Layanan Bot Gagal Dimulai';
+      if (desc) desc.textContent = st.lastError || 'Token tidak valid atau terjadi kendala jaringan ke Telegram.';
+      if (userTag) userTag.textContent = '';
+    } else {
+      if (dot) { dot.className = 'ping-badge fail'; dot.textContent = '🔴 Nonaktif'; }
+      if (title) title.textContent = 'Bot Sedang Tidak Aktif';
+      if (desc) desc.textContent = 'Aktifkan switch di bawah dan simpan untuk memulai bot.';
+      if (userTag) userTag.textContent = '';
+    }
+  } catch (e) {
+    console.error('loadTelegramStatus error:', e);
+  }
+}
+
+async function testTelegramToken() {
+  const token = (document.getElementById('cfgTelegramToken')?.value || '').trim();
+  if (!token) return toast('Harap masukkan token Telegram bot terlebih dahulu', 'err');
+
+  toast('⏳ Menghubungi Telegram API (getMe)...', 'ok');
+  try {
+    const r = await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
+      body: JSON.stringify({ action: 'test_telegram', token: token })
+    });
+    const data = await r.json();
+    if (data.ok && data.bot) {
+      const tag = document.getElementById('telegramBotUsernameTag');
+      if (tag) tag.textContent = `@${data.bot.username}`;
+      toast(`✅ Token Valid! Bot: @${data.bot.username} (${data.bot.first_name})`, 'ok');
+    } else {
+      toast(`❌ Token Tidak Valid: ${data.error || 'Gagal'}` , 'err');
+    }
+  } catch (e) {
+    toast(`Gagal menguji token: ${e.message}`, 'err');
+  }
+}
+
+async function restartTelegramBot() {
+  toast('🔄 Me-restart bot service...', 'ok');
+  try {
+    const r = await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
+      body: JSON.stringify({ action: 'restart_telegram' })
+    });
+    const data = await r.json();
+    if (data.ok) {
+      toast(data.running ? '✅ Bot service berhasil dijalankan!' : 'Bot service dimatikan (periksa token & toggle)', 'ok');
+      loadTelegramStatus();
+    } else {
+      toast('Gagal restart bot: ' + data.error, 'err');
+    }
+  } catch (e) {
+    toast('Error: ' + e.message, 'err');
+  }
+}
+
+// Telegram User List CRUD Controllers
+function renderTelegramUsersTable() {
+  const tbody = document.getElementById('telegramUsersTableBody');
+  if (!tbody) return;
+  if (!telegramUsers.length) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #64748b; padding: 20px;">Belum ada daftar pengguna khusus. Tambahkan di atas.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = telegramUsers.map((u, i) => {
+    let roleBadge = '<span class="ping-badge ok">🟢 Whitelist</span>';
+    if (u.role === 'owner') roleBadge = '<span class="ping-badge ok" style="border-color:#38bdf8; color:#38bdf8;">👑 Owner</span>';
+    else if (u.role === 'blocked') roleBadge = '<span class="ping-badge fail">🔴 Blocked</span>';
+
+    const dateStr = u.addedAt ? new Date(u.addedAt).toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
+    const userTag = u.username ? `@${u.username.replace(/^@/, '')}` : (u.id ? `ID: ${u.id}` : '-');
+
+    return `
+      <tr>
+        <td style="font-family: monospace; font-size: 13px; color: #38bdf8; font-weight: 600;">${userTag}</td>
+        <td style="color: #f1f5f9;">${u.name || '-'}</td>
+        <td>${roleBadge}</td>
+        <td style="font-size: 12px; color: #94a3b8;">${dateStr}</td>
+        <td style="text-align: right;">
+          <div style="display: inline-flex; gap: 6px;">
+            ${u.role !== 'owner' ? `
+              <button class="btn btn-outline" style="font-size: 11px; padding: 4px 8px;" onclick="toggleTelegramUserRole(${i})">
+                ${u.role === 'whitelist' ? 'Blokir' : 'Whitelist'}
+              </button>
+              <button class="btn btn-danger" style="font-size: 11px; padding: 4px 8px;" onclick="deleteTelegramUser(${i})">Hapus</button>
+            ` : '<span style="font-size: 12px; color: #64748b; padding: 4px;">Utama</span>'}
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function addTelegramUser() {
+  const idInput = document.getElementById('newTgUserId');
+  const nameInput = document.getElementById('newTgUserName');
+  const roleSelect = document.getElementById('newTgUserRole');
+
+  const rawVal = (idInput?.value || '').trim();
+  if (!rawVal) return toast('Harap masukkan ID Telegram atau @username', 'err');
+
+  let id = rawVal;
+  let username = '';
+  if (rawVal.startsWith('@')) {
+    username = rawVal.slice(1);
+    id = rawVal;
+  } else if (isNaN(rawVal)) {
+    username = rawVal;
+  }
+
+  const name = (nameInput?.value || '').trim() || (username ? `@${username}` : `User ${id}`);
+  const role = roleSelect?.value || 'whitelist';
+
+  const existing = telegramUsers.find(u => String(u.id) === String(id) || (username && u.username === username));
+  if (existing) {
+    existing.role = role;
+    existing.name = name;
+  } else {
+    telegramUsers.push({
+      id: String(id),
+      username: username,
+      name: name,
+      role: role,
+      addedAt: new Date().toISOString()
+    });
+  }
+
+  if (idInput) idInput.value = '';
+  if (nameInput) nameInput.value = '';
+
+  renderTelegramUsersTable();
+  saveAllConfig();
+  toast(`Pengguna ${name} berhasil didaftarkan!`, 'ok');
+}
+
+function toggleTelegramUserRole(idx) {
+  if (!telegramUsers[idx]) return;
+  telegramUsers[idx].role = telegramUsers[idx].role === 'whitelist' ? 'blocked' : 'whitelist';
+  renderTelegramUsersTable();
+  saveAllConfig();
+  toast(`Status ${telegramUsers[idx].name || telegramUsers[idx].id} diperbarui`, 'ok');
+}
+
+function deleteTelegramUser(idx) {
+  if (!telegramUsers[idx]) return;
+  const item = telegramUsers[idx];
+  if (!confirm(`Hapus pengguna "${item.name || item.id}" dari daftar akses?`)) return;
+  telegramUsers.splice(idx, 1);
+  renderTelegramUsersTable();
+  saveAllConfig();
+  toast('Pengguna dihapus dari daftar', 'ok');
+}
+
+

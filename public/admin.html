@@ -347,6 +347,179 @@
     .toast.ok { border-color: #22c55e; color: #86efac; }
     .toast.err { border-color: #ef4444; color: #fca5a5; }
     @keyframes toastIn { from { transform: translateY(-10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    /* Stat Cards */
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: #0f121a;
+      border: 1px solid #1e2433;
+      border-radius: 10px;
+      padding: 18px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      position: relative;
+      overflow: hidden;
+    }
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, #38bdf8, #818cf8);
+    }
+    .stat-card.stat-ok::before { background: linear-gradient(90deg, #22c55e, #10b981); }
+    .stat-card.stat-err::before { background: linear-gradient(90deg, #ef4444, #f43f5e); }
+    .stat-card.stat-warn::before { background: linear-gradient(90deg, #f59e0b, #eab308); }
+    .stat-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .stat-val {
+      font-size: 26px;
+      font-weight: 700;
+      color: #fff;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .stat-sub {
+      font-size: 12px;
+      color: #64748b;
+    }
+
+    /* Distribution Progress Bars */
+    .bar-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .bar-label {
+      width: 150px;
+      font-size: 13px;
+      font-weight: 500;
+      color: #cbd5e1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .bar-track {
+      flex: 1;
+      height: 10px;
+      background: #090b10;
+      border-radius: 5px;
+      overflow: hidden;
+      border: 1px solid #1e2433;
+    }
+    .bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #38bdf8, #6366f1);
+      border-radius: 5px;
+      transition: width 0.5s ease;
+    }
+    .bar-val {
+      width: 80px;
+      text-align: right;
+      font-size: 12px;
+      font-family: 'JetBrains Mono', monospace;
+      color: #94a3b8;
+    }
+
+    /* Data Tables */
+    .table-responsive {
+      width: 100%;
+      overflow-x: auto;
+      border-radius: 8px;
+      border: 1px solid #1e2433;
+      background: #090b10;
+    }
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      text-align: left;
+    }
+    .data-table th {
+      background: #121622;
+      color: #94a3b8;
+      font-weight: 600;
+      padding: 12px 14px;
+      border-bottom: 1px solid #1e2433;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+    }
+    .data-table td {
+      padding: 11px 14px;
+      border-bottom: 1px solid #161b26;
+      color: #cbd5e1;
+      vertical-align: middle;
+    }
+    .data-table tr:hover td {
+      background: rgba(56, 189, 248, 0.03);
+    }
+
+    /* Masked Input */
+    .masked-key {
+      -webkit-text-security: disc !important;
+      text-security: disc !important;
+    }
+
+    /* Custom Toggle Switch */
+    .toggle-wrap {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .toggle-switch {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background-color: #232a3b;
+      transition: 0.25s;
+      border-radius: 24px;
+      border: 1px solid #384259;
+    }
+    .toggle-slider:before {
+      position: absolute;
+      content: "";
+      height: 16px;
+      width: 16px;
+      left: 3px;
+      bottom: 3px;
+      background-color: #94a3b8;
+      transition: 0.25s;
+      border-radius: 50%;
+    }
+    .toggle-switch input:checked + .toggle-slider {
+      background-color: #0284c7;
+      border-color: #38bdf8;
+    }
+    .toggle-switch input:checked + .toggle-slider:before {
+      transform: translateX(20px);
+      background-color: #fff;
+    }
   </style>
 </head>
 <body>
@@ -386,15 +559,144 @@
     
     <!-- Tab Navigation -->
     <div class="tab-bar">
-      <button class="tab-btn active" onclick="switchTab('tabProviders', this)">🔌 Endpoints & Routing</button>
+      <button class="tab-btn active" onclick="switchTab('tabAnalytics', this)">📊 Analitik & Metrik</button>
+      <button class="tab-btn" onclick="switchTab('tabLogs', this)">📜 Request & Error Logs</button>
+      <button class="tab-btn" onclick="switchTab('tabProviders', this)">🔌 Endpoints & Routing</button>
       <button class="tab-btn" onclick="switchTab('tabEngine', this)">⚙️ Global Engine</button>
       <button class="tab-btn" onclick="switchTab('tabSecurity', this)">🛡️ Keamanan & Klien API</button>
-      <button class="tab-btn" onclick="switchTab('tabTester', this)">📊 Live Model Tester</button>
+      <button class="tab-btn" onclick="switchTab('tabTelegram', this)">🤖 Telegram Bot</button>
+      <button class="tab-btn" onclick="switchTab('tabTester', this)">🧪 Live Model Tester</button>
       <button class="tab-btn" onclick="switchTab('tabBackup', this)">📦 Backup & Restore</button>
     </div>
 
+    <!-- TAB: ANALYTICS & METRICS -->
+    <div id="tabAnalytics" class="tab-content">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Real-Time Proxy Analytics & Performance</div>
+            <div class="card-subtitle">Metrik throughput token, rasio kegagalan upstream, dan latensi rata-rata.</div>
+          </div>
+          <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+            <label class="toggle-wrap" style="font-size: 13px; color: #94a3b8;">
+              <span class="toggle-switch">
+                <input type="checkbox" id="autoRefreshMetrics" checked onchange="toggleAutoRefreshMetrics(this)">
+                <span class="toggle-slider"></span>
+              </span>
+              Auto-Refresh (5s)
+            </label>
+            <button class="btn btn-outline" style="padding: 6px 12px; font-size: 13px;" onclick="loadMetrics()">🔄 Refresh</button>
+          </div>
+        </div>
+
+        <div class="stat-grid">
+          <div class="stat-card">
+            <span class="stat-label">Total Permintaan</span>
+            <span class="stat-val" id="metricTotalReq">0</span>
+            <span class="stat-sub" id="metricSuccessFail">0 sukses · 0 gagal</span>
+          </div>
+          <div class="stat-card stat-ok">
+            <span class="stat-label">Total Token Diproses</span>
+            <span class="stat-val" id="metricTotalTokens">0</span>
+            <span class="stat-sub">Prompt & Completion</span>
+          </div>
+          <div class="stat-card stat-err">
+            <span class="stat-label">Error Rate</span>
+            <span class="stat-val" id="metricErrorRate">0.0%</span>
+            <span class="stat-sub" id="metricFailedReq">0 error upstream</span>
+          </div>
+          <div class="stat-card stat-warn">
+            <span class="stat-label">Rata-Rata Latensi</span>
+            <span class="stat-val" id="metricAvgLatency">0 ms</span>
+            <span class="stat-sub">Responsivitas server</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">In-Memory Cache</span>
+            <span class="stat-val" id="metricCacheSize">0 item</span>
+            <span class="stat-sub">Respon instan 0ms</span>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div style="background: #090b10; border: 1px solid #1e2433; border-radius: 8px; padding: 18px;">
+            <div style="font-size: 14px; font-weight: 600; color: #f1f5f9; margin-bottom: 14px; display: flex; justify-content: space-between;">
+              <span>Distribusi Trafik Provider</span>
+              <span style="font-size: 12px; color: #64748b;">Upstream Hits</span>
+            </div>
+            <div id="providerDistributionList">
+              <div style="color: #64748b; font-size: 13px; text-align: center; padding: 20px;">Belum ada trafik terekam.</div>
+            </div>
+          </div>
+
+          <div style="background: #090b10; border: 1px solid #1e2433; border-radius: 8px; padding: 18px;">
+            <div style="font-size: 14px; font-weight: 600; color: #f1f5f9; margin-bottom: 14px; display: flex; justify-content: space-between;">
+              <span>Model Terpopuler</span>
+              <span style="font-size: 12px; color: #64748b;">Query Hits</span>
+            </div>
+            <div id="modelDistributionList">
+              <div style="color: #64748b; font-size: 13px; text-align: center; padding: 20px;">Belum ada model query terekam.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: REQUEST & ERROR LOGS -->
+    <div id="tabLogs" class="tab-content" style="display: none;">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Live Request & Error Logs Viewer</div>
+            <div class="card-subtitle">Pemantauan 150 request terakhir secara real-time termasuk status HTTP, latensi, dan token.</div>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+            <label class="toggle-wrap" style="font-size: 13px; color: #94a3b8;">
+              <span class="toggle-switch">
+                <input type="checkbox" id="autoRefreshLogs" checked onchange="toggleAutoRefreshLogs(this)">
+                <span class="toggle-slider"></span>
+              </span>
+              Auto-Refresh (5s)
+            </label>
+            <button class="btn btn-outline" style="padding: 6px 12px; font-size: 13px;" onclick="loadLogs()">🔄 Refresh</button>
+            <button class="btn btn-danger" style="padding: 6px 12px; font-size: 13px;" onclick="clearAdminLogs()">🗑️ Bersihkan Log</button>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; align-items: center;">
+          <input type="text" id="logSearchInput" class="input-text" style="flex: 1; min-width: 200px;" placeholder="🔍 Cari IP, Provider, Model, atau Error..." oninput="filterLogs()">
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #cbd5e1; cursor: pointer; user-select: none;">
+            <input type="checkbox" id="logFilterErrorOnly" onchange="filterLogs()">
+            <span>⚠️ Tampilkan Error Saja (Status &ge; 400)</span>
+          </label>
+        </div>
+
+        <div class="table-responsive">
+          <table class="data-table" id="logsTable">
+            <thead>
+              <tr>
+                <th>Waktu</th>
+                <th>Client IP</th>
+                <th>Provider</th>
+                <th>Model</th>
+                <th>Status</th>
+                <th>Latensi</th>
+                <th>Tokens</th>
+                <th>Cache</th>
+                <th>Detail / Error</th>
+              </tr>
+            </thead>
+            <tbody id="logsTableBody">
+              <tr>
+                <td colspan="9" style="text-align: center; color: #64748b; padding: 30px;">Memuat log server...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- TAB 1: PROVIDERS & ROUTING -->
-    <div id="tabProviders" class="tab-content">
+    <div id="tabProviders" class="tab-content" style="display: none;">
       
       <!-- Preset Quick Templates -->
       <div class="presets-bar">
@@ -406,6 +708,47 @@
         <button class="preset-btn" onclick="addPreset('openrouter')">🌐 OpenRouter</button>
         <button class="preset-btn" onclick="addPreset('together')">🤝 Together AI</button>
         <button class="preset-btn" onclick="addPreset('ollama')">💻 Ollama (Local)</button>
+      </div>
+
+      <!-- Auto-Failover Policy & Benchmark Toolbar -->
+      <div style="background: #0d111a; border: 1px solid #1e2433; border-radius: 10px; padding: 14px 18px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
+        <label class="toggle-wrap" style="font-size: 13px; color: #e2e8f0;">
+          <span class="toggle-switch">
+            <input type="checkbox" id="cfgAutoFailover" checked>
+            <span class="toggle-slider"></span>
+          </span>
+          <div>
+            <div style="font-weight: 600; color: #f1f5f9;">🔄 Zero-Downtime Auto-Failover</div>
+            <div style="font-size: 12px; color: #64748b;">Otomatis coba provider berikutnya jika provider aktif gagal atau terkena Rate Limit (429/5xx).</div>
+          </div>
+        </label>
+        <button class="btn btn-outline" style="border-color: #0284c7; color: #38bdf8;" onclick="runBatchLatencyTest()" id="btnBatchBenchmark">⚡ Test Semua Provider (Parallel Benchmark)</button>
+      </div>
+
+      <!-- Leaderboard Box -->
+      <div id="benchmarkLeaderboardBox" style="display: none; background: #07090e; border: 1px solid #0284c7; border-radius: 10px; padding: 18px; margin-bottom: 24px; box-shadow: 0 4px 20px rgba(2, 132, 199, 0.2);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+          <div>
+            <div style="font-weight: 700; font-size: 15px; color: #38bdf8;">🏆 Leaderboard Kecepatan Provider (Parallel Latency Probe)</div>
+            <div style="font-size: 12px; color: #64748b;">Diurutkan otomatis dari yang paling cepat merespons (Low Latency).</div>
+          </div>
+          <button class="btn btn-outline" style="padding: 4px 10px; font-size: 12px;" onclick="document.getElementById('benchmarkLeaderboardBox').style.display='none'">✕ Tutup</button>
+        </div>
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width: 60px;">Rank</th>
+                <th>Nama Provider</th>
+                <th>Model Uji</th>
+                <th>Latensi</th>
+                <th>Status HTTP</th>
+                <th>Status Probe</th>
+              </tr>
+            </thead>
+            <tbody id="benchmarkTableBody"></tbody>
+          </table>
+        </div>
       </div>
 
       <div class="card">
@@ -480,6 +823,33 @@
             </select>
           </div>
         </div>
+
+        <!-- In-Memory Response Caching Section -->
+        <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid #1e2433;">
+          <div class="card-title" style="font-size: 15px; margin-bottom: 4px;">⚡ In-Memory Response Caching</div>
+          <div class="card-subtitle" style="margin-bottom: 16px;">Simpan respon prompt yang identik langsung dalam RAM server untuk memangkas biaya token dan memberikan respon instan (0ms).</div>
+
+          <div class="grid-2">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="toggle-wrap" style="font-size: 13px; color: #e2e8f0; margin-top: 8px;">
+                <span class="toggle-switch">
+                  <input type="checkbox" id="cfgCacheEnabled">
+                  <span class="toggle-slider"></span>
+                </span>
+                <div>
+                  <div style="font-weight: 600; color: #f1f5f9;">Aktifkan Response Caching</div>
+                  <div style="font-size: 12px; color: #64748b;">Query non-streaming identik dijawab instan dari memori.</div>
+                </div>
+              </label>
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label">Cache TTL / Masa Berlaku (Detik)</label>
+              <input type="number" id="cfgCacheTTL" class="input-text" min="10" max="86400" placeholder="3600">
+              <div class="form-hint">Standar: 3600 detik (1 jam). Kedaluwarsa otomatis dibersihkan.</div>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
 
@@ -495,7 +865,7 @@
             <input type="password" id="cfgNewPw" class="input-text" placeholder="Kosongkan jika tidak ingin mengubah password">
           </div>
           <div class="form-group">
-            <label class="form-label">Master Client API Key (Opsional)</label>
+            <label class="form-label">Master Client API Key (Fallback)</label>
             <div style="display: flex; gap: 8px;">
               <input type="text" id="cfgClientKey" class="input-text" placeholder="sk-bre-ai-master-key...">
               <button class="btn btn-outline" style="white-space: nowrap;" onclick="generateRandomKey()">🎲 Generate</button>
@@ -515,6 +885,196 @@
             <input type="number" id="cfgRateWin" class="input-text" placeholder="30">
             <div class="form-hint">Lama waktu blokir dalam hitungan detik (HTTP 429).</div>
           </div>
+        </div>
+      </div>
+
+      <!-- Multi-Client API Key Management Card -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Multi-Client API Key Management</div>
+            <div class="card-subtitle">Buat dan kelola API Key terpisah untuk berbagai klien/aplikasi dengan kontrol revoke/hapus instan.</div>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-bottom: 18px; flex-wrap: wrap;">
+          <input type="text" id="newClientKeyLabel" class="input-text" style="flex: 1; min-width: 220px;" placeholder="Label / Nama Klien (misal: Cherry Studio, NextChat Dev, Cline)">
+          <button class="btn btn-save" onclick="addNewClientKey()">➕ Buat Client API Key Baru</button>
+        </div>
+
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Label / Klien</th>
+                <th>API Key</th>
+                <th>Status</th>
+                <th>Dibuat Pada</th>
+                <th style="text-align: right;">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="clientKeysTableBody">
+              <tr>
+                <td colspan="5" style="text-align: center; color: #64748b; padding: 20px;">Belum ada Client API Key khusus.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Content Moderation & Keyword Blacklist Card -->
+      <div class="card">
+        <div class="card-title">🛡️ Content Moderation & Keyword Blacklist</div>
+        <div class="card-subtitle" style="margin-bottom: 16px;">Saring pesan masuk dan tolak kata-kata terlarang otomatis sebelum query dikirim ke model upstream (menghemat kuota dan menjaga kepatuhan).</div>
+
+        <div class="form-group" style="margin-bottom: 0;">
+          <label class="form-label">Daftar Kata Terlarang (Satu kata/frasa per baris - Case Insensitive)</label>
+          <textarea id="cfgBlacklist" class="input-textarea" rows="4" placeholder="kata_kasar&#10;prompt_injection_keyword&#10;spam_phrase"></textarea>
+          <div class="form-hint">Jika prompt user memuat kata dalam daftar ini, server langsung menolak dengan HTTP 400 Bad Request tanpa menyentuh upstream AI.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: TELEGRAM BOT INTEGRATION -->
+    <div id="tabTelegram" class="tab-content" style="display: none;">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">🤖 Integrasi Telegram Bot (Bre AI on Telegram)</div>
+            <div class="card-subtitle">Hubungkan Bre AI langsung ke akun bot Telegram Anda menggunakan teknologi Long-Polling tanpa perlu domain publik atau webhook SSL.</div>
+          </div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button class="btn btn-outline" style="border-color: #0284c7; color: #38bdf8;" onclick="testTelegramToken()">⚡ Uji Token Bot (getMe)</button>
+            <button class="btn btn-outline" onclick="restartTelegramBot()">🔄 Restart Bot Service</button>
+          </div>
+        </div>
+
+        <!-- Connection Status Banner -->
+        <div id="telegramStatusBanner" style="background: #090c13; border: 1px solid #1e2433; border-radius: 10px; padding: 16px 20px; margin-bottom: 22px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <span id="telegramStatusDot" class="ping-badge fail" style="font-size: 13px; padding: 4px 10px;">🔴 Nonaktif</span>
+            <div>
+              <div id="telegramStatusTitle" style="font-weight: 600; color: #f1f5f9; font-size: 14px;">Bot Sedang Tidak Aktif</div>
+              <div id="telegramStatusDesc" style="font-size: 12px; color: #64748b;">Masukkan token dan aktifkan switch di bawah untuk memulai layanan.</div>
+            </div>
+          </div>
+          <div id="telegramBotUsernameTag" style="font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #38bdf8; font-weight: 600;"></div>
+        </div>
+
+        <!-- Bot Settings Form -->
+        <div class="form-group">
+          <label class="toggle-wrap" style="font-size: 14px; color: #e2e8f0; margin-bottom: 8px;">
+            <span class="toggle-switch">
+              <input type="checkbox" id="cfgTelegramEnabled">
+              <span class="toggle-slider"></span>
+            </span>
+            <div>
+              <div style="font-weight: 600; color: #f1f5f9;">Aktifkan Integrasi Telegram Bot</div>
+              <div style="font-size: 12px; color: #64748b;">Nyalakan long-polling untuk menerima dan menjawab pesan Telegram secara real-time.</div>
+            </div>
+          </label>
+        </div>
+
+        <div class="form-group" style="margin-top: 18px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <label class="form-label" style="margin-bottom: 0;">Telegram Bot Token (dari @BotFather)</label>
+            <button type="button" class="btn btn-outline" style="font-size: 11px; padding: 3px 8px;" onclick="toggleTelegramTokenMask()" id="btnMaskTelegram">👁️ Tampilkan Token</button>
+          </div>
+          <input type="password" id="cfgTelegramToken" class="input-text" placeholder="1234567890:ABCdefGhIJKlmNoPQRsTUVwxyZ...">
+          <div class="form-hint">Dapatkan bot token gratis dengan membuat bot baru di Telegram melalui <b>@BotFather</b>.</div>
+        </div>
+
+        <div class="grid-2" style="margin-top: 14px;">
+          <div class="form-group">
+            <label class="form-label">👑 Telegram Owner ID / Username (Wajib untuk Akses Panel Bot)</label>
+            <input type="text" id="cfgTelegramOwner" class="input-text" placeholder="123456789 atau @username_anda">
+            <div class="form-hint">Akun ini memiliki hak akses eksklusif membuka panel kontrol interaktif <code>/admin</code> di Telegram.</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Mode Akses Bot Telegram</label>
+            <select id="cfgTelegramAccessMode" class="input-select">
+              <option value="public">🟢 Terbuka untuk Publik (Semua Bisa Chat)</option>
+              <option value="whitelist">🔒 Khusus Pengguna Terdaftar (Private Whitelist)</option>
+            </select>
+            <div class="form-hint">Tentukan apakah bot bisa digunakan oleh siapa saja atau hanya daftar pengguna yang diizinkan.</div>
+          </div>
+        </div>
+
+        <div class="grid-2" style="margin-top: 14px;">
+          <div class="form-group">
+            <label class="form-label">Model Default untuk Telegram</label>
+            <select id="cfgTelegramModel" class="input-select"></select>
+            <div class="form-hint">Pilih model yang akan memproses pesan dari Telegram (atau otomatis ikuti router).</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Legacy Whitelist Tambahan (Opsional)</label>
+            <input type="text" id="cfgTelegramWhitelist" class="input-text" placeholder="123456789, @username_anda">
+            <div class="form-hint">ID atau username tambahan dipisahkan koma.</div>
+          </div>
+        </div>
+
+        <!-- Quick Setup Guide -->
+        <div style="background: #080a10; border: 1px dashed #1e2433; border-radius: 8px; padding: 16px; margin-top: 18px;">
+          <div style="font-weight: 600; font-size: 13px; color: #38bdf8; margin-bottom: 8px;">💡 Panduan Singkat Menghubungkan Bot Telegram:</div>
+          <ol style="margin-left: 20px; font-size: 12px; color: #94a3b8; line-height: 1.8;">
+            <li>Buka Telegram di HP / Desktop dan cari akun resmi <b>@BotFather</b>.</li>
+            <li>Kirim perintah <code>/newbot</code> lalu ikuti panduan untuk memberi nama dan username bot Anda.</li>
+            <li>Salin <b>HTTP API Token</b> yang diberikan @BotFather dan tempelkan ke kolom token di atas.</li>
+            <li>Isi kolom <b>Telegram Owner ID</b> dengan ID / username Telegram Anda agar bisa membuka panel kontrol bot.</li>
+            <li>Centang tombol <b>Aktifkan Integrasi Telegram Bot</b> di atas lalu klik <b>💾 Simpan Semua Pengaturan</b>.</li>
+            <li>Buka bot Anda di Telegram dan kirim <code>/start</code> atau kirim <code>/admin</code> untuk membuka panel kontrol interaktif!</li>
+          </ol>
+        </div>
+
+      </div>
+
+      <!-- Telegram User List Management Card -->
+      <div class="card" style="margin-top: 24px;">
+        <div class="card-header">
+          <div>
+            <div class="card-title">👥 Manajemen Pengguna Telegram (User Access List)</div>
+            <div class="card-subtitle">Daftarkan akun Telegram yang diizinkan (Whitelist) atau dicekal (Blocked) dengan kontrol status interaktif.</div>
+          </div>
+        </div>
+
+        <div class="grid-3" style="margin-bottom: 14px;">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label">ID Telegram / @Username</label>
+            <input type="text" id="newTgUserId" class="input-text" placeholder="123456789 atau @username">
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label">Nama / Catatan Pengguna</label>
+            <input type="text" id="newTgUserName" class="input-text" placeholder="Contoh: Rayan (Kantor)">
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label">Hak Akses / Status</label>
+            <select id="newTgUserRole" class="input-select">
+              <option value="whitelist">🟢 Whitelist (Diizinkan)</option>
+              <option value="blocked">🔴 Blocked (Diblokir)</option>
+            </select>
+          </div>
+        </div>
+        <div style="display: flex; justify-content: flex-end; margin-bottom: 18px;">
+          <button class="btn btn-save" onclick="addTelegramUser()">➕ Tambah Pengguna ke Daftar</button>
+        </div>
+
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>ID / Username</th>
+                <th>Nama / Label</th>
+                <th>Status Akses</th>
+                <th>Ditambahkan</th>
+                <th style="text-align: right;">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="telegramUsersTableBody">
+              <tr>
+                <td colspan="5" style="text-align: center; color: #64748b; padding: 20px;">Belum ada daftar pengguna khusus.</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

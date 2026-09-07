@@ -31,8 +31,153 @@ const DEFAULT_CONFIG = {
   temperature: 0.7,
   topP: 1.0,
   reasoningEffort: 'low',
-  streamEnabled: true
+  streamEnabled: true,
+  autoFailover: true,
+  cacheEnabled: false,
+  cacheTTL: 3600,
+  blacklist: [],
+  clientKeys: [],
+  telegramEnabled: false,
+  telegramBotToken: '',
+  telegramAllowedUsers: '',
+  telegramModel: '',
+  telegramOwnerId: '',
+  telegramAccessMode: 'public',
+  telegramUsers: []
 };
+
+// ========================================================
+// IN-MEMORY METRICS, LOGGING & CACHING SYSTEMS
+// ========================================================
+const MAX_LOGS = 150;
+const requestLogs = [];
+const metricsStats = {
+  totalRequests: 0,
+  successfulRequests: 0,
+  failedRequests: 0,
+  totalTokens: 0,
+  totalLatencyMs: 0,
+  providerHits: {},
+  modelHits: {}
+};
+const responseCache = new Map();
+
+function logRequest(entry) {
+  const logItem = {
+    id: 'log_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+    timestamp: new Date().toISOString(),
+    timeStr: new Date().toLocaleTimeString('id-ID'),
+    ip: entry.ip || '127.0.0.1',
+    provider: entry.provider || 'Default',
+    model: entry.model || 'mercury-2',
+    status: entry.status || 200,
+    latencyMs: entry.latencyMs || 0,
+    tokens: entry.tokens || 0,
+    failover: !!entry.failover,
+    cached: !!entry.cached,
+    error: entry.error || null
+  };
+
+  requestLogs.unshift(logItem);
+  if (requestLogs.length > MAX_LOGS) requestLogs.pop();
+
+  // Update metrics
+  metricsStats.totalRequests++;
+  if (logItem.status >= 200 && logItem.status < 400) {
+    metricsStats.successfulRequests++;
+  } else {
+    metricsStats.failedRequests++;
+  }
+  metricsStats.totalTokens += (logItem.tokens || 0);
+  metricsStats.totalLatencyMs += (logItem.latencyMs || 0);
+
+  const prov = logItem.provider;
+  metricsStats.providerHits[prov] = (metricsStats.providerHits[prov] || 0) + 1;
+
+  const mod = logItem.model;
+  metricsStats.modelHits[mod] = (metricsStats.modelHits[mod] || 0) + 1;
+}
+
+function getLogs() {
+  return requestLogs;
+}
+
+function clearLogs() {
+  requestLogs.length = 0;
+}
+
+function getMetrics() {
+  const avgLatency = metricsStats.totalRequests > 0
+    ? Math.round(metricsStats.totalLatencyMs / metricsStats.totalRequests)
+    : 0;
+  const errorRate = metricsStats.totalRequests > 0
+    ? ((metricsStats.failedRequests / metricsStats.totalRequests) * 100).toFixed(1)
+    : '0.0';
+
+  return {
+    totalRequests: metricsStats.totalRequests,
+    successfulRequests: metricsStats.successfulRequests,
+    failedRequests: metricsStats.failedRequests,
+    errorRate: errorRate + '%',
+    totalTokens: metricsStats.totalTokens,
+    avgLatencyMs: avgLatency,
+    providerHits: metricsStats.providerHits,
+    modelHits: metricsStats.modelHits,
+    cacheSize: responseCache.size
+  };
+}
+
+function checkBlacklist(text, blacklist) {
+  if (!text || typeof text !== 'string') return null;
+  const list = Array.isArray(blacklist) ? blacklist : [];
+  const lower = text.toLowerCase();
+  for (const word of list) {
+    const clean = (word || '').trim().toLowerCase();
+    if (clean && lower.includes(clean)) {
+      return clean;
+    }
+  }
+  return null;
+}
+
+function getCachedResponse(key) {
+  const item = responseCache.get(key);
+  if (!item) return null;
+  if (Date.now() > item.expiresAt) {
+    responseCache.delete(key);
+    return null;
+  }
+  return item.data;
+}
+
+function setCachedResponse(key, data, ttlSeconds = 3600) {
+  responseCache.set(key, {
+    data,
+    expiresAt: Date.now() + (ttlSeconds * 1000)
+  });
+}
+
+function clearResponseCache() {
+  responseCache.clear();
+}
+
+function validateClientKey(authHeader, cfg) {
+  if (!authHeader) return { valid: false };
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : authHeader.trim();
+  if (!token) return { valid: false };
+  
+  if (token === cfg.adminPassword) return { valid: true, name: 'Admin Master' };
+  
+  if (Array.isArray(cfg.clientKeys)) {
+    const found = cfg.clientKeys.find(k => k.key === token);
+    if (found) {
+      if (found.active === false) return { valid: false, error: 'API Key dinonaktifkan (Revoked)' };
+      return { valid: true, name: found.name || 'Client Key' };
+    }
+  }
+  
+  return { valid: false, error: 'API Key tidak valid' };
+}
 
 function parseKeys(raw) {
   if (!raw) return [];
@@ -66,6 +211,21 @@ function getConfig() {
   
   // Environment Overrides (For Vercel / Cloud deployments)
   if (process.env.ADMIN_PASSWORD) cfg.adminPassword = process.env.ADMIN_PASSWORD.trim();
+  if (process.env.TELEGRAM_BOT_TOKEN) {
+    cfg.telegramBotToken = process.env.TELEGRAM_BOT_TOKEN.trim();
+    cfg.telegramEnabled = true;
+  }
+  if (process.env.TELEGRAM_OWNER_ID) {
+    cfg.telegramOwnerId = process.env.TELEGRAM_OWNER_ID.trim();
+  }
+  if (process.env.API_KEY || process.env.INCEPTION_API_KEY) {
+    const k = (process.env.API_KEY || process.env.INCEPTION_API_KEY).trim();
+    if (cfg.endpoints && cfg.endpoints.length > 0) {
+      if (!cfg.endpoints[0].keys.includes(k)) {
+        cfg.endpoints[0].keys.unshift(k);
+      }
+    }
+  }
   if (process.env.BRE_CONFIG) {
     try {
       const envObj = JSON.parse(process.env.BRE_CONFIG);
@@ -96,6 +256,15 @@ function saveConfig(updated) {
   if (updated.forceStream !== undefined) merged.forceStream = updated.forceStream;
   if (updated.rateLimitMax !== undefined) merged.rateLimitMax = parseInt(updated.rateLimitMax) || 5;
   if (updated.rateLimitWindow !== undefined) merged.rateLimitWindow = parseInt(updated.rateLimitWindow) || 30;
+  if (updated.autoFailover !== undefined) merged.autoFailover = Boolean(updated.autoFailover);
+  if (updated.cacheEnabled !== undefined) merged.cacheEnabled = Boolean(updated.cacheEnabled);
+  if (updated.cacheTTL !== undefined) merged.cacheTTL = parseInt(updated.cacheTTL) || 3600;
+  if (updated.blacklist !== undefined) {
+    merged.blacklist = Array.isArray(updated.blacklist) ? updated.blacklist : (typeof updated.blacklist === 'string' ? updated.blacklist.split(/[\n,]+/).map(w=>w.trim()).filter(Boolean) : []);
+  }
+  if (updated.clientKeys !== undefined && Array.isArray(updated.clientKeys)) {
+    merged.clientKeys = updated.clientKeys;
+  }
   
   memConfig = merged;
   try { fs.writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2), 'utf-8'); } catch (e) {}
@@ -141,4 +310,21 @@ function sanitizeOutput(text) {
   return t;
 }
 
-module.exports = { getConfig, saveConfig, parseKeys, sanitizeOutput, checkRateLimit, recordFailedAttempt, clearLoginAttempts };
+module.exports = {
+  getConfig,
+  saveConfig,
+  parseKeys,
+  sanitizeOutput,
+  checkRateLimit,
+  recordFailedAttempt,
+  clearLoginAttempts,
+  logRequest,
+  getLogs,
+  clearLogs,
+  getMetrics,
+  checkBlacklist,
+  getCachedResponse,
+  setCachedResponse,
+  clearResponseCache,
+  validateClientKey
+};

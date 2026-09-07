@@ -11,6 +11,8 @@ const chat   = require('./api/chat');
 const config = require('./api/config');
 const info   = require('./api/info');
 const test   = require('./api/test');
+const search = require('./api/search');
+
 
 const PORT   = process.env.PORT || 3000;
 const PUBLIC = path.join(__dirname, 'public');
@@ -69,6 +71,7 @@ const server = http.createServer((req, res) => {
   if (pathname === '/api/config') return config(req, wres);
   if (pathname === '/api/info')   return info(req, wres);
   if (pathname === '/api/test')   return test(req, wres);
+  if (pathname === '/api/search') return search(req, wres);
   if (pathname === '/admin')      return serve(res, path.join(PUBLIC, 'admin.html'));
 
   let fp = path.join(PUBLIC, pathname === '/' ? 'index.html' : pathname);
@@ -82,7 +85,15 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, () => {
   console.log('');
-  console.log('  \u26A1 Bre AI v3.0 \u2014 Ciptaan Amirun Rayan Ariandi');
-  console.log('  \u1F310 Buka: http://localhost:' + PORT);
+  console.log('  ⚡ Bre AI v3.0 — Ciptaan Amirun Rayan Ariandi');
+  console.log('  🌐 Buka: http://localhost:' + PORT);
   console.log('');
+
+  // Start Telegram bot background service if enabled
+  try {
+    const telegramBot = require('./services/telegramBot');
+    telegramBot.init();
+  } catch (err) {
+    console.error('[TelegramBot] Init error:', err.message);
+  }
 });
