@@ -58,6 +58,41 @@ const LANGUAGE_OPTIONS = {
   ko: { label: '🇰🇷 한국어 (Korean)', prompt: '항상 자연스럽고 유창한 한국어로 답변해 주세요.' }
 };
 
+// Helper to classify all file format categories
+function getFileCategory(ext, mime = '') {
+  const e = (ext || '').toLowerCase();
+  const m = (mime || '').toLowerCase();
+
+  const codeAndTextExts = [
+    'txt', 'text', 'py', 'pyw', 'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx',
+    'html', 'htm', 'xhtml', 'css', 'scss', 'sass', 'less', 'json', 'json5', 'jsonc',
+    'md', 'markdown', 'sql', 'sh', 'bash', 'zsh', 'fish', 'ps1', 'bat', 'cmd',
+    'c', 'cpp', 'cc', 'cxx', 'h', 'hpp', 'hh', 'java', 'kt', 'kts', 'rs', 'go',
+    'php', 'phtml', 'rb', 'rbw', 'swift', 'dart', 'lua', 'r', 'pl', 'pm', 't',
+    'scala', 'sc', 'groovy', 'gvy', 'asm', 's', 'v', 'sv', 'vhd', 'vhdl', 'jl',
+    'ex', 'exs', 'erl', 'hrl', 'clj', 'cljs', 'edn', 'hs', 'lhs', 'nim', 'cr',
+    'zig', 'odin', 'pas', 'pp', 'd', 'sol', 'vy', 'proto', 'graphql', 'gql',
+    'csv', 'tsv', 'tab', 'xml', 'svg', 'yaml', 'yml', 'env', 'log', 'ini', 'cfg',
+    'conf', 'config', 'toml', 'properties', 'dockerfile', 'containerfile', 'gitignore',
+    'gitattributes', 'editorconfig', 'cmake', 'makefile', 'mk', 'gradle', 'lock',
+    'tex', 'bib', 'diff', 'patch', 'nfo', 'srt', 'vtt', 'ass', 'sub', 'lrc'
+  ];
+
+  if (codeAndTextExts.includes(e) || m.startsWith('text/') || m.includes('json') || m.includes('javascript') || m.includes('xml')) {
+    return 'code_or_text';
+  }
+  if (['pdf'].includes(e) || m.includes('pdf')) return 'pdf_document';
+  if (['doc', 'docx', 'rtf', 'odt', 'pages'].includes(e) || m.includes('word') || m.includes('officedocument.wordprocessingml')) return 'word_document';
+  if (['xls', 'xlsx', 'ods', 'csv', 'numbers'].includes(e) || m.includes('excel') || m.includes('spreadsheetml')) return 'spreadsheet';
+  if (['ppt', 'pptx', 'odp', 'key'].includes(e) || m.includes('powerpoint') || m.includes('presentationml')) return 'presentation';
+  if (['zip', 'rar', '7z', 'tar', 'gz', 'tgz', 'bz2', 'xz', 'iso', 'dmg', 'pkg', 'deb', 'rpm'].includes(e) || m.includes('zip') || m.includes('compressed') || m.includes('tar') || m.includes('archive')) return 'archive';
+  if (['apk', 'aab', 'ipa', 'exe', 'msi', 'dll', 'so', 'dylib', 'bin', 'dat', 'wasm', 'dex'].includes(e)) return 'executable_or_package';
+  if (['mp3', 'wav', 'ogg', 'flac', 'm4a', 'aac', 'wma', 'opus'].includes(e) || m.startsWith('audio/')) return 'audio_file';
+  if (['mp4', 'mkv', 'avi', 'mov', 'webm', 'flv', 'wmv', '3gp'].includes(e) || m.startsWith('video/')) return 'video_file';
+  if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'tiff', 'tif', 'ico', 'psd', 'ai', 'eps'].includes(e) || m.startsWith('image/')) return 'image_file';
+  return 'general_file';
+}
+
 // Query internal Bre AI router (works both on Localhost and Vercel Serverless)
 function queryBreAIRouter(userContent, history = [], senderInfo = '', langCode = null) {
   return new Promise(async (resolve, reject) => {
@@ -101,13 +136,14 @@ Anda sedang melayani pengguna Telegram ${senderInfo}.
 - GANTILAH TABEL dengan format daftar poin/bullet points (• atau -) dengan judul tebal (*Judul*) yang ringkas, rapi, dan mudah dibaca di layar HP.
 - Gunakan format Telegram Markdown yang sah: *teks tebal*, _teks miring_, \`kode ringkas\`, dan \`\`\`blok kode\`\`\`.
 
-[KEMAMPUAN GENERASI PESAN NON-TEKS INTERAKTIF]:
-Sebagai Bre AI di Telegram, Anda memiliki integrasi khusus untuk MENGHASILKAN dan MENGIRIM PESAN NON-TEKS INTERAKTIF ke obrolan pengguna:
+[KEMAMPUAN GENERASI PESAN NON-TEKS & SEMUA FORMAT BERKAS FILE]:
+Sebagai Bre AI di Telegram, Anda memiliki integrasi khusus untuk MENGHASILKAN dan MENGIRIM PESAN NON-TEKS serta SEMUA FORMAT BERKAS FILE:
 
-1. BERKAS KODE & DOKUMEN UNDUHAN (.js, .py, .html, .css, .json, .txt, .sh, .cpp, dll):
-   Ketika diminta membuatkan script, kodingan, atau file, sertakan nama file di baris pertama blok kode Anda (misal: \`\`\`python\n# main.py\n...kodingan...\`\`\`) ATAU gunakan tag:
-   [TELEGRAM_FILE: {"filename": "nama_file.py", "content": "...isi kode...", "caption": "Keterangan berkas"}]
-   Sistem bot otomatis mengekstrak dan mengirimkannya sebagai berkas file fisik (.py, .html, .js, dll) agar pengguna bisa langsung mendownloadnya!
+1. SEMUA FORMAT BERKAS FILE & KODE UNDUHAN:
+   Anda dapat membuat dan mengirimkan 100% SEMUA format berkas file tanpa batasan (.py, .js, .ts, .html, .css, .json, .csv, .sql, .sh, .bat, .ps1, .cpp, .c, .java, .go, .rs, .php, .xml, .yaml, .yml, .env, .ini, .cfg, .toml, .svg, .tex, .dart, .kt, .swift, .lua, .r, .vcf, .ics, .md, .txt, .log, dll).
+   Sertakan nama file di baris pertama blok kode Anda (misal: \`\`\`python\n# app.py\n...kode...\`\`\`) ATAU gunakan tag:
+   [TELEGRAM_FILE: {"filename": "nama_berkas.ext", "content": "...isi lengkap berkas...", "caption": "Keterangan berkas"}]
+   Sistem bot otomatis mengemasnya menjadi berkas fisik asli yang bisa langsung di-download pengguna ke perangkatnya!
 
 2. POLLING & KUIS INTERAKTIF TELEGRAM:
    Jika pengguna meminta dibuatkan polling, voting, atau kuis:
@@ -130,7 +166,7 @@ Sebagai Bre AI di Telegram, Anda memiliki integrasi khusus untuk MENGHASILKAN da
    Jika ingin menyematkan gambar URL valid:
    [TELEGRAM_PHOTO: {"url": "https://url-gambar.jpg", "caption": "Deskripsi foto"}]
 
-- Berikan respon yang cerdas, relevan, alami, dan solutif terhadap APA PUN jenis pesan yang dikirim pengguna.`
+- Berikan respon yang cerdas, relevan, alami, dan solutif terhadap APA PUN jenis file dan pesan yang dikirim pengguna.`
         },
         socket: { remoteAddress: '127.0.0.1' }
       });
@@ -541,30 +577,54 @@ async function handleMessage(msg, botService, ctx = null) {
     }
   }
 
-  // 5. DOCUMENT / FILE
+  // 5. DOCUMENT / FILE (Universal Support for 100% of ALL File Formats)
   else if (msg.document) {
     const doc = msg.document;
-    const fileName = doc.file_name || 'file.txt';
+    const fileName = doc.file_name || 'berkas.bin';
     const caption = (msg.caption || '').trim();
     const ext = fileName.includes('.') ? fileName.split('.').pop().toLowerCase() : '';
-    const textExts = ['txt', 'py', 'js', 'json', 'md', 'html', 'css', 'sql', 'sh', 'ts', 'csv', 'xml', 'yaml', 'yml', 'c', 'cpp', 'java', 'rs', 'go', 'php', 'env', 'bat', 'log', 'ini', 'cfg'];
+    const category = getFileCategory(ext, doc.mime_type);
+    const sizeBytes = doc.file_size || 0;
+    const sizeStr = sizeBytes > 1048576 ? `${(sizeBytes / 1048576).toFixed(2)} MB` : `${(sizeBytes / 1024).toFixed(1)} KB`;
+    const mime = doc.mime_type || 'application/octet-stream';
 
-    if (textExts.includes(ext) && (doc.file_size || 0) <= 300000) {
+    // If file is within text-read limit (up to 1MB), attempt to read content
+    if (sizeBytes <= 1048576 && (category === 'code_or_text' || ext === '' || !ext)) {
       try {
         const buf = await downloadTelegramFile(doc.file_id, token);
-        const content = buf.toString('utf-8');
-        const snippet = content.length > 12000 ? content.slice(0, 12000) + '\n... [dipotong karena terlalu panjang]' : content;
-        userQueryPrompt = `${replyPrefix}${forwardPrefix}[Pengguna melampirkan berkas kode/teks: "${fileName}"]:\n\`\`\`${ext}\n${snippet}\n\`\`\`\n\nInstruksi/Pertanyaan dari pengguna:\n${caption || 'Analisis dan jelaskan isi berkas ini, tinjau kualitas/strukturnya, dan berikan evaluasi atau poin pentingnya.'}`;
-        historyDisplaySnippet = `[Berkas: ${fileName}]: ${caption || 'Analisis Kode/Teks'}`;
+        // Check if buffer is valid text (no null bytes in sample)
+        const isText = !buf.slice(0, 1000).includes(0);
+        if (isText) {
+          const content = buf.toString('utf-8');
+          const snippet = content.length > 16000 ? content.slice(0, 16000) + '\n... [dipotong karena terlalu panjang]' : content;
+          userQueryPrompt = `${replyPrefix}${forwardPrefix}[Pengguna melampirkan berkas teks/kode: "${fileName}" (Ukuran: ${sizeStr}, Format: .${ext || 'txt'})]:\n\`\`\`${ext || 'text'}\n${snippet}\n\`\`\`\n\nInstruksi/Pertanyaan dari pengguna:\n${caption || 'Analisis dan jelaskan isi berkas ini secara rinci, periksa kualitas/logika/strukturnya, dan berikan evaluasi atau solusi terbaik sebagai Bre AI.'}`;
+          historyDisplaySnippet = `[Berkas ${fileName} (${sizeStr})]: ${caption || 'Analisis Berkas'}`;
+        } else {
+          userQueryPrompt = `${replyPrefix}${forwardPrefix}[Pengguna melampirkan berkas biner: "${fileName}" (Kategori: ${category}, Ukuran: ${sizeStr}, MIME: ${mime}) dengan catatan: "${caption || 'Mohon berikan panduan terkait berkas ini.'}"]. Berikan panduan teknis, jelaskan fungsi/struktur berkas tersebut, dan berikan saran atau evaluasi komprehensif sebagai Bre AI.`;
+          historyDisplaySnippet = `[Berkas ${fileName} (${sizeStr})]: ${caption || 'Panduan Berkas'}`;
+        }
       } catch (err) {
-        userQueryPrompt = `${replyPrefix}${forwardPrefix}[Pengguna melampirkan berkas dokumen: "${fileName}"] (Ukuran: ${(doc.file_size/1024).toFixed(1)} KB). Instruksi: "${caption || 'Bahas dokumen ini.'}". Responlah secara profesional sebagai Bre AI.`;
-        historyDisplaySnippet = `[Berkas: ${fileName}]`;
+        userQueryPrompt = `${replyPrefix}${forwardPrefix}[Pengguna melampirkan berkas: "${fileName}" (Kategori: ${category}, Ukuran: ${sizeStr}, MIME: ${mime})]. Instruksi pengguna: "${caption || 'Bahas berkas ini.'}". Responlah secara profesional, cerdas, dan solutif sebagai Bre AI.`;
+        historyDisplaySnippet = `[Berkas: ${fileName} (${sizeStr})]`;
       }
     } else {
-      const sizeStr = doc.file_size ? `${(doc.file_size / 1024).toFixed(1)} KB` : 'Dokumen';
-      const mime = doc.mime_type || 'aplikasi/dokumen';
-      userQueryPrompt = `${replyPrefix}${forwardPrefix}[Pengguna melampirkan berkas dokumen: "${fileName}" (Tipe: ${mime}, Ukuran: ${sizeStr}) dengan catatan: "${caption || 'Mohon berikan panduan atau analisis terkait berkas ini.'}"]. Berikan panduan cerdas, jelaskan topik yang relevan dengan berkas tersebut, dan tawarkan bantuan lanjutan sebagai Bre AI.`;
-      historyDisplaySnippet = `[Berkas Dokumen ${fileName} (${sizeStr})]: ${caption || 'Panduan Dokumen'}`;
+      // For binary formats (PDF, Word, Excel, PPT, ZIP, RAR, APK, EXE, Media, etc.)
+      const catDescriptions = {
+        pdf_document: 'Dokumen Adobe PDF',
+        word_document: 'Dokumen Microsoft Word / Dokumen Teks',
+        spreadsheet: 'Dokumen Spreadsheet / Excel / Data Tabel',
+        presentation: 'Dokumen Presentasi PowerPoint / Slide',
+        archive: 'Arsip Terkompresi (ZIP/RAR/7Z/TAR/GZ)',
+        executable_or_package: 'Paket Aplikasi / Installer / Eksekusi Biner (APK/EXE/DEB/DMG)',
+        audio_file: 'Berkas Rekaman Audio / Musik',
+        video_file: 'Berkas Rekaman Video / Animasi',
+        image_file: 'Berkas Desain / Grafis / Gambar Resolusi Tinggi',
+        general_file: 'Berkas Data / Dokumen Umum'
+      };
+      const catLabel = catDescriptions[category] || 'Berkas Dokumen';
+
+      userQueryPrompt = `${replyPrefix}${forwardPrefix}[Pengguna melampirkan berkas: "${fileName}" (Jenis: ${catLabel}, Format: .${ext || 'file'}, Ukuran: ${sizeStr}, MIME: ${mime}) dengan catatan: "${caption || 'Mohon berikan analisis, panduan, atau informasi teknis terkait berkas ini.'}"]. Berikan tanggapan cerdas, jelaskan fungsi dan cara penanganan berkas tersebut, berikan panduan langkah demi langkah, dan tawarkan bantuan lanjutan sebagai Bre AI.`;
+      historyDisplaySnippet = `[${catLabel}: ${fileName} (${sizeStr})]: ${caption || 'Panduan Berkas'}`;
     }
   }
 
