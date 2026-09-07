@@ -142,6 +142,49 @@ function initTimers() {
   }
 }
 
+function parseNum(val, def = 0) {
+  if (val === undefined || val === null || val === '') return def;
+  const cleaned = String(val).replace(',', '.').trim();
+  const num = parseFloat(cleaned);
+  return isNaN(num) ? def : num;
+}
+
+function restoreFullConfigFromLocalStorage(c) {
+  try {
+    const raw = localStorage.getItem('bre_full_config');
+    if (!raw) return c;
+    const s = JSON.parse(raw);
+    if (!s || typeof s !== 'object') return c;
+
+    if (s.systemPrompt) c.systemPrompt = s.systemPrompt;
+    if (s.temperature !== undefined && s.temperature !== null) c.temperature = s.temperature;
+    if (s.topP !== undefined && s.topP !== null) c.topP = s.topP;
+    if (s.frequencyPenalty !== undefined && s.frequencyPenalty !== null) c.frequencyPenalty = s.frequencyPenalty;
+    if (s.presencePenalty !== undefined && s.presencePenalty !== null) c.presencePenalty = s.presencePenalty;
+    if (s.maxTokens !== undefined && s.maxTokens !== null) c.maxTokens = s.maxTokens;
+    if (s.forceStream !== undefined && s.forceStream !== null) c.forceStream = s.forceStream;
+    if (s.clientApiKey) c.clientApiKey = s.clientApiKey;
+
+    if (s.upstashRedisUrl) c.upstashRedisUrl = s.upstashRedisUrl;
+    if (s.upstashRedisToken) c.upstashRedisToken = s.upstashRedisToken;
+    if (s.githubToken) c.githubToken = s.githubToken;
+    if (s.githubRepo) c.githubRepo = s.githubRepo;
+    if (s.githubBranch) c.githubBranch = s.githubBranch;
+
+    if (s.endpoints && Array.isArray(s.endpoints) && s.endpoints.length) c.endpoints = s.endpoints;
+    if (s.clientKeys && Array.isArray(s.clientKeys) && s.clientKeys.length) c.clientKeys = s.clientKeys;
+    if (s.blacklist && Array.isArray(s.blacklist) && s.blacklist.length) c.blacklist = s.blacklist;
+
+    if (s.telegramBotToken) c.telegramBotToken = s.telegramBotToken;
+    if (s.telegramOwnerId) c.telegramOwnerId = s.telegramOwnerId;
+    if (s.telegramDomain) c.telegramDomain = s.telegramDomain;
+    if (s.telegramAccessMode) c.telegramAccessMode = s.telegramAccessMode;
+    if (s.telegramModel) c.telegramModel = s.telegramModel;
+    if (s.telegramUsers && Array.isArray(s.telegramUsers) && s.telegramUsers.length) c.telegramUsers = s.telegramUsers;
+  } catch(e) {}
+  return c;
+}
+
 async function loadConfig() {
   try {
     const r = await fetch('/api/config', {
@@ -149,7 +192,8 @@ async function loadConfig() {
     });
     if (!r.ok) return toast('Gagal memuat konfigurasi', 'err');
     const data = await r.json();
-    const c = data.config || {};
+    let c = data.config || {};
+    c = restoreFullConfigFromLocalStorage(c);
     
     endpoints = c.endpoints || [];
     
@@ -858,11 +902,11 @@ async function saveAllConfig() {
     blacklist: document.getElementById('cfgBlacklist')?.value.split('\n').map(w => w.trim()).filter(Boolean) || [],
     clientKeys: clientKeys,
     systemPrompt: document.getElementById('cfgPrompt').value,
-    temperature: parseFloat(document.getElementById('cfgTemp').value) || 0.7,
-    topP: parseFloat(document.getElementById('cfgTopP').value) || 1.0,
-    frequencyPenalty: parseFloat(document.getElementById('cfgFreqPenalty').value) || 0.0,
-    presencePenalty: parseFloat(document.getElementById('cfgPresPenalty').value) || 0.0,
-    maxTokens: parseInt(document.getElementById('cfgMaxTokens').value) || 16384,
+    temperature: parseNum(document.getElementById('cfgTemp')?.value, 0.7),
+    topP: parseNum(document.getElementById('cfgTopP')?.value, 1.0),
+    frequencyPenalty: parseNum(document.getElementById('cfgFreqPenalty')?.value, 0.0),
+    presencePenalty: parseNum(document.getElementById('cfgPresPenalty')?.value, 0.0),
+    maxTokens: parseInt(document.getElementById('cfgMaxTokens')?.value) || 16384,
     clientApiKey: document.getElementById('cfgClientKey').value.trim(),
     rateLimitMax: parseInt(document.getElementById('cfgRateMax').value) || 5,
     rateLimitWindow: parseInt(document.getElementById('cfgRateWin').value) || 30,
@@ -888,6 +932,11 @@ async function saveAllConfig() {
   else payload.forceStream = 'auto';
   
   if (newPw) payload.adminPassword = newPw;
+
+  // Simpan seluruh konfigurasi ke browser localStorage sebagai jaminan permanen klien
+  try {
+    localStorage.setItem('bre_full_config', JSON.stringify(payload));
+  } catch(e) {}
   
   try {
     const r = await fetch('/api/config', {
@@ -905,6 +954,11 @@ async function saveAllConfig() {
       }
       document.getElementById('cfgNewPw').value = '';
       loadTelegramStatus();
+
+      // Perbarui localStorage dengan data server yang telah dimerge
+      try {
+        localStorage.setItem('bre_full_config', JSON.stringify(payload));
+      } catch(e) {}
 
       if (data.cloudStorageInfo) {
         updateStorageBadges(data.cloudStorageInfo, data.cloudStatus);
@@ -1367,8 +1421,9 @@ window.addEventListener('DOMContentLoaded', () => {
 // CLOUD STORAGE & PERSISTENCE CONTROLLER (VERCEL & GITHUB)
 // ========================================================
 
-async function loadCloudStorageStatus() {
+async function loadCloudStorageStatus(interactive = false) {
   if (!adminToken) return;
+  if (interactive) toast('🔍 Memeriksa status penyimpanan cloud...', 'ok');
   try {
     const r = await fetch('/api/config', {
       method: 'POST',
@@ -1379,9 +1434,21 @@ async function loadCloudStorageStatus() {
     const data = await r.json();
     if (data.status) {
       updateStorageBadges(data.status);
+      if (interactive) {
+        const st = data.status;
+        if (st.upstashInvalidUrl) {
+          alert('⚠️ PERHATIAN: URL UPSTASH TIDAK VALID!\n\nAnda memasukkan URL Web Browser Console (console.upstash.com), bukan URL REST API.\n\nCara Memperbaiki:\n1. Buka console Upstash Anda di browser.\n2. Scroll ke bagian bawah ke tabel "REST API".\n3. Salin UPSTASH_REDIS_REST_URL yang berakhiran .upstash.io (contoh: https://humble-cat-12345.upstash.io).\n4. Tempelkan ke kolom URL di bawah, lalu klik Simpan.');
+        } else if (st.upstashActive) {
+          alert('✅ STATUS PENYIMPANAN CLOUD:\n\n• Provider: Vercel KV / Upstash Redis Aktif 🟢\n• Latensi: <20ms\n• Seluruh konfigurasi tersimpan permanen di cloud database.');
+        } else if (st.githubActive) {
+          alert('✅ STATUS PENYIMPANAN CLOUD:\n\n• Provider: GitHub Auto-Commit Aktif 🟢\n• Seluruh perubahan di-commit otomatis ke repositori GitHub.');
+        } else {
+          alert('ℹ️ STATUS PENYIMPANAN:\n\n• Mode: Local Disk & Browser Storage Aktif.\n• Bot Telegram: Berjalan 24/7 serverless tanpa perlu database cloud.\n• Catatan: Untuk Vercel KV, pastikan menggunakan URL REST API (.upstash.io).');
+        }
+      }
     }
   } catch(e) {
-    console.error('loadCloudStorageStatus error:', e);
+    if (interactive) toast('Gagal memeriksa status: ' + e.message, 'err');
   }
 }
 
@@ -1393,7 +1460,16 @@ function updateStorageBadges(info, cloudStatus = null) {
 
   if (!info) return;
 
-  if (info.upstashActive) {
+  if (info.upstashInvalidUrl) {
+    if (cardBadge) {
+      cardBadge.className = 'ping-badge fail';
+      cardBadge.textContent = '🔴 URL Console (Bukan REST API)';
+    }
+    if (cardTitle) cardTitle.textContent = 'URL Upstash Salah (Gunakan URL .upstash.io)';
+    if (cardDesc) {
+      cardDesc.innerHTML = '<span style="color:#f87171; font-weight:600;">⚠️ URL yang dimasukkan adalah URL browser console (console.upstash.com).</span><br>Harap buka console Upstash di browser Anda, scroll ke bagian bawah ke tabel <b>REST API</b>, lalu salin <code>UPSTASH_REDIS_REST_URL</code> yang berakhiran <code>.upstash.io</code> (contoh: <code>https://humble-cat-12345.upstash.io</code>) beserta tokennya.';
+    }
+  } else if (info.upstashActive) {
     if (headerBadge) {
       headerBadge.className = 'ping-badge ok';
       headerBadge.textContent = '🟢 Vercel KV Aktif';

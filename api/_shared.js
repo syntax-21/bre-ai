@@ -289,14 +289,15 @@ async function syncCloudConfig(force = false) {
   const ghBranch = (process.env.GITHUB_BRANCH || cfg.githubBranch || 'main').trim();
 
   // 1. Coba muat dari Vercel KV / Upstash Redis (Prioritas Utama - Paling Cepat)
-  if (redisUrl && redisToken) {
+  if (redisUrl && redisToken && !redisUrl.includes('console.upstash.com')) {
     try {
       const cleanUrl = redisUrl.replace(/\/$/, '');
       const resp = await fetch(`${cleanUrl}/get/bre_ai_config`, {
         headers: { 'Authorization': `Bearer ${redisToken}` },
         signal: AbortSignal.timeout(4000)
       });
-      if (resp.ok) {
+      const contentType = resp.headers.get('content-type') || '';
+      if (resp.ok && contentType.includes('application/json')) {
         const data = await resp.json();
         let remoteVal = data.result;
         if (typeof remoteVal === 'string') {
@@ -426,7 +427,7 @@ async function saveConfig(updated) {
   const ghBranch = (process.env.GITHUB_BRANCH || merged.githubBranch || 'main').trim();
 
   // Upstash Redis Save
-  if (redisUrl && redisToken) {
+  if (redisUrl && redisToken && !redisUrl.includes('console.upstash.com')) {
     try {
       const cleanUrl = redisUrl.replace(/\/$/, '');
       const resp = await fetch(`${cleanUrl}/set/bre_ai_config`, {
@@ -438,18 +439,26 @@ async function saveConfig(updated) {
         body: JSON.stringify(merged),
         signal: AbortSignal.timeout(5000)
       });
-      if (resp.ok) {
-        cloudStatus.synced = true;
-        cloudStatus.upstashSuccess = true;
-        cloudStatus.provider = 'upstash';
-        cloudStatus.message = 'Tersimpan permanen di Vercel KV / Upstash Redis';
+      const contentType = resp.headers.get('content-type') || '';
+      if (resp.ok && contentType.includes('application/json')) {
+        const data = await resp.json();
+        if (data && !data.error) {
+          cloudStatus.synced = true;
+          cloudStatus.upstashSuccess = true;
+          cloudStatus.provider = 'upstash';
+          cloudStatus.message = 'Tersimpan permanen di Vercel KV / Upstash Redis';
+        } else {
+          cloudStatus.message = `Upstash error: ${data?.error || 'Format response tidak sesuai'}`;
+        }
       } else {
         const errTxt = await resp.text();
-        cloudStatus.message = `Upstash error: HTTP ${resp.status} - ${errTxt}`;
+        cloudStatus.message = `Upstash error: HTTP ${resp.status} - ${errTxt.slice(0, 80)}`;
       }
     } catch (err) {
       cloudStatus.message = `Upstash error: ${err.message}`;
     }
+  } else if (redisUrl && redisUrl.includes('console.upstash.com')) {
+    cloudStatus.message = 'Gagal: URL console.upstash.com bukan REST API. Gunakan URL yang berakhiran .upstash.io';
   }
 
   // GitHub Auto-Commit Save
@@ -512,6 +521,14 @@ async function testUpstash(url, token) {
     const cleanUrl = (url || '').trim().replace(/\/$/, '');
     const cleanToken = (token || '').trim();
     if (!cleanUrl || !cleanToken) return { ok: false, error: 'URL dan Token Upstash tidak boleh kosong' };
+
+    if (cleanUrl.includes('console.upstash.com')) {
+      return {
+        ok: false,
+        error: '⚠️ URL yang Anda masukkan adalah URL Browser Console (console.upstash.com).\nHarap buka Upstash Console, scroll ke bagian "REST API", lalu salin URL yang berakhiran .upstash.io (contoh: https://humble-cat-12345.upstash.io).'
+      };
+    }
+
     const resp = await fetch(`${cleanUrl}/set/bre_ai_test_ping`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${cleanToken}`, 'Content-Type': 'application/json' },
@@ -520,7 +537,18 @@ async function testUpstash(url, token) {
     });
     if (!resp.ok) {
       const txt = await resp.text();
-      return { ok: false, error: `HTTP ${resp.status}: ${txt}` };
+      return { ok: false, error: `HTTP ${resp.status}: ${txt.slice(0, 100)}` };
+    }
+    const contentType = resp.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      return {
+        ok: false,
+        error: '⚠️ Response dari server terdeteksi HTML (Web Console), bukan JSON REST API. Harap periksa URL endpoint Upstash Anda.'
+      };
+    }
+    const data = await resp.json();
+    if (!data || data.error) {
+      return { ok: false, error: data?.error || 'Token atau URL Redis tidak valid' };
     }
     return { ok: true, message: 'Koneksi ke Vercel KV / Upstash Redis berhasil & siap digunakan!' };
   } catch (err) {
@@ -554,11 +582,14 @@ async function testGitHub(token, repo, branch = 'main') {
 
 function getCloudStorageInfo() {
   const cfg = getConfig();
-  const hasUpstash = Boolean((process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || cfg.upstashRedisUrl) && (process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || cfg.upstashRedisToken));
+  const upUrl = (process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || cfg.upstashRedisUrl || '').trim();
+  const upToken = (process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || cfg.upstashRedisToken || '').trim();
+  const hasUpstash = Boolean(upUrl && upToken && !upUrl.includes('console.upstash.com'));
   const hasGitHub = Boolean((process.env.GITHUB_TOKEN || cfg.githubToken) && (process.env.GITHUB_REPO || cfg.githubRepo));
   return {
     upstashActive: hasUpstash,
     githubActive: hasGitHub,
+    upstashInvalidUrl: Boolean(upUrl && upUrl.includes('console.upstash.com')),
     mode: (hasUpstash && hasGitHub) ? 'upstash+github' : (hasUpstash ? 'upstash' : (hasGitHub ? 'github' : 'local')),
     isServerless: Boolean(process.env.VERCEL || process.env.VERCEL_URL || process.env.AWS_LAMBDA_FUNCTION_NAME)
   };
