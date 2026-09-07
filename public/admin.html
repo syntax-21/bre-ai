@@ -550,6 +550,7 @@
       <span class="brand-badge">9Router Enterprise Proxy</span>
     </div>
     <div class="top-actions">
+      <span id="storageHeaderBadge" class="ping-badge testing" style="font-size: 11px; cursor: pointer;" onclick="switchTab('tabCloud', document.getElementById('tabBtnCloud'))" title="Klik untuk membuka pengaturan Cloud Storage">☁️ Memeriksa Storage...</span>
       <a href="/" class="btn btn-outline" style="padding: 8px 16px; font-size: 13px;">Chat Utama</a>
       <button class="btn btn-save" onclick="saveAllConfig()">💾 Simpan Semua Pengaturan</button>
     </div>
@@ -565,6 +566,7 @@
       <button class="tab-btn" onclick="switchTab('tabEngine', this)">⚙️ Global Engine</button>
       <button class="tab-btn" onclick="switchTab('tabSecurity', this)">🛡️ Keamanan & Klien API</button>
       <button class="tab-btn" onclick="switchTab('tabTelegram', this)">🤖 Telegram Bot</button>
+      <button class="tab-btn" onclick="switchTab('tabCloud', this)" id="tabBtnCloud">☁️ Cloud Storage (Vercel 24/7)</button>
       <button class="tab-btn" onclick="switchTab('tabTester', this)">🧪 Live Model Tester</button>
       <button class="tab-btn" onclick="switchTab('tabBackup', this)">📦 Backup & Restore</button>
     </div>
@@ -1121,6 +1123,116 @@
           <input type="file" id="importFile" accept=".json" style="display: none;" onchange="importConfigFile(event)">
           <button class="btn btn-danger" onclick="resetToFactoryDefault()">⚠️ Reset Pengaturan Awal</button>
         </div>
+      </div>
+    </div>
+
+    <!-- TAB: CLOUD STORAGE & PERSISTENCE (VERCEL & GITHUB) -->
+    <div id="tabCloud" class="tab-content" style="display: none;">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">☁️ Penyimpanan Cloud Permanen (Vercel & GitHub)</div>
+            <div class="card-subtitle">Pastikan seluruh konfigurasi web tersimpan permanen di cloud tanpa takut reset akibat Vercel cold start / read-only filesystem.</div>
+          </div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button class="btn btn-save" onclick="saveAllConfig()">💾 Simpan Konfigurasi</button>
+          </div>
+        </div>
+
+        <!-- Cloud Engine Status Banner -->
+        <div style="background: #090c13; border: 1px solid #1e2433; border-radius: 10px; padding: 18px 20px; margin-bottom: 24px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 10px;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <span id="cloudStatusBadge" class="ping-badge testing" style="font-size: 13px; padding: 4px 12px;">☁️ Memeriksa...</span>
+              <span style="font-weight: 600; color: #f1f5f9; font-size: 15px;" id="cloudStatusTitle">Status Penyimpanan</span>
+            </div>
+            <button type="button" class="btn btn-outline" style="font-size: 12px; padding: 4px 10px;" onclick="loadCloudStorageStatus()">🔄 Cek Status Storage</button>
+          </div>
+          <div id="cloudStatusExplanation" style="font-size: 13px; color: #94a3b8; line-height: 1.6;">
+            Memuat informasi status penyimpanan...
+          </div>
+        </div>
+
+        <!-- Section 1: Upstash Redis / Vercel KV -->
+        <div style="border: 1px solid #1e2433; border-radius: 10px; padding: 22px; margin-bottom: 22px; background: rgba(56, 189, 248, 0.02);">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 14px;">
+            <div>
+              <div style="font-size: 16px; font-weight: 600; color: #38bdf8; display: flex; align-items: center; gap: 8px;">
+                ⚡ Opsi 1: Vercel KV / Upstash Redis (Direkomendasikan - Paling Cepat & Gratis)
+              </div>
+              <div style="font-size: 12px; color: #64748b; margin-top: 2px;">
+                Database Redis serverless resmi Vercel. Pengaturan tersimpan secara instan (&lt;20ms) dan permanen lintas seluruh serverless lambda global.
+              </div>
+            </div>
+            <button type="button" class="btn btn-outline" style="border-color: #38bdf8; color: #38bdf8; font-size: 12px;" onclick="testUpstashConnection()">⚡ Test Koneksi Upstash</button>
+          </div>
+
+          <div style="background: #0d1117; border-left: 3px solid #38bdf8; padding: 12px 14px; border-radius: 6px; margin-bottom: 16px; font-size: 12px; color: #cbd5e1; line-height: 1.5;">
+            <b>💡 Cara 1-Klik di Vercel Dashboard (Paling Mudah):</b><br>
+            Buka Vercel Dashboard → Pilih Proyek Anda → Klik tab <b>Storage</b> → Klik <b>Create Database</b> → Pilih <b>KV</b> (atau Upstash Redis) → Klik <b>Connect to Project</b>.<br>
+            <i>Begitu terhubung, Bre AI akan otomatis mendeteksi database tanpa Anda perlu mengisi kolom URL &amp; Token di bawah!</i>
+          </div>
+
+          <div class="grid-2">
+            <div class="form-group">
+              <label class="form-label">Upstash / Vercel KV REST API URL</label>
+              <input type="text" id="cfgUpstashUrl" class="input-text" placeholder="https://xxxxxx.upstash.io">
+              <div class="form-hint">URL endpoint REST API Upstash Redis.</div>
+            </div>
+            <div class="form-group">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <label class="form-label" style="margin-bottom: 0;">Upstash / Vercel KV REST API Token</label>
+                <button type="button" class="btn btn-outline" style="font-size: 11px; padding: 2px 7px;" onclick="toggleUpstashTokenMask()" id="btnMaskUpstash">👁️ Tampilkan</button>
+              </div>
+              <input type="password" id="cfgUpstashToken" class="input-text" placeholder="AX... (Token Rahasia Read/Write)">
+              <div class="form-hint">Token autentikasi REST API Upstash.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 2: GitHub Repository Sync -->
+        <div style="border: 1px solid #1e2433; border-radius: 10px; padding: 22px; margin-bottom: 16px; background: rgba(16, 185, 129, 0.02);">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 14px;">
+            <div>
+              <div style="font-size: 16px; font-weight: 600; color: #34d399; display: flex; align-items: center; gap: 8px;">
+                🐙 Opsi 2: Sinkronisasi Repositori GitHub (Auto-Commit dari Web)
+              </div>
+              <div style="font-size: 12px; color: #64748b; margin-top: 2px;">
+                Karena Anda deploy via <b>Vercel + GitHub</b>, setiap kali klik "Simpan", Bre AI langsung meng-commit <code>config.json</code> terbaru ke GitHub Anda!
+              </div>
+            </div>
+            <button type="button" class="btn btn-outline" style="border-color: #34d399; color: #34d399; font-size: 12px;" onclick="testGitHubConnection()">⚡ Test Koneksi GitHub</button>
+          </div>
+
+          <div style="background: #0d1117; border-left: 3px solid #34d399; padding: 12px 14px; border-radius: 6px; margin-bottom: 16px; font-size: 12px; color: #cbd5e1; line-height: 1.5;">
+            <b>💡 Cara Menggunakan GitHub Sync:</b><br>
+            1. Buat Personal Access Token (PAT) di GitHub (Settings → Developer Settings → Personal access tokens → Token classic dengan izin <b>repo</b>).<br>
+            2. Masukkan Token dan nama repositori (contoh: <code>AmirunRayan/bre-ai-main</code>).<br>
+            3. Klik <b>Test Koneksi GitHub</b> lalu <b>Simpan Semua Pengaturan</b>.
+          </div>
+
+          <div class="grid-3" style="display: grid; grid-template-columns: 1fr 1fr 140px; gap: 12px;">
+            <div class="form-group">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <label class="form-label" style="margin-bottom: 0;">GitHub Token (PAT)</label>
+                <button type="button" class="btn btn-outline" style="font-size: 11px; padding: 2px 7px;" onclick="toggleGithubTokenMask()" id="btnMaskGithub">👁️ Tampilkan</button>
+              </div>
+              <input type="password" id="cfgGithubToken" class="input-text" placeholder="ghp_... atau github_pat_...">
+              <div class="form-hint">Token akses GitHub dengan izin <code>repo</code>.</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Nama Repositori GitHub</label>
+              <input type="text" id="cfgGithubRepo" class="input-text" placeholder="username/bre-ai-main">
+              <div class="form-hint">Format: <code>owner/repository</code>.</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Branch</label>
+              <input type="text" id="cfgGithubBranch" class="input-text" placeholder="main" value="main">
+              <div class="form-hint">Branch target git.</div>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
 

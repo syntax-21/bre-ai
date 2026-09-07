@@ -1,8 +1,12 @@
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
 const CONFIG_PATH = path.join(process.cwd(), 'config.json');
+const TMP_CONFIG_PATH = path.join(os.tmpdir(), 'bre_config.json');
 let memConfig = null;
+let lastCloudSync = 0;
+const CLOUD_SYNC_TTL_MS = 15000; // 15 detik cache memori agar tidak spam API
 const loginAttempts = new Map();
 
 const DEFAULT_CONFIG = {
@@ -43,7 +47,14 @@ const DEFAULT_CONFIG = {
   telegramModel: '',
   telegramOwnerId: '',
   telegramAccessMode: 'public',
-  telegramUsers: []
+  telegramUsers: [],
+  // Cloud Persistence Engine (Vercel & GitHub Deployments)
+  cloudStorageType: 'auto', // 'auto' | 'upstash' | 'github' | 'none'
+  upstashRedisUrl: '',
+  upstashRedisToken: '',
+  githubToken: '',
+  githubRepo: '',
+  githubBranch: 'main'
 };
 
 // ========================================================
@@ -189,9 +200,19 @@ function parseKeys(raw) {
 function getConfig() {
   if (memConfig) return memConfig;
   let cfg = { ...DEFAULT_CONFIG };
+  
+  // 1. Baca konfigurasi bawaan repositori (config.json)
   try {
     if (fs.existsSync(CONFIG_PATH)) {
       cfg = { ...cfg, ...JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8')) };
+    }
+  } catch (e) {}
+
+  // 2. Baca konfigurasi /tmp (khusus instance serverless Vercel yang writable)
+  try {
+    if (fs.existsSync(TMP_CONFIG_PATH)) {
+      const tmpData = JSON.parse(fs.readFileSync(TMP_CONFIG_PATH, 'utf-8'));
+      cfg = { ...cfg, ...tmpData };
     }
   } catch (e) {}
 
@@ -218,6 +239,9 @@ function getConfig() {
   if (process.env.TELEGRAM_OWNER_ID) {
     cfg.telegramOwnerId = process.env.TELEGRAM_OWNER_ID.trim();
   }
+  if (process.env.TELEGRAM_ACCESS_MODE) {
+    cfg.telegramAccessMode = process.env.TELEGRAM_ACCESS_MODE.trim();
+  }
   if (process.env.API_KEY || process.env.INCEPTION_API_KEY) {
     const k = (process.env.API_KEY || process.env.INCEPTION_API_KEY).trim();
     if (cfg.endpoints && cfg.endpoints.length > 0) {
@@ -226,6 +250,18 @@ function getConfig() {
       }
     }
   }
+
+  // Cloud Storage Env Overrides (Vercel KV / Upstash / GitHub)
+  if (process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL) {
+    cfg.upstashRedisUrl = (process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL).trim();
+  }
+  if (process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN) {
+    cfg.upstashRedisToken = (process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN).trim();
+  }
+  if (process.env.GITHUB_TOKEN) cfg.githubToken = process.env.GITHUB_TOKEN.trim();
+  if (process.env.GITHUB_REPO) cfg.githubRepo = process.env.GITHUB_REPO.trim();
+  if (process.env.GITHUB_BRANCH) cfg.githubBranch = process.env.GITHUB_BRANCH.trim();
+
   if (process.env.BRE_CONFIG) {
     try {
       const envObj = JSON.parse(process.env.BRE_CONFIG);
@@ -237,8 +273,81 @@ function getConfig() {
   return cfg;
 }
 
-function saveConfig(updated) {
-  const merged = { ...getConfig(), ...updated };
+// Sinkronisasi konfigurasi dari Cloud Storage (Upstash / Vercel KV / GitHub)
+async function syncCloudConfig(force = false) {
+  const now = Date.now();
+  if (!force && memConfig && (now - lastCloudSync < CLOUD_SYNC_TTL_MS)) {
+    return memConfig;
+  }
+
+  let cfg = getConfig();
+  const redisUrl = (process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || cfg.upstashRedisUrl || '').trim();
+  const redisToken = (process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || cfg.upstashRedisToken || '').trim();
+  const ghToken = (process.env.GITHUB_TOKEN || cfg.githubToken || '').trim();
+  const ghRepo = (process.env.GITHUB_REPO || cfg.githubRepo || '').trim();
+  const ghBranch = (process.env.GITHUB_BRANCH || cfg.githubBranch || 'main').trim();
+
+  // 1. Coba muat dari Vercel KV / Upstash Redis (Prioritas Utama - Paling Cepat)
+  if (redisUrl && redisToken) {
+    try {
+      const cleanUrl = redisUrl.replace(/\/$/, '');
+      const resp = await fetch(`${cleanUrl}/get/bre_ai_config`, {
+        headers: { 'Authorization': `Bearer ${redisToken}` },
+        signal: AbortSignal.timeout(4000)
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        let remoteVal = data.result;
+        if (typeof remoteVal === 'string') {
+          try { remoteVal = JSON.parse(remoteVal); } catch(e){}
+        }
+        if (remoteVal && typeof remoteVal === 'object') {
+          memConfig = { ...cfg, ...remoteVal };
+          lastCloudSync = now;
+          try { fs.writeFileSync(TMP_CONFIG_PATH, JSON.stringify(memConfig, null, 2), 'utf-8'); } catch(e){}
+          return memConfig;
+        }
+      }
+    } catch (err) {
+      console.warn('[CloudConfig] Upstash fetch error:', err.message);
+    }
+  }
+
+  // 2. Coba muat dari GitHub Contents API
+  if (ghToken && ghRepo) {
+    try {
+      const resp = await fetch(`https://api.github.com/repos/${ghRepo}/contents/config.json?ref=${ghBranch}`, {
+        headers: {
+          'Authorization': `Bearer ${ghToken}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'User-Agent': 'Bre-AI-Router'
+        },
+        signal: AbortSignal.timeout(4000)
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.content) {
+          const fileStr = Buffer.from(data.content, 'base64').toString('utf-8');
+          const parsed = JSON.parse(fileStr);
+          memConfig = { ...cfg, ...parsed };
+          lastCloudSync = now;
+          try { fs.writeFileSync(TMP_CONFIG_PATH, JSON.stringify(memConfig, null, 2), 'utf-8'); } catch(e){}
+          return memConfig;
+        }
+      }
+    } catch (err) {
+      console.warn('[CloudConfig] GitHub fetch error:', err.message);
+    }
+  }
+
+  lastCloudSync = now;
+  return cfg;
+}
+
+// Simpan konfigurasi secara permanen (Local file + /tmp + Upstash Redis + GitHub Commit)
+async function saveConfig(updated) {
+  const current = getConfig();
+  const merged = { ...current, ...updated };
   
   if (updated.endpoints && Array.isArray(updated.endpoints)) {
     merged.endpoints = updated.endpoints.map(e => ({
@@ -274,7 +383,23 @@ function saveConfig(updated) {
   if (updated.telegramAllowedUsers !== undefined) merged.telegramAllowedUsers = updated.telegramAllowedUsers;
   if (updated.telegramUsers !== undefined && Array.isArray(updated.telegramUsers)) merged.telegramUsers = updated.telegramUsers;
 
+  // Cloud Persistence Options
+  if (updated.cloudStorageType !== undefined) merged.cloudStorageType = updated.cloudStorageType;
+  if (updated.upstashRedisUrl !== undefined) merged.upstashRedisUrl = String(updated.upstashRedisUrl).trim();
+  if (updated.upstashRedisToken !== undefined) merged.upstashRedisToken = String(updated.upstashRedisToken).trim();
+  if (updated.githubToken !== undefined) merged.githubToken = String(updated.githubToken).trim();
+  if (updated.githubRepo !== undefined) merged.githubRepo = String(updated.githubRepo).trim();
+  if (updated.githubBranch !== undefined) merged.githubBranch = String(updated.githubBranch).trim() || 'main';
+
   memConfig = merged;
+  lastCloudSync = Date.now();
+
+  // 1. Tulis ke /tmp (selalu berhasil di serverless / Vercel lambda container)
+  try {
+    fs.writeFileSync(TMP_CONFIG_PATH, JSON.stringify(merged, null, 2), 'utf-8');
+  } catch (e) {}
+
+  // 2. Tulis ke config.json lokal jika diizinkan
   let saveError = null;
   try {
     fs.writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2), 'utf-8');
@@ -282,7 +407,159 @@ function saveConfig(updated) {
     saveError = e.message;
     console.warn('[Config] Gagal menulis ke config.json (Read-Only FS/Vercel):', e.message);
   }
-  return { ...merged, _isReadOnlyFS: Boolean(saveError), _saveError: saveError };
+
+  // 3. Simpan ke Cloud Provider (Upstash Redis & GitHub)
+  const cloudStatus = {
+    provider: 'local',
+    synced: false,
+    upstashSuccess: false,
+    githubSuccess: false,
+    message: ''
+  };
+
+  const redisUrl = (process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || merged.upstashRedisUrl || '').trim();
+  const redisToken = (process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || merged.upstashRedisToken || '').trim();
+  const ghToken = (process.env.GITHUB_TOKEN || merged.githubToken || '').trim();
+  const ghRepo = (process.env.GITHUB_REPO || merged.githubRepo || '').trim();
+  const ghBranch = (process.env.GITHUB_BRANCH || merged.githubBranch || 'main').trim();
+
+  // Upstash Redis Save
+  if (redisUrl && redisToken) {
+    try {
+      const cleanUrl = redisUrl.replace(/\/$/, '');
+      const resp = await fetch(`${cleanUrl}/set/bre_ai_config`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${redisToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(merged),
+        signal: AbortSignal.timeout(5000)
+      });
+      if (resp.ok) {
+        cloudStatus.synced = true;
+        cloudStatus.upstashSuccess = true;
+        cloudStatus.provider = 'upstash';
+        cloudStatus.message = 'Tersimpan permanen di Vercel KV / Upstash Redis';
+      } else {
+        const errTxt = await resp.text();
+        cloudStatus.message = `Upstash error: HTTP ${resp.status} - ${errTxt}`;
+      }
+    } catch (err) {
+      cloudStatus.message = `Upstash error: ${err.message}`;
+    }
+  }
+
+  // GitHub Auto-Commit Save
+  if (ghToken && ghRepo) {
+    try {
+      let currentSha = null;
+      try {
+        const getRes = await fetch(`https://api.github.com/repos/${ghRepo}/contents/config.json?ref=${ghBranch}`, {
+          headers: {
+            'Authorization': `Bearer ${ghToken}`,
+            'Accept': 'application/vnd.github.v3+json',
+            'User-Agent': 'Bre-AI-Router'
+          },
+          signal: AbortSignal.timeout(4000)
+        });
+        if (getRes.ok) {
+          const fData = await getRes.json();
+          currentSha = fData.sha;
+        }
+      } catch (e) {}
+
+      const putRes = await fetch(`https://api.github.com/repos/${ghRepo}/contents/config.json`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${ghToken}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'Content-Type': 'application/json',
+          'User-Agent': 'Bre-AI-Router'
+        },
+        body: JSON.stringify({
+          message: 'chore: update Bre AI configuration via Admin Dashboard [skip ci]',
+          content: Buffer.from(JSON.stringify(merged, null, 2), 'utf-8').toString('base64'),
+          sha: currentSha || undefined,
+          branch: ghBranch
+        }),
+        signal: AbortSignal.timeout(6000)
+      });
+
+      if (putRes.ok) {
+        cloudStatus.synced = true;
+        cloudStatus.githubSuccess = true;
+        cloudStatus.provider = cloudStatus.upstashSuccess ? 'upstash+github' : 'github';
+        cloudStatus.message = (cloudStatus.message ? cloudStatus.message + ' & ' : '') + 'Tersimpan permanen ke GitHub Repository';
+      }
+    } catch (err) {
+      console.warn('[CloudConfig] GitHub commit error:', err.message);
+    }
+  }
+
+  return {
+    ...merged,
+    _isReadOnlyFS: Boolean(saveError),
+    _saveError: saveError,
+    _cloudStatus: cloudStatus
+  };
+}
+
+async function testUpstash(url, token) {
+  try {
+    const cleanUrl = (url || '').trim().replace(/\/$/, '');
+    const cleanToken = (token || '').trim();
+    if (!cleanUrl || !cleanToken) return { ok: false, error: 'URL dan Token Upstash tidak boleh kosong' };
+    const resp = await fetch(`${cleanUrl}/set/bre_ai_test_ping`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${cleanToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ping: 'pong', time: Date.now() }),
+      signal: AbortSignal.timeout(5000)
+    });
+    if (!resp.ok) {
+      const txt = await resp.text();
+      return { ok: false, error: `HTTP ${resp.status}: ${txt}` };
+    }
+    return { ok: true, message: 'Koneksi ke Vercel KV / Upstash Redis berhasil & siap digunakan!' };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+async function testGitHub(token, repo, branch = 'main') {
+  try {
+    const cleanToken = (token || '').trim();
+    const cleanRepo = (repo || '').trim();
+    if (!cleanToken || !cleanRepo) return { ok: false, error: 'GitHub Token dan Repo tidak boleh kosong' };
+    const resp = await fetch(`https://api.github.com/repos/${cleanRepo}`, {
+      headers: {
+        'Authorization': `Bearer ${cleanToken}`,
+        'Accept': 'application/vnd.github.v3+json',
+        'User-Agent': 'Bre-AI-Router'
+      },
+      signal: AbortSignal.timeout(5000)
+    });
+    if (!resp.ok) {
+      const txt = await resp.text();
+      return { ok: false, error: `HTTP ${resp.status}: ${txt}` };
+    }
+    const data = await resp.json();
+    return { ok: true, message: `Terhubung ke repositori ${data.full_name} (${branch})!` };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+function getCloudStorageInfo() {
+  const cfg = getConfig();
+  const hasUpstash = Boolean((process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || cfg.upstashRedisUrl) && (process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || cfg.upstashRedisToken));
+  const hasGitHub = Boolean((process.env.GITHUB_TOKEN || cfg.githubToken) && (process.env.GITHUB_REPO || cfg.githubRepo));
+  return {
+    upstashActive: hasUpstash,
+    githubActive: hasGitHub,
+    mode: (hasUpstash && hasGitHub) ? 'upstash+github' : (hasUpstash ? 'upstash' : (hasGitHub ? 'github' : 'local')),
+    isServerless: Boolean(process.env.VERCEL || process.env.VERCEL_URL || process.env.AWS_LAMBDA_FUNCTION_NAME)
+  };
 }
 
 function checkRateLimit(ip) {
@@ -326,7 +603,11 @@ function sanitizeOutput(text) {
 
 module.exports = {
   getConfig,
+  syncCloudConfig,
   saveConfig,
+  testUpstash,
+  testGitHub,
+  getCloudStorageInfo,
   parseKeys,
   sanitizeOutput,
   checkRateLimit,

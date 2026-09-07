@@ -1,6 +1,10 @@
 const {
   getConfig,
+  syncCloudConfig,
   saveConfig,
+  testUpstash,
+  testGitHub,
+  getCloudStorageInfo,
   checkRateLimit,
   recordFailedAttempt,
   clearLoginAttempts,
@@ -19,7 +23,8 @@ module.exports = async (req, res) => {
 
   if (req.method === 'OPTIONS') return res.status(204).end();
 
-  const cfg = getConfig();
+  // Sinkronisasi cloud agar konfigurasi selalu mutakhir di Vercel Serverless
+  const cfg = await syncCloudConfig();
   const ip = getIp(req);
   const token = getToken(req);
   const isAdmin = token === cfg.adminPassword;
@@ -116,12 +121,28 @@ module.exports = async (req, res) => {
       }
     }
 
+    // Cloud Persistence Actions
+    if (body.action === 'test_upstash') {
+      const resTest = await testUpstash(body.url, body.token);
+      return res.json(resTest);
+    }
+
+    if (body.action === 'test_github') {
+      const resTest = await testGitHub(body.token, body.repo, body.branch);
+      return res.json(resTest);
+    }
+
+    if (body.action === 'get_cloud_status') {
+      return res.json({ ok: true, status: getCloudStorageInfo() });
+    }
+
     if (body.action === 'restart_telegram') {
       let telegramBot;
       try { telegramBot = require('../services/telegramBot'); } catch(e){}
       if (!telegramBot) return res.status(500).json({ ok: false, error: 'Telegram service unavailable' });
-      const started = await telegramBot.restart();
-      const status = await telegramBot.getDetailedStatus();
+      const host = req.headers['x-forwarded-host'] || req.headers.host || '';
+      const started = await telegramBot.restart(host);
+      const status = await telegramBot.getDetailedStatus(host);
       return res.json({ ok: true, running: started, status });
     }
 
@@ -129,13 +150,14 @@ module.exports = async (req, res) => {
     let updatedFields = { ...body };
     delete updatedFields.action;
     
-    const updated = saveConfig(updatedFields);
+    const updated = await saveConfig(updatedFields);
 
     // Auto-restart telegram bot if telegram settings changed
     if (updatedFields.telegramEnabled !== undefined || updatedFields.telegramBotToken !== undefined || updatedFields.telegramAllowedUsers !== undefined) {
       try {
         const telegramBot = require('../services/telegramBot');
-        telegramBot.restart().catch(() => {});
+        const host = req.headers['x-forwarded-host'] || req.headers.host || '';
+        telegramBot.restart(host).catch(() => {});
       } catch(e){}
     }
 
@@ -143,7 +165,8 @@ module.exports = async (req, res) => {
       ok: true, 
       config: updated, 
       isReadOnlyFS: !!updated._isReadOnlyFS,
-      warning: updated._saveError ? 'Sistem file serverless Vercel bersifat Read-Only. Untuk konfigurasi permanen di Vercel, atur di menu Environment Variables Dashboard Vercel.' : null
+      cloudStatus: updated._cloudStatus || null,
+      cloudStorageInfo: getCloudStorageInfo()
     }); 
   }
 
@@ -158,5 +181,8 @@ module.exports = async (req, res) => {
     return res.json({ ok: true, logs: getLogs() });
   }
 
-  return res.json({ config: isAdmin ? cfg : publicCfg });
+  return res.json({ 
+    config: isAdmin ? cfg : publicCfg,
+    cloudStorageInfo: getCloudStorageInfo()
+  });
 };

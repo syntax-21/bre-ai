@@ -7,11 +7,12 @@ const path = require('path');
 const fs   = require('fs');
 const url  = require('url');
 
-const chat   = require('./api/chat');
-const config = require('./api/config');
-const info   = require('./api/info');
-const test   = require('./api/test');
-const search = require('./api/search');
+const chat     = require('./api/chat');
+const config   = require('./api/config');
+const info     = require('./api/info');
+const test     = require('./api/test');
+const search   = require('./api/search');
+const telegram = require('./api/telegram');
 
 
 const PORT   = process.env.PORT || 3000;
@@ -67,12 +68,13 @@ const server = http.createServer((req, res) => {
 
   const wres = wrapRes(res);
 
-  if (pathname === '/api/chat')   return chat(req, wres);
-  if (pathname === '/api/config') return config(req, wres);
-  if (pathname === '/api/info')   return info(req, wres);
-  if (pathname === '/api/test')   return test(req, wres);
-  if (pathname === '/api/search') return search(req, wres);
-  if (pathname === '/admin')      return serve(res, path.join(PUBLIC, 'admin.html'));
+  if (pathname === '/api/chat')     return chat(req, wres);
+  if (pathname === '/api/config')   return config(req, wres);
+  if (pathname === '/api/info')     return info(req, wres);
+  if (pathname === '/api/test')     return test(req, wres);
+  if (pathname === '/api/search')   return search(req, wres);
+  if (pathname === '/api/telegram') return telegram(req, wres);
+  if (pathname === '/admin')        return serve(res, path.join(PUBLIC, 'admin.html'));
 
   let fp = path.join(PUBLIC, pathname === '/' ? 'index.html' : pathname);
   fp = path.normalize(fp);

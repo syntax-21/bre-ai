@@ -85,6 +85,7 @@ function switchTab(tabId, btn) {
   if (tabId === 'tabAnalytics') loadMetrics();
   if (tabId === 'tabLogs') loadLogs();
   if (tabId === 'tabTelegram') loadTelegramStatus();
+  if (tabId === 'tabCloud') loadCloudStorageStatus();
 }
 
 async function doLogin() {
@@ -104,6 +105,7 @@ async function doLogin() {
       await loadConfig();
       loadMetrics();
       loadLogs();
+      loadCloudStorageStatus();
       initTimers();
       toast('Login berhasil! Selamat datang di Bre AI Control Center.', 'ok');
     } else {
@@ -182,6 +184,22 @@ async function loadConfig() {
 
     telegramUsers = Array.isArray(c.telegramUsers) ? c.telegramUsers : [];
     renderTelegramUsersTable();
+
+    // Cloud Persistence Settings
+    const upUrlEl = document.getElementById('cfgUpstashUrl');
+    if (upUrlEl) upUrlEl.value = c.upstashRedisUrl || '';
+    const upTokEl = document.getElementById('cfgUpstashToken');
+    if (upTokEl) upTokEl.value = c.upstashRedisToken || '';
+    const ghTokEl = document.getElementById('cfgGithubToken');
+    if (ghTokEl) ghTokEl.value = c.githubToken || '';
+    const ghRepoEl = document.getElementById('cfgGithubRepo');
+    if (ghRepoEl) ghRepoEl.value = c.githubRepo || '';
+    const ghBranchEl = document.getElementById('cfgGithubBranch');
+    if (ghBranchEl) ghBranchEl.value = c.githubBranch || 'main';
+
+    if (data.cloudStorageInfo) {
+      updateStorageBadges(data.cloudStorageInfo);
+    }
 
     updateTelegramModelDropdown(c.telegramModel);
     loadTelegramStatus();
@@ -836,7 +854,13 @@ async function saveAllConfig() {
     telegramAccessMode: document.getElementById('cfgTelegramAccessMode') ? document.getElementById('cfgTelegramAccessMode').value : 'public',
     telegramAllowedUsers: document.getElementById('cfgTelegramWhitelist') ? document.getElementById('cfgTelegramWhitelist').value.trim() : '',
     telegramModel: document.getElementById('cfgTelegramModel') ? document.getElementById('cfgTelegramModel').value.trim() : '',
-    telegramUsers: telegramUsers
+    telegramUsers: telegramUsers,
+    // Cloud Persistence Settings
+    upstashRedisUrl: document.getElementById('cfgUpstashUrl') ? document.getElementById('cfgUpstashUrl').value.trim() : '',
+    upstashRedisToken: document.getElementById('cfgUpstashToken') ? document.getElementById('cfgUpstashToken').value.trim() : '',
+    githubToken: document.getElementById('cfgGithubToken') ? document.getElementById('cfgGithubToken').value.trim() : '',
+    githubRepo: document.getElementById('cfgGithubRepo') ? document.getElementById('cfgGithubRepo').value.trim() : '',
+    githubBranch: document.getElementById('cfgGithubBranch') ? document.getElementById('cfgGithubBranch').value.trim() : 'main'
   };
   
   const streamMode = document.getElementById('cfgStream').value;
@@ -862,8 +886,15 @@ async function saveAllConfig() {
       }
       document.getElementById('cfgNewPw').value = '';
       loadTelegramStatus();
-      if (data.isReadOnlyFS) {
-        toast('⚠️ Disimpan di memori! Di Vercel (Read-Only), atur di menu Environment Variables Vercel agar tersimpan permanen.', 'ok');
+
+      if (data.cloudStorageInfo) {
+        updateStorageBadges(data.cloudStorageInfo, data.cloudStatus);
+      }
+
+      if (data.cloudStatus && data.cloudStatus.synced) {
+        toast(`✅ Seluruh konfigurasi tersimpan PERMANEN! (${data.cloudStatus.message})`, 'ok');
+      } else if (data.isReadOnlyFS) {
+        toast('⚠️ Disimpan di cache serverless container. Hubungkan Vercel KV atau GitHub Sync di tab "Cloud Storage" agar tersimpan permanen.', 'ok');
       } else {
         toast('✅ Seluruh konfigurasi berhasil disimpan permanen ke config.json!', 'ok');
       }
@@ -1085,8 +1116,29 @@ async function testTelegramToken() {
 }
 
 async function restartTelegramBot() {
-  toast('💾 Menyimpan pengaturan & me-restart bot...', 'ok');
+  toast('💾 Menyimpan pengaturan & mengaktifkan bot...', 'ok');
   await saveAllConfig();
+
+  // If on HTTPS (e.g. Vercel / custom cloud domain), auto-setup webhook so bot runs 24/7 without login
+  if (window.location.protocol === 'https:') {
+    try {
+      const origin = window.location.origin;
+      const webhookUrl = `${origin}/api/telegram`;
+      const wbRes = await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
+        body: JSON.stringify({ action: 'setup_webhook', url: webhookUrl })
+      });
+      const wbData = await wbRes.json();
+      if (wbData.ok) {
+        toast('🎉 Webhook Cloud Berhasil Diaktifkan! Bot aktif 24 jam nonstop tanpa perlu login admin.', 'ok');
+        loadTelegramStatus();
+        return;
+      }
+    } catch (e) {}
+  }
+
+  // Fallback for localhost (HTTP) -> start local polling loop
   try {
     const r = await fetch('/api/config', {
       method: 'POST',
@@ -1219,6 +1271,172 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   } catch(e) {}
 });
+
+// ========================================================
+// CLOUD STORAGE & PERSISTENCE CONTROLLER (VERCEL & GITHUB)
+// ========================================================
+
+async function loadCloudStorageStatus() {
+  if (!adminToken) return;
+  try {
+    const r = await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
+      body: JSON.stringify({ action: 'get_cloud_status' })
+    });
+    if (!r.ok) return;
+    const data = await r.json();
+    if (data.status) {
+      updateStorageBadges(data.status);
+    }
+  } catch(e) {
+    console.error('loadCloudStorageStatus error:', e);
+  }
+}
+
+function updateStorageBadges(info, cloudStatus = null) {
+  const headerBadge = document.getElementById('storageHeaderBadge');
+  const cardBadge = document.getElementById('cloudStatusBadge');
+  const cardTitle = document.getElementById('cloudStatusTitle');
+  const cardDesc = document.getElementById('cloudStatusExplanation');
+
+  if (!info) return;
+
+  if (info.upstashActive) {
+    if (headerBadge) {
+      headerBadge.className = 'ping-badge ok';
+      headerBadge.textContent = '🟢 Vercel KV Aktif';
+    }
+    if (cardBadge) {
+      cardBadge.className = 'ping-badge ok';
+      cardBadge.textContent = '🟢 Vercel KV / Upstash Redis Aktif';
+    }
+    if (cardTitle) cardTitle.textContent = 'Penyimpanan Permanen Cloud Aktif (Vercel KV / Redis)';
+    if (cardDesc) {
+      cardDesc.innerHTML = 'Database Redis serverless terhubung. Seluruh perubahan konfigurasi di panel web ini langsung tersimpan permanen di cloud (&lt;20ms) dan tidak akan pernah hilang meskipun Vercel cold start atau restart deployment.';
+    }
+  } else if (info.githubActive) {
+    if (headerBadge) {
+      headerBadge.className = 'ping-badge ok';
+      headerBadge.textContent = '🟢 GitHub Sync Aktif';
+    }
+    if (cardBadge) {
+      cardBadge.className = 'ping-badge ok';
+      cardBadge.textContent = '🟢 GitHub Auto-Commit Aktif';
+    }
+    if (cardTitle) cardTitle.textContent = 'Sinkronisasi Otomatis Repositori GitHub Aktif';
+    if (cardDesc) {
+      cardDesc.innerHTML = 'Setiap kali Anda klik <b>Simpan Semua Pengaturan</b>, Bre AI akan langsung membuat commit baru ke file <code>config.json</code> di repositori GitHub Anda. Vercel akan otomatis mendapatkan versi terbaru!';
+    }
+  } else if (info.isServerless) {
+    if (headerBadge) {
+      headerBadge.className = 'ping-badge testing';
+      headerBadge.textContent = '🟡 Serverless /tmp Cache';
+    }
+    if (cardBadge) {
+      cardBadge.className = 'ping-badge testing';
+      cardBadge.textContent = '🟡 Cache Sementara (Vercel Read-Only)';
+    }
+    if (cardTitle) cardTitle.textContent = 'Sistem File Vercel Read-Only';
+    if (cardDesc) {
+      cardDesc.innerHTML = '⚠️ Anda saat ini mendeploy di Vercel tanpa cloud storage permanen. Pengaturan tersimpan di cache <code>/tmp</code> selama serverless container masih hangat, namun dapat kembali ke default saat container baru dimulai.<br><b>Saran:</b> Hubungkan <b>Vercel KV</b> (1-klik di Vercel Dashboard → Storage) atau isi <b>Token GitHub</b> di bawah agar konfigurasi tersimpan 100% permanen!';
+    }
+  } else {
+    if (headerBadge) {
+      headerBadge.className = 'ping-badge ok';
+      headerBadge.textContent = '💾 Local Disk (config.json)';
+    }
+    if (cardBadge) {
+      cardBadge.className = 'ping-badge ok';
+      cardBadge.textContent = '🟢 File Lokal (config.json)';
+    }
+    if (cardTitle) cardTitle.textContent = 'Penyimpanan File Lokal Aktif';
+    if (cardDesc) {
+      cardDesc.innerHTML = 'Aplikasi berjalan di server lokal / VPS dengan akses tulis langsung ke <code>config.json</code>. Semua perubahan langsung tersimpan permanen ke hard drive server.';
+    }
+  }
+}
+
+async function testUpstashConnection() {
+  const url = (document.getElementById('cfgUpstashUrl')?.value || '').trim();
+  const token = (document.getElementById('cfgUpstashToken')?.value || '').trim();
+
+  if (!url || !token) {
+    return toast('Masukkan URL dan Token Upstash Redis terlebih dahulu', 'err');
+  }
+
+  toast('⚡ Menguji koneksi ke Vercel KV / Upstash Redis...', 'ok');
+  try {
+    const r = await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
+      body: JSON.stringify({ action: 'test_upstash', url, token })
+    });
+    const data = await r.json();
+    if (data.ok) {
+      toast('🎉 ' + data.message, 'ok');
+      await saveAllConfig();
+    } else {
+      toast('❌ Gagal terhubung ke Upstash: ' + (data.error || 'Unknown error'), 'err');
+    }
+  } catch(e) {
+    toast('Error pengujian Upstash: ' + e.message, 'err');
+  }
+}
+
+async function testGitHubConnection() {
+  const token = (document.getElementById('cfgGithubToken')?.value || '').trim();
+  const repo = (document.getElementById('cfgGithubRepo')?.value || '').trim();
+  const branch = (document.getElementById('cfgGithubBranch')?.value || '').trim() || 'main';
+
+  if (!token || !repo) {
+    return toast('Masukkan GitHub Token dan Nama Repositori (contoh: user/repo)', 'err');
+  }
+
+  toast('⚡ Menguji koneksi ke GitHub API...', 'ok');
+  try {
+    const r = await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
+      body: JSON.stringify({ action: 'test_github', token, repo, branch })
+    });
+    const data = await r.json();
+    if (data.ok) {
+      toast('🎉 ' + data.message, 'ok');
+      await saveAllConfig();
+    } else {
+      toast('❌ Gagal terhubung ke GitHub: ' + (data.error || 'Periksa token & nama repo'), 'err');
+    }
+  } catch(e) {
+    toast('Error pengujian GitHub: ' + e.message, 'err');
+  }
+}
+
+function toggleUpstashTokenMask() {
+  const inp = document.getElementById('cfgUpstashToken');
+  const btn = document.getElementById('btnMaskUpstash');
+  if (!inp || !btn) return;
+  if (inp.type === 'password') {
+    inp.type = 'text';
+    btn.textContent = '🔒 Sembunyikan';
+  } else {
+    inp.type = 'password';
+    btn.textContent = '👁️ Tampilkan';
+  }
+}
+
+function toggleGithubTokenMask() {
+  const inp = document.getElementById('cfgGithubToken');
+  const btn = document.getElementById('btnMaskGithub');
+  if (!inp || !btn) return;
+  if (inp.type === 'password') {
+    inp.type = 'text';
+    btn.textContent = '🔒 Sembunyikan';
+  } else {
+    inp.type = 'password';
+    btn.textContent = '👁️ Tampilkan';
+  }
+}
 
 
 

@@ -1,5 +1,6 @@
 const {
   getConfig,
+  syncCloudConfig,
   sanitizeOutput,
   checkRateLimit,
   recordFailedAttempt,
@@ -33,7 +34,7 @@ module.exports = async (req, res) => {
   }
   body = body || {};
 
-  const cfg = getConfig();
+  const cfg = await syncCloudConfig();
   const ip = (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim();
 
   // 1. Validate Client API Key (if configured and header provided)

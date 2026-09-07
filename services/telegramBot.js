@@ -976,8 +976,8 @@ class TelegramBotService {
     }
   }
 
-  // Start the bot polling service
-  async start() {
+  // Start the bot service
+  async start(host = null) {
     const cfg = getConfig();
     if (!cfg.telegramEnabled) {
       this.isRunning = false;
@@ -990,21 +990,37 @@ class TelegramBotService {
       return false;
     }
 
-    if (this.isRunning) return true;
-
     try {
       const info = await this.apiCall('getMe');
       this.botInfo = info;
+      this.lastError = null;
 
-      // Auto-clear webhook if previously set (e.g. from Vercel deployment), so long polling can run
+      const isServerless = Boolean(process.env.VERCEL || process.env.VERCEL_URL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+
+      // Serverless Mode (Vercel): Gunakan Webhook 24/7, JANGAN hapus webhook & JANGAN jalankan polling!
+      if (isServerless || (host && !host.includes('localhost') && !host.includes('127.0.0.1'))) {
+        if (host) {
+          const webhookUrl = `https://${host}/api/telegram`;
+          try {
+            await this.apiCall('setWebhook', { url: webhookUrl });
+            console.log(`[TelegramBot] 🌐 Webhook serverless 24/7 dipasang ke ${webhookUrl}`);
+          } catch (e) {}
+        }
+        this.isRunning = true;
+        console.log(`[TelegramBot] 🟢 Berhasil terhubung sebagai @${info.username} (Mode Serverless Webhook 24/7)`);
+        return true;
+      }
+
+      // Local Development Mode: Gunakan Long-Polling
+      if (this.isRunning) return true;
+
+      // Hapus webhook sebelumnya agar long-polling lokal tidak bentrok
       try {
         await this.apiCall('deleteWebhook', { drop_pending_updates: false });
       } catch (e) {}
 
       this.isRunning = true;
-      this.lastError = null;
-      console.log(`[TelegramBot] 🟢 Berhasil terhubung sebagai @${info.username} (ID: ${info.id})`);
-      
+      console.log(`[TelegramBot] 🟢 Berhasil terhubung sebagai @${info.username} (Mode Long-Polling Lokal)`);
       this.poll();
       return true;
     } catch (err) {
@@ -1023,11 +1039,11 @@ class TelegramBotService {
     }
   }
 
-  // Restart polling service
-  async restart() {
+  // Restart bot service
+  async restart(host = null) {
     this.stop();
     await new Promise(r => setTimeout(r, 500));
-    return this.start();
+    return this.start(host);
   }
 
   // Initialize on server boot
@@ -1085,7 +1101,7 @@ class TelegramBotService {
     return {
       enabled: !!cfg.telegramEnabled,
       hasToken,
-      running: this.isRunning,
+      running: Boolean(hasActiveWebhook || this.isRunning),
       isVercel,
       isWebhookActive: hasActiveWebhook,
       webhookUrl: webhookInfo?.url || '',

@@ -3,6 +3,7 @@
 // Created by Amirun Rayan Ariandi
 // ========================================================
 const telegramBot = require('../services/telegramBot');
+const { syncCloudConfig } = require('./_shared');
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -22,6 +23,9 @@ module.exports = async (req, res) => {
     }
 
     try {
+      // Pastikan konfigurasi terbaru (whitelist, role pengguna, model) tersinkronisasi dari Cloud
+      await syncCloudConfig();
+
       if (body.message) {
         await telegramBot.handleMessage(body.message);
       } else if (body.callback_query) {
