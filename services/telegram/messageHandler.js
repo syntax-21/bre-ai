@@ -782,13 +782,57 @@ async function handleMessage(msg, botService, ctx = null) {
     }
     const cfg = getConfig();
     const eps = Array.isArray(cfg.endpoints) ? cfg.endpoints : [];
-    let provMsg = `🔌 *Daftar Provider AI (${eps.length} endpoint):*\n\n`;
+    const routingMode = (cfg.routingStrategy || cfg.providerRoutingMode || 'auto').toLowerCase();
+    
+    let routingLabel = '🔄 AUTO (Rotasi Bergantian Semua Provider Aktif)';
+    if (routingMode === 'priority') routingLabel = '🥇 Prioritas Tunggal';
+    else if (routingMode === 'weighted') routingLabel = '⚖️ Berdasarkan Bobot (Weight)';
+
+    let provMsg = `🔌 *Daftar Provider AI & Strategi Routing*\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `• *Strategi Routing:* *${routingLabel}*\n` +
+      `• *Auto-Failover:* *${cfg.autoFailover !== false ? '🟢 Aktif' : '🔴 Nonaktif'}*\n` +
+      `• *Total Provider:* *${eps.length} endpoint*\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+
     eps.forEach((e, i) => {
       const st = e.status !== false ? '🟢 Aktif' : '🔴 Nonaktif';
       const kCount = Array.isArray(e.keys) ? e.keys.length : (e.keys ? 1 : 0);
       provMsg += `${i+1}. *${e.name || 'Provider'}* [${st}]\n   • Models: \`${(e.models || []).join(', ') || '-'}\`\n   • Keys: ${kCount} key\n   • Weight: ${e.weight || 1}\n\n`;
     });
+
+    provMsg += `_Ketik \`/setrouting auto\` untuk mengaktifkan rotasi bergantian semua provider._`;
     await sendTelegramMessage(chatId, provMsg, null, null, token);
+    return;
+  }
+
+  // /setrouting [auto|priority|weighted]
+  if (lowerText.startsWith('/setrouting') || lowerText.startsWith('/routing')) {
+    if (!isOwnerUser) {
+      await sendTelegramMessage(chatId, '⛔ Perintah ini khusus untuk Owner.', null, null, token);
+      return;
+    }
+    const rawMode = text.replace(/^\/(setrouting|routing)/i, '').trim().toLowerCase();
+    if (!['auto', 'priority', 'weighted'].includes(rawMode)) {
+      await sendTelegramMessage(
+        chatId,
+        `🔀 *Panduan Mengatur Strategi Routing Provider:*\n\n` +
+        `Gunakan format:\n\`/setrouting [auto | priority | weighted]\`\n\n` +
+        `• \`/setrouting auto\` -> 🔄 *Mode AUTO (Bergantian)*: Membagi beban dengan menggunakan semua provider secara bergantian bergilir (Round-Robin).\n` +
+        `• \`/setrouting priority\` -> 🥇 *Prioritas Tunggal*: Menggunakan provider pertama dan fallback jika error.\n` +
+        `• \`/setrouting weighted\` -> ⚖️ *Berdasarkan Bobot*: Mengikuti nilai bobot weight masing-masing provider.`,
+        null, null, token
+      );
+      return;
+    }
+
+    saveConfig({ routingStrategy: rawMode, providerRoutingMode: rawMode });
+    const labels = {
+      auto: '🔄 AUTO (Rotasi Bergantian Seluruh Provider Aktif)',
+      priority: '🥇 Prioritas Tunggal (Fallback Failover)',
+      weighted: '⚖️ Berdasarkan Bobot (Weight Distribution)'
+    };
+    await sendTelegramMessage(chatId, `✅ Strategi routing AI berhasil diubah ke: *${labels[rawMode]}*`, null, null, token);
     return;
   }
 
@@ -1076,29 +1120,31 @@ async function handleMessage(msg, botService, ctx = null) {
     botService.conversations.delete(chatId);
     const currentLang = chatLanguages.get(chatId);
     const langLabel = currentLang && LANGUAGE_OPTIONS[currentLang] ? LANGUAGE_OPTIONS[currentLang].label : '🇮🇩 Bahasa Indonesia';
-    let welcome = `⚡ *Halo ${senderName}!* Selamat datang di *Bre AI*.\n\n` +
+    
+    let welcome = `⚡️ *Halo ${senderName}!* Selamat datang di *Bre AI*.\n\n` +
       `Saya adalah asisten kecerdasan buatan serba bisa dan cerdas tanpa batas ciptaan *Amirun Rayan Ariandi*, siap membantu Anda menjawab pertanyaan, menulis kode program, menghasilkan pesan interaktif, menganalisis dokumen/gambar, hingga menyelesaikan tugas kompleks langsung dari Telegram.\n\n` +
-      `📌 *Fitur Lengkap yang Didukung:*\n` +
-      `• 💬 *Pesan Teks & Diskusi:* Bebas bertanya apa pun dalam berbagai bahasa.\n` +
-      `• 📄 *Kirim & Buat Berkas File:* Otomatis membuatkan & mengirim file (.py, .js, .html, .css, .json, .txt, dll) yang bisa langsung diunduh.\n` +
-      `• 📊 *Polling & Kuis Interaktif:* Minta AI membuat voting atau kuis langsung ke grup/chat.\n` +
-      `• 🎲 *Game & Dadu Animasi:* Lempar dadu, panahan, basket, sepakbola, bowling, dan slot.\n` +
-      `• 📍 *Peta Lokasi & Venue:* Pin koordinat lokasi dan tempat wisata/gedung di peta.\n` +
-      `• 👤 *Kartu Kontak:* Bagikan info kartu kontak resmi.\n` +
-      `• 📷 *Gambar & Foto:* Analisis gambar dan foto secara visual.\n` +
-      `• 🎙️ *Pesan Suara / Audio:* Kirim voice note atau rekaman audio.\n` +
-      `• 🎬 *Video & Video Note:* Kirim rekaman video untuk didiskusikan.\n` +
-      `• 🎭 *Stiker & GIF Animasi:* Respons ekspresif dan ramah.\n\n` +
       `• Kirim /reset untuk membersihkan riwayat obrolan.\n` +
       `• Kirim /language untuk memilih bahasa respons.\n` +
       `• Kirim /help untuk daftar perintah & panduan lengkap.\n` +
       `🌐 *Bahasa Aktif:* ${langLabel}`;
 
+    let replyMarkup = null;
+
     if (isOwnerUser) {
-      welcome += `\n\n👑 *Panel Pemilik (Owner):*\nKirim perintah */admin* untuk membuka master control panel lengkap!`;
+      welcome += `\n\n👑 *Panel Pemilik (Owner):*\n` +
+        `Kirim */admin* untuk membuka Master Control Panel atau pantau sistem dengan perintah cepat: \`/status\`, \`/metrics\`, \`/logs\`, \`/providers\`, \`/benchmark\`.`;
+      
+      replyMarkup = {
+        inline_keyboard: [
+          [
+            { text: '🎛️ Buka Master Admin Panel', callback_data: 'adm_main' },
+            { text: '📊 Cek Status & Metrik', callback_data: 'adm_metrics' }
+          ]
+        ]
+      };
     }
 
-    await sendTelegramMessage(chatId, welcome, null, null, token);
+    await sendTelegramMessage(chatId, welcome, replyMarkup, null, token);
     return;
   }
 
@@ -1130,7 +1176,8 @@ async function handleMessage(msg, botService, ctx = null) {
         `• \`/status\` - Ringkasan status bot & engine\n` +
         `• \`/metrics\` - Laporan metrik real-time & token\n` +
         `• \`/logs\` - Lihat 5 log server terakhir\n` +
-        `• \`/providers\` - Daftar endpoint AI & routing\n` +
+        `• \`/providers\` - Daftar endpoint AI & status routing\n` +
+        `• \`/setrouting [auto|priority|weighted]\` - Atur rotasi provider (AUTO bergantian)\n` +
         `• \`/benchmark\` - Uji kecepatan paralel semua provider\n` +
         `• \`/setmodel [nama]\` - Ganti model AI Telegram\n` +
         `• \`/setmode [public|whitelist]\` - Ubah mode akses\n` +

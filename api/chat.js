@@ -8,7 +8,8 @@ const {
   checkBlacklist,
   getCachedResponse,
   setCachedResponse,
-  validateClientKey
+  validateClientKey,
+  getNextRoundRobinIndex
 } = require('./_shared');
 
 const keyRotations = new Map();
@@ -34,28 +35,27 @@ module.exports = async (req, res) => {
   }
   body = body || {};
 
+  // 1. IP and Rate Limiting
+  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || '127.0.0.1';
   const cfg = await syncCloudConfig();
-  const ip = (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim();
 
-  // 1. Validate Client API Key (if configured and header provided)
-  const authHeader = req.headers.authorization || '';
-  if (authHeader && cfg.clientKeys && cfg.clientKeys.length > 0) {
-    const keyCheck = validateClientKey(authHeader, cfg);
-    if (!keyCheck.valid) {
-      logRequest({ ip, provider: 'Security Gate', model: 'auth', status: 401, latencyMs: 2, error: keyCheck.error });
-      return res.status(401).json({ error: keyCheck.error || 'Unauthorized: Invalid client API Key.' });
-    }
+  // 2. Client Authentication Check
+  const authHeader = req.headers['authorization'] || '';
+  const apiKey = authHeader.replace(/^Bearer\s+/i, '').trim();
+  const isValidAuth = validateClientKey(apiKey, cfg);
+  if (!isValidAuth) {
+    recordFailedAttempt(ip);
+    logRequest({ ip, provider: 'Auth', model: 'n/a', status: 401, latencyMs: 1, error: 'Unauthorized Client API Key' });
+    return res.status(401).json({ error: 'Akses ditolak: Client API Key tidak valid atau belum diisi.' });
   }
 
-  // 2. Rate limiting check
-  const rate = checkRateLimit(ip);
-  if (rate.limited) {
-    logRequest({ ip, provider: 'Rate Limiter', model: 'limit', status: 429, latencyMs: 1, error: 'Rate limit exceeded' });
-    return res.status(429).json({ error: `Rate limit API. Coba lagi dalam ${rate.retryAfter} detik.` });
+  // Check Rate Limits
+  if (!checkRateLimit(ip)) {
+    logRequest({ ip, provider: 'RateLimiter', model: 'n/a', status: 429, latencyMs: 1, error: 'Rate limit exceeded' });
+    return res.status(429).json({ error: 'Batas kuota request tercapai. Silakan coba beberapa detik lagi.' });
   }
-  recordFailedAttempt(ip);
 
-  // 3. Extract requested provider & model
+  // 3. Extract Custom Provider and Model Routing
   const requestedProvider = (req.headers['x-custom-provider'] || body.provider || '').trim();
   const requestedModel = (req.headers['x-custom-model'] || body.model || body.customModel || cfg.model || '').trim();
 
@@ -79,56 +79,81 @@ module.exports = async (req, res) => {
     return res.status(500).json({ error: 'Tidak ada Provider AI aktif yang memiliki API Key.' });
   }
 
-  // Find primary target
+  const routingMode = (cfg.routingStrategy || cfg.providerRoutingMode || 'auto').toLowerCase();
+  const searchProv = requestedProvider || requestedModel;
+  const isExplicitAuto = searchProv && searchProv.toLowerCase() === 'auto';
+  const isAutoRouting = routingMode === 'auto' || isExplicitAuto;
+
+  let candidates = [];
   let primaryTarget = null;
   let targetModelName = requestedModel;
 
-  const searchProv = requestedProvider || requestedModel;
-  if (searchProv && searchProv.toLowerCase() === 'auto') {
-    // Implement random rotation across active endpoints for Auto Router
-    const randomIdx = Math.floor(Math.random() * activeEps.length);
-    primaryTarget = activeEps[randomIdx];
-    targetModelName = primaryTarget.models?.[0] || 'auto';
-  } else if (searchProv) {
-    primaryTarget = activeEps.find(e => e.name && e.name.toLowerCase() === searchProv.toLowerCase())
-                 || activeEps.find(e => e.name && (e.name.toLowerCase().includes(searchProv.toLowerCase()) || searchProv.toLowerCase().includes(e.name.toLowerCase())));
-    if (primaryTarget) targetModelName = primaryTarget.models?.[0] || requestedModel;
-  }
-
-  if (!primaryTarget) {
-    for (const e of activeEps) {
-      if (e.models && e.models.some(m => m.toLowerCase() === requestedModel.toLowerCase())) {
-        primaryTarget = e;
-        targetModelName = requestedModel;
+  if (isAutoRouting) {
+    // Mode AUTO: Rotasi bergantian secara teratur (Round-Robin Sequential) ke semua provider aktif
+    const startIdx = getNextRoundRobinIndex(activeEps.length);
+    for (let i = 0; i < activeEps.length; i++) {
+      candidates.push(activeEps[(startIdx + i) % activeEps.length]);
+    }
+    primaryTarget = candidates[0];
+    targetModelName = primaryTarget.models?.[0] || requestedModel || 'mercury-2';
+  } else if (routingMode === 'weighted') {
+    // Mode WEIGHTED: Pilih provider berdasarkan bobot (weight)
+    let totalWeight = activeEps.reduce((acc, ep) => acc + (Math.max(1, parseInt(ep.weight) || 1)), 0);
+    let randWeight = Math.random() * totalWeight;
+    let chosenIdx = 0;
+    for (let i = 0; i < activeEps.length; i++) {
+      const w = Math.max(1, parseInt(activeEps[i].weight) || 1);
+      if (randWeight < w) {
+        chosenIdx = i;
         break;
       }
-      if (e.mapping) {
-        const mapStr = Array.isArray(e.mapping) ? e.mapping.join(',') : e.mapping;
-        const pairs = mapStr.split(',').map(p => p.trim()).filter(Boolean);
-        for (const p of pairs) {
-          const [alias, real] = p.split(':').map(s => s.trim());
-          if (alias && real && alias.toLowerCase() === requestedModel.toLowerCase()) {
-            primaryTarget = e;
-            targetModelName = real;
-            break;
+      randWeight -= w;
+    }
+    primaryTarget = activeEps[chosenIdx];
+    targetModelName = primaryTarget.models?.[0] || requestedModel || 'mercury-2';
+    candidates = [primaryTarget, ...activeEps.filter((_, idx) => idx !== chosenIdx)];
+  } else {
+    // Mode PRIORITY: Sesuai provider/model tertentu yang diminta, atau fallback urutan pertama
+    if (searchProv && !isExplicitAuto) {
+      primaryTarget = activeEps.find(e => e.name && e.name.toLowerCase() === searchProv.toLowerCase())
+                   || activeEps.find(e => e.name && (e.name.toLowerCase().includes(searchProv.toLowerCase()) || searchProv.toLowerCase().includes(e.name.toLowerCase())));
+      if (primaryTarget) targetModelName = primaryTarget.models?.[0] || requestedModel;
+    }
+
+    if (!primaryTarget) {
+      for (const e of activeEps) {
+        if (e.models && e.models.some(m => m.toLowerCase() === requestedModel.toLowerCase())) {
+          primaryTarget = e;
+          targetModelName = requestedModel;
+          break;
+        }
+        if (e.mapping) {
+          const mapStr = Array.isArray(e.mapping) ? e.mapping.join(',') : e.mapping;
+          const pairs = mapStr.split(',').map(p => p.trim()).filter(Boolean);
+          for (const p of pairs) {
+            const [alias, real] = p.split(':').map(s => s.trim());
+            if (alias && real && alias.toLowerCase() === requestedModel.toLowerCase()) {
+              primaryTarget = e;
+              targetModelName = real;
+              break;
+            }
           }
         }
+        if (primaryTarget) break;
       }
-      if (primaryTarget) break;
     }
-  }
 
-  if (!primaryTarget) {
-    primaryTarget = activeEps[0];
-    targetModelName = primaryTarget.models?.[0] || requestedModel;
-  }
+    if (!primaryTarget) {
+      primaryTarget = activeEps[0];
+      targetModelName = primaryTarget.models?.[0] || requestedModel || 'mercury-2';
+    }
 
-  // Build candidate list for auto-failover
-  const candidates = [primaryTarget];
-  if (cfg.autoFailover !== false) {
-    activeEps.forEach(e => {
-      if (e !== primaryTarget && !candidates.includes(e)) candidates.push(e);
-    });
+    candidates = [primaryTarget];
+    if (cfg.autoFailover !== false) {
+      activeEps.forEach(e => {
+        if (e !== primaryTarget && !candidates.includes(e)) candidates.push(e);
+      });
+    }
   }
 
   // 6. Response Caching check (only for non-stream requests)

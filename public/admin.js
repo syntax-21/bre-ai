@@ -195,8 +195,9 @@ async function loadConfig() {
     let c = data.config || {};
     c = restoreFullConfigFromLocalStorage(c);
     
-    endpoints = c.endpoints || [];
-    
+    // Routing Strategy (AUTO vs Priority vs Weighted)
+    setRoutingModeUI(c.routingStrategy || c.providerRoutingMode || 'auto');
+
     // Auto Failover
     const afEl = document.getElementById('cfgAutoFailover');
     if (afEl) afEl.checked = c.autoFailover !== false;
@@ -1190,12 +1191,65 @@ function clearLiveOutput() {
   document.getElementById('testOutputArea').textContent = 'Output dibersihkan.';
 }
 
+function setRoutingModeUI(mode) {
+  const m = (mode || 'auto').toLowerCase();
+  const hiddenInput = document.getElementById('cfgRoutingStrategy');
+  if (hiddenInput) hiddenInput.value = m;
+
+  const btnAuto = document.getElementById('btnRoutingAuto');
+  const btnPriority = document.getElementById('btnRoutingPriority');
+  const btnWeighted = document.getElementById('btnRoutingWeighted');
+  const desc = document.getElementById('routingModeDescription');
+
+  if (btnAuto) {
+    btnAuto.style.background = m === 'auto' ? '#0284c7' : 'transparent';
+    btnAuto.style.color = m === 'auto' ? '#ffffff' : '#94a3b8';
+    btnAuto.style.borderColor = m === 'auto' ? '#38bdf8' : '#334155';
+    btnAuto.style.fontWeight = m === 'auto' ? '600' : 'normal';
+  }
+  if (btnPriority) {
+    btnPriority.style.background = m === 'priority' ? '#0284c7' : 'transparent';
+    btnPriority.style.color = m === 'priority' ? '#ffffff' : '#94a3b8';
+    btnPriority.style.borderColor = m === 'priority' ? '#38bdf8' : '#334155';
+    btnPriority.style.fontWeight = m === 'priority' ? '600' : 'normal';
+  }
+  if (btnWeighted) {
+    btnWeighted.style.background = m === 'weighted' ? '#0284c7' : 'transparent';
+    btnWeighted.style.color = m === 'weighted' ? '#ffffff' : '#94a3b8';
+    btnWeighted.style.borderColor = m === 'weighted' ? '#38bdf8' : '#334155';
+    btnWeighted.style.fontWeight = m === 'weighted' ? '600' : 'normal';
+  }
+
+  if (desc) {
+    if (m === 'auto') {
+      desc.style.color = '#38bdf8';
+      desc.style.background = 'rgba(56, 189, 248, 0.08)';
+      desc.style.borderLeftColor = '#38bdf8';
+      desc.innerHTML = '🔄 <b>Mode AUTO Aktif:</b> Setiap permintaan baru yang masuk akan dieksekusi secara <b>bergantian (bergilir/round-robin)</b> ke seluruh provider yang aktif ON untuk membagi beban secara merata dan mencegah limit API.';
+    } else if (m === 'priority') {
+      desc.style.color = '#fbbf24';
+      desc.style.background = 'rgba(251, 191, 36, 0.08)';
+      desc.style.borderLeftColor = '#fbbf24';
+      desc.innerHTML = '🥇 <b>Mode Prioritas Tunggal Aktif:</b> Permintaan selalu diarahkan ke provider pertama yang aktif. Provider lainnya hanya digunakan sebagai cadangan jika provider utama error/down.';
+    } else if (m === 'weighted') {
+      desc.style.color = '#a78bfa';
+      desc.style.background = 'rgba(167, 139, 250, 0.08)';
+      desc.style.borderLeftColor = '#a78bfa';
+      desc.innerHTML = '⚖️ <b>Mode Berdasarkan Bobot (Weight) Aktif:</b> Permintaan didistribusikan secara proporsional sesuai nilai bobot (Weight) masing-masing provider.';
+    }
+  }
+}
+
 async function saveAllConfig() {
   syncProvidersFromUI();
   
   const newPw = document.getElementById('cfgNewPw').value.trim();
+  const routingMode = document.getElementById('cfgRoutingStrategy')?.value || 'auto';
+
   const payload = {
     endpoints: endpoints,
+    routingStrategy: routingMode,
+    providerRoutingMode: routingMode,
     autoFailover: document.getElementById('cfgAutoFailover') ? document.getElementById('cfgAutoFailover').checked : true,
     cacheEnabled: document.getElementById('cfgCacheEnabled') ? document.getElementById('cfgCacheEnabled').checked : false,
     cacheTTL: parseInt(document.getElementById('cfgCacheTTL')?.value) || 3600,

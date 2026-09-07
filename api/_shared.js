@@ -37,6 +37,8 @@ const DEFAULT_CONFIG = {
   reasoningEffort: 'low',
   streamEnabled: true,
   autoFailover: true,
+  routingStrategy: 'auto', // 'auto' (Round-Robin bergantian) | 'priority' | 'weighted'
+  providerRoutingMode: 'auto',
   cacheEnabled: false,
   cacheTTL: 3600,
   blacklist: [],
@@ -58,6 +60,15 @@ const DEFAULT_CONFIG = {
   githubRepo: '',
   githubBranch: 'main'
 };
+
+// Global round-robin rotation counter for AUTO mode
+let roundRobinIndex = 0;
+function getNextRoundRobinIndex(length) {
+  if (!length || length <= 1) return 0;
+  const idx = roundRobinIndex % length;
+  roundRobinIndex = (roundRobinIndex + 1) % length;
+  return idx;
+}
 
 // ========================================================
 // IN-MEMORY METRICS, LOGGING & CACHING SYSTEMS
@@ -762,5 +773,6 @@ module.exports = {
   clearResponseCache,
   validateClientKey,
   fetchAvailableModels,
-  testSingleModel
+  testSingleModel,
+  getNextRoundRobinIndex
 };

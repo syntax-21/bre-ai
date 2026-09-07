@@ -712,6 +712,35 @@
         <button class="preset-btn" onclick="addPreset('ollama')">💻 Ollama (Local)</button>
       </div>
 
+      <!-- Routing Strategy Selector (AUTO Rotation vs Priority vs Weighted) -->
+      <div style="background: linear-gradient(135deg, #0d131f, #090c14); border: 1px solid #1e293b; border-radius: 12px; padding: 18px 20px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; margin-bottom: 12px;">
+          <div>
+            <div style="font-weight: 700; font-size: 15px; color: #38bdf8; display: flex; align-items: center; gap: 8px;">
+              <span>🔀</span> Strategi Routing & Load Balancing Provider
+            </div>
+            <div style="font-size: 12px; color: #94a3b8; margin-top: 2px;">
+              Atur bagaimana permintaan AI didistribusikan jika seluruh/beberapa provider aktif menyala (ON).
+            </div>
+          </div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;" id="routingStrategyButtonGroup">
+            <button type="button" class="btn" id="btnRoutingAuto" onclick="setRoutingModeUI('auto')" style="background: #0284c7; color: #ffffff; border: 1px solid #38bdf8; font-size: 12px; padding: 6px 14px; font-weight: 600;">
+              🔄 AUTO (Bergantian / Round-Robin)
+            </button>
+            <button type="button" class="btn btn-outline" id="btnRoutingPriority" onclick="setRoutingModeUI('priority')" style="font-size: 12px; padding: 6px 14px; border-color: #334155; color: #94a3b8;">
+              🥇 Prioritas Tunggal
+            </button>
+            <button type="button" class="btn btn-outline" id="btnRoutingWeighted" onclick="setRoutingModeUI('weighted')" style="font-size: 12px; padding: 6px 14px; border-color: #334155; color: #94a3b8;">
+              ⚖️ Berdasarkan Bobot (Weight)
+            </button>
+          </div>
+        </div>
+        <input type="hidden" id="cfgRoutingStrategy" value="auto">
+        <div id="routingModeDescription" style="font-size: 12px; color: #38bdf8; background: rgba(56, 189, 248, 0.08); border-left: 3px solid #38bdf8; padding: 8px 12px; border-radius: 4px;">
+          🔄 <b>Mode AUTO Aktif:</b> Setiap permintaan baru yang masuk akan dieksekusi secara <b>bergantian (bergilir/round-robin)</b> ke seluruh provider yang aktif ON untuk membagi beban secara merata dan mencegah limit API.
+        </div>
+      </div>
+
       <!-- Auto-Failover Policy & Benchmark Toolbar -->
       <div style="background: #0d111a; border: 1px solid #1e2433; border-radius: 10px; padding: 14px 18px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
         <label class="toggle-wrap" style="font-size: 13px; color: #e2e8f0;">

@@ -321,11 +321,25 @@ async function handleAdminCallback(cq, botService) {
     await answerCallback(cq.id, null, false, token);
     const endpoints = Array.isArray(cfg.endpoints) ? cfg.endpoints : [];
     const autoFailover = cfg.autoFailover !== false;
+    const routingMode = (cfg.routingStrategy || cfg.providerRoutingMode || 'auto').toLowerCase();
+    
+    let routingLabel = '🔄 AUTO (Bergantian Semua Provider)';
+    let routingShort = '🔄 AUTO (Bergantian)';
+    if (routingMode === 'priority') {
+      routingLabel = '🥇 Prioritas Tunggal';
+      routingShort = '🥇 Prioritas';
+    } else if (routingMode === 'weighted') {
+      routingLabel = '⚖️ Berdasarkan Bobot (Weight)';
+      routingShort = '⚖️ Bobot';
+    }
 
     let text = `🔌 *Daftar Endpoint AI (Multi-Provider Router)*\n` +
-      `Auto-Failover Zero-Downtime: *${autoFailover ? '🟢 Aktif' : '🔴 Nonaktif'}*\n` +
-      `Total Provider Terkonfigurasi: *${endpoints.length} endpoint*\n\n` +
-      `_Klik nama provider di bawah untuk melihat detail, tes ping, deteksi model, atau mengaktifkan/menonaktifkan:_\n`;
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `• *Mode Routing:* *${routingLabel}*\n` +
+      `• *Auto-Failover:* *${autoFailover ? '🟢 Aktif' : '🔴 Nonaktif'}*\n` +
+      `• *Total Provider:* *${endpoints.length} endpoint*\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `_Klik nama provider di bawah untuk kelola, atau klik tombol Mode Routing untuk mengganti rotasi:_\n`;
 
     const rows = [];
     endpoints.forEach((ep, i) => {
@@ -338,7 +352,10 @@ async function handleAdminCallback(cq, botService) {
     });
 
     rows.push([
-      { text: `🔄 Auto-Failover: ${autoFailover ? '🟢 ON' : '🔴 OFF'}`, callback_data: 'adm_toggle_af' },
+      { text: `🔀 Mode: ${routingShort}`, callback_data: 'adm_cycle_routing' }
+    ]);
+    rows.push([
+      { text: `🔄 Failover: ${autoFailover ? '🟢 ON' : '🔴 OFF'}`, callback_data: 'adm_toggle_af' },
       { text: '🏆 Benchmark Leaderboard', callback_data: 'adm_benchmark' }
     ]);
     rows.push([
@@ -348,6 +365,28 @@ async function handleAdminCallback(cq, botService) {
 
     await editTelegramMessage(chatId, messageId, text, { inline_keyboard: rows }, token);
     return;
+  }
+
+  // 4a. Cycle Routing Strategy (AUTO -> Priority -> Weighted -> AUTO)
+  if (data === 'adm_cycle_routing') {
+    const current = (cfg.routingStrategy || cfg.providerRoutingMode || 'auto').toLowerCase();
+    let nextMode = 'auto';
+    let label = '🔄 AUTO (Rotasi Bergantian Seluruh Provider)';
+    if (current === 'auto') {
+      nextMode = 'priority';
+      label = '🥇 Prioritas Tunggal';
+    } else if (current === 'priority') {
+      nextMode = 'weighted';
+      label = '⚖️ Berdasarkan Bobot (Weight)';
+    } else {
+      nextMode = 'auto';
+      label = '🔄 AUTO (Rotasi Bergantian Seluruh Provider)';
+    }
+
+    saveConfig({ routingStrategy: nextMode, providerRoutingMode: nextMode });
+    await answerCallback(cq.id, `Mode Routing diubah ke: ${label}`, false, token);
+    cq.data = 'adm_providers';
+    return handleAdminCallback(cq, botService);
   }
 
   // 4b. Toggle Auto Failover
