@@ -492,7 +492,7 @@ async function detectModels(i) {
   }
 
   try {
-    const adminToken = sessionStorage.getItem('adminToken') || '';
+    const adminToken = window.adminToken || '';
     const r = await fetch('/api/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
@@ -571,7 +571,7 @@ async function testModel(providerIdx, modelName) {
   if (btnEl) { btnEl.disabled = true; }
 
   try {
-    const adminToken = sessionStorage.getItem('adminToken') || '';
+    const adminToken = window.adminToken || '';
     const r = await fetch('/api/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },

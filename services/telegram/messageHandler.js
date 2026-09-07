@@ -18,12 +18,19 @@ const {
 const { sendAdminPanel } = require('./adminMenu');
 
 // Query internal Bre AI router (works both on Localhost and Vercel Serverless)
-function queryBreAIRouter(userText, history = [], senderInfo = '') {
+// userContent can be a string (text) or an array (multimodal: text + image_url)
+function queryBreAIRouter(userContent, history = [], senderInfo = '') {
   return new Promise(async (resolve, reject) => {
     try {
       const chatHandler = require('../../api/chat');
       const cfg = getConfig();
       const model = cfg.telegramModel || cfg.model || 'mercury-2';
+
+      // Build the last user message — support multimodal content arrays
+      const lastUserMessage = {
+        role: 'user',
+        content: userContent // string or array of {type, text/image_url}
+      };
 
       const EventEmitter = require('events');
       const mockReq = Object.assign(new EventEmitter(), {
@@ -34,7 +41,7 @@ function queryBreAIRouter(userText, history = [], senderInfo = '') {
         },
         body: {
           model: model,
-          messages: history,
+          messages: [...history, lastUserMessage],
           stream: false,
           customSystemPrompt: `Anda sedang melayani pengguna Telegram ${senderInfo}.
 [PANDUAN FORMAT TAMPILAN TELEGRAM]:
@@ -216,19 +223,82 @@ async function handleMessage(msg, botService, ctx = null) {
     }
   }
 
-  // 4. PHOTO
+  // 4. PHOTO — Support Vision: download & send as base64 image to AI
   if (msg.photo && Array.isArray(msg.photo) && msg.photo.length > 0) {
     const caption = (msg.caption || '').trim();
-    if (caption) {
-      text = `[Pengguna melampirkan gambar/foto dengan keterangan]: ${caption}`;
-    } else {
+    await sendTyping(chatId, token);
+
+    try {
+      // Pick the largest photo (Telegram sends multiple sizes)
+      const largestPhoto = msg.photo[msg.photo.length - 1];
+      const buf = await downloadTelegramFile(largestPhoto.file_id, token);
+      const base64Image = buf.toString('base64');
+      const mimeType = 'image/jpeg';
+      const dataUrl = `data:${mimeType};base64,${base64Image}`;
+
+      const questionText = caption || 'Deskripsikan dan analisis gambar ini secara lengkap.';
+
+      // Build multimodal content array (OpenAI vision format)
+      const visionContent = [
+        { type: 'text', text: questionText },
+        { type: 'image_url', image_url: { url: dataUrl } }
+      ];
+
+      let history = botService.conversations.get(chatId) || [];
+      // Store text version of image in history (for context continuity)
+      const historyTextVersion = `[Gambar dikirim] ${questionText}`;
+      history.push({ role: 'user', content: historyTextVersion });
+      if (history.length > botService.MAX_HISTORY) history = history.slice(-botService.MAX_HISTORY);
+
+      const typingInterval = setInterval(() => sendTyping(chatId, token), 4000);
+      try {
+        // Pass vision content (array) as userContent — history excludes this message
+        // so we pass history minus the last item + multimodal message
+        const historyWithoutLast = history.slice(0, -1);
+        const answer = await queryBreAIRouter(visionContent, historyWithoutLast, senderTag);
+        clearInterval(typingInterval);
+        history.push({ role: 'assistant', content: answer });
+        botService.conversations.set(chatId, history);
+        await sendTelegramMessage(chatId, answer, null, null, token);
+      } catch (visionErr) {
+        clearInterval(typingInterval);
+        // Model doesn't support vision — fall back to caption-only text
+        console.warn('[TelegramBot] Vision request failed, falling back to text:', visionErr.message);
+        if (caption) {
+          // Process as text-only with caption
+          text = `[Pengguna melampirkan gambar dengan keterangan]: ${caption}`;
+          history[history.length - 1] = { role: 'user', content: text };
+          const typingInterval2 = setInterval(() => sendTyping(chatId, token), 4000);
+          try {
+            const answer2 = await queryBreAIRouter(text, history.slice(0, -1), senderTag);
+            clearInterval(typingInterval2);
+            history.push({ role: 'assistant', content: answer2 });
+            botService.conversations.set(chatId, history);
+            await sendTelegramMessage(chatId, answer2, null, null, token);
+          } catch (e2) {
+            clearInterval(typingInterval2);
+            await sendTelegramMessage(chatId, `⚠️ Gagal memproses gambar: ${e2.message}`, null, null, token);
+          }
+        } else {
+          await sendTelegramMessage(
+            chatId,
+            `📷 *Foto Diterima!*\n\nModel AI aktif tidak mendukung analisis gambar secara langsung. Coba sertakan teks *caption* pada foto (misal: _"Apa isi gambar ini?"_) atau gunakan model yang mendukung visi seperti GPT-4o.`,
+            null, null, token
+          );
+          // Remove the stale history entry
+          history.pop();
+          botService.conversations.set(chatId, history);
+        }
+      }
+    } catch (downloadErr) {
+      console.error('[TelegramBot] Gagal download foto:', downloadErr.message);
       await sendTelegramMessage(
         chatId,
-        `📷 *Foto Diterima!*\n\nSaya telah menerima foto yang Anda kirimkan. Saat ini model AI utama berfokus pada pemrosesan teks, kode, dan logika.\n\n💡 *Tips:* Anda bisa mengirim ulang foto dengan menyertakan teks *caption* (misal: _"Tuliskan caption untuk foto ini"_ atau _"Jelaskan konsep gambar ini"_) agar saya dapat membantu Anda!`,
+        `⚠️ Gagal mengunduh foto dari Telegram: ${downloadErr.message}`,
         null, null, token
       );
-      return;
     }
+    return;
   }
 
   // 5. DOCUMENT / FILE (Direct code/text analysis)
@@ -369,15 +439,17 @@ async function handleMessage(msg, botService, ctx = null) {
 
   try {
     let history = botService.conversations.get(chatId) || [];
-    history.push({ role: 'user', content: text });
 
-    if (history.length > botService.MAX_HISTORY) {
-      history = history.slice(-botService.MAX_HISTORY);
+    if (history.length >= botService.MAX_HISTORY) {
+      history = history.slice(-(botService.MAX_HISTORY - 1));
     }
 
+    // queryBreAIRouter adds the user message internally via lastUserMessage
     const answer = await queryBreAIRouter(text, history, senderTag);
     clearInterval(typingInterval);
 
+    // Store in history after answer
+    history.push({ role: 'user', content: text });
     history.push({ role: 'assistant', content: answer });
     botService.conversations.set(chatId, history);
 
