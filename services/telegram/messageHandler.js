@@ -17,9 +17,26 @@ const {
 } = require('./accessControl');
 const { sendAdminPanel } = require('./adminMenu');
 
+// Per-chat language selection (in-memory, resets on restart)
+const chatLanguages = new Map(); // chatId -> languageCode
+
+// Language options matching the web app LANGUAGE_PROMPTS
+const LANGUAGE_OPTIONS = {
+  id: { label: '🇮🇩 Bahasa Indonesia', prompt: 'Responlah dalam Bahasa Indonesia secara alami dan akurat.' },
+  en: { label: '🇺🇸 English', prompt: 'Respond in English by default.' },
+  ja: { label: '🇯🇵 日本語 (Japanese)', prompt: '常に自然で流暢な日本語で回答してください。' },
+  zh: { label: '🇨🇳 中文 (Chinese)', prompt: '请始终使用自然流畅的中文进行回答。' },
+  es: { label: '🇪🇸 Español (Spanish)', prompt: 'Responde siempre en español de manera natural y precisa.' },
+  ar: { label: '🇸🇦 العربية (Arabic)', prompt: 'أجب باللغة العربية الفصحى الطبيعية والدقيقة دائماً.' },
+  de: { label: '🇩🇪 Deutsch (German)', prompt: 'Antworte immer auf natürlichem und präzisem Deutsch.' },
+  fr: { label: '🇫🇷 Français (French)', prompt: 'Répondez toujours en français soigné et naturel.' },
+  ru: { label: '🇷🇺 Русский (Russian)', prompt: 'Всегда отвечайте на естественном и грамотном русском языке.' },
+  ko: { label: '🇰🇷 한국어 (Korean)', prompt: '항상 자연스럽고 유창한 한국어로 답변해 주세요.' }
+};
+
 // Query internal Bre AI router (works both on Localhost and Vercel Serverless)
 // userContent can be a string (text) or an array (multimodal: text + image_url)
-function queryBreAIRouter(userContent, history = [], senderInfo = '') {
+function queryBreAIRouter(userContent, history = [], senderInfo = '', langCode = null) {
   return new Promise(async (resolve, reject) => {
     try {
       const chatHandler = require('../../api/chat');
@@ -31,6 +48,11 @@ function queryBreAIRouter(userContent, history = [], senderInfo = '') {
         role: 'user',
         content: userContent // string or array of {type, text/image_url}
       };
+
+      // Determine language prompt (from per-chat setting, then global config, then default ID)
+      const effectiveLang = langCode || cfg.telegramLanguage || 'id';
+      const langEntry = LANGUAGE_OPTIONS[effectiveLang];
+      const langPrompt = langEntry ? langEntry.prompt : LANGUAGE_OPTIONS['id'].prompt;
 
       const EventEmitter = require('events');
       const mockReq = Object.assign(new EventEmitter(), {
@@ -44,6 +66,7 @@ function queryBreAIRouter(userContent, history = [], senderInfo = '') {
           messages: [...history, lastUserMessage],
           stream: false,
           customSystemPrompt: `Anda sedang melayani pengguna Telegram ${senderInfo}.
+[BAHASA RESPONS]: ${langPrompt}
 [PANDUAN FORMAT TAMPILAN TELEGRAM]:
 - DILARANG KERAS menggunakan tag HTML apa pun (JANGAN gunakan <br>, <p>, <div>, <script>, dll). Gunakan baris baru biasa (Enter/newline) untuk jeda antar-kalimat.
 - DILARANG membuat tabel markdown (| kolom | kolom |) karena Telegram ponsel tidak mendukung tabel dan tampilannya akan berantakan.
@@ -377,15 +400,19 @@ async function handleMessage(msg, botService, ctx = null) {
   if (text === '/start' || text.startsWith('/start ')) {
     botService.conversations.delete(chatId);
     const isOwnerUser = isOwner(fromUser, botService.activeOwnerId);
+    const currentLang = chatLanguages.get(chatId);
+    const langLabel = currentLang && LANGUAGE_OPTIONS[currentLang] ? LANGUAGE_OPTIONS[currentLang].label : '🇮🇩 Bahasa Indonesia';
     let welcome = `⚡ *Halo ${senderName}!* Selamat datang di *Bre AI*.\n\n` +
       `Saya adalah kecerdasan buatan ciptaan *Amirun Rayan Ariandi*, siap membantu Anda menjawab berbagai pertanyaan, menganalisis kode program, hingga membuat dokumen langsung dari Telegram.\n\n` +
       `📌 *Panduan Interaksi:*\n` +
       `• Kirim pesan apa pun untuk langsung mengobrol.\n` +
       `• Kirim /reset untuk membersihkan topik percakapan.\n` +
-      `• Kirim /help untuk panduan penggunaan.\n`;
+      `• Kirim /language untuk memilih bahasa respons.\n` +
+      `• Kirim /help untuk panduan penggunaan.\n` +
+      `🌐 *Bahasa Saat Ini:* ${langLabel}`;
 
     if (isOwnerUser) {
-      welcome += `\n👑 *Akses Pemilik (Owner):*\nKirim perintah */admin* untuk membuka panel kontrol interaktif!`;
+      welcome += `\n\n👑 *Akses Pemilik (Owner):*\nKirim perintah */admin* untuk membuka panel kontrol interaktif!`;
     }
 
     await sendTelegramMessage(chatId, welcome, null, null, token);
@@ -395,11 +422,15 @@ async function handleMessage(msg, botService, ctx = null) {
   // Command: /help
   if (text === '/help') {
     const isOwnerUser = isOwner(fromUser, botService.activeOwnerId);
+    const currentLang = chatLanguages.get(chatId);
+    const langLabel = currentLang && LANGUAGE_OPTIONS[currentLang] ? LANGUAGE_OPTIONS[currentLang].label : '🇮🇩 Bahasa Indonesia (default)';
     let help = `📖 *Panduan Penggunaan Bre AI di Telegram*\n\n` +
       `• *Obrolan Alami:* Anda bisa bertanya apa saja dalam bahasa Indonesia, Inggris, atau bahasa lainnya secara santai.\n` +
       `• *Ingatan Konteks:* Bre AI mengingat percakapan Anda sehingga Anda dapat berdiskusi secara berkelanjutan.\n` +
       `• *Perintah /reset:* Gunakan saat ingin mengganti topik obrolan agar ingatan topik sebelumnya tidak bercampur.\n` +
+      `• *Perintah /language:* Pilih bahasa respons Bre AI (Indonesia, English, Jepang, dll).\n` +
       `• *Kode & Dokumen:* Bre AI dapat menuliskan kode lengkap atau dokumen kerja secara rapi.\n\n` +
+      `🌐 *Bahasa Aktif:* ${langLabel}\n` +
       `Pencipta & Pengembang: *Amirun Rayan Ariandi* 🚀`;
 
     if (isOwnerUser) {
@@ -414,6 +445,25 @@ async function handleMessage(msg, botService, ctx = null) {
   if (text === '/reset' || text === '/clear') {
     botService.conversations.delete(chatId);
     await sendTelegramMessage(chatId, `✨ *Riwayat percakapan berhasil dibersihkan!* Anda sekarang berada di sesi obrolan baru.`, null, null, token);
+    return;
+  }
+
+  // Command: /language — Select response language
+  if (text === '/language' || text.startsWith('/language ')) {
+    const currentLang = chatLanguages.get(chatId) || 'id';
+    const langRows = Object.entries(LANGUAGE_OPTIONS).map(([code, info]) => ([
+      {
+        text: (code === currentLang ? '✅ ' : '') + info.label,
+        callback_data: `set_lang:${chatId}:${code}`
+      }
+    ]));
+    langRows.push([{ text: '❌ Tutup', callback_data: `set_lang:${chatId}:close` }]);
+
+    const langText = `🌐 *Pilih Bahasa Respons Bre AI*\n\n` +
+      `Bahasa saat ini: *${LANGUAGE_OPTIONS[currentLang]?.label || 'Bahasa Indonesia'}*\n\n` +
+      `Pilih bahasa yang diinginkan:`;
+
+    await sendTelegramMessage(chatId, langText, { inline_keyboard: langRows }, null, token);
     return;
   }
 
@@ -444,8 +494,11 @@ async function handleMessage(msg, botService, ctx = null) {
       history = history.slice(-(botService.MAX_HISTORY - 1));
     }
 
+    // Get current language setting for this chat
+    const chatLang = chatLanguages.get(chatId) || null;
+
     // queryBreAIRouter adds the user message internally via lastUserMessage
-    const answer = await queryBreAIRouter(text, history, senderTag);
+    const answer = await queryBreAIRouter(text, history, senderTag, chatLang);
     clearInterval(typingInterval);
 
     // Store in history after answer
@@ -468,5 +521,7 @@ async function handleMessage(msg, botService, ctx = null) {
 module.exports = {
   queryBreAIRouter,
   handleBroadcastCommand,
-  handleMessage
+  handleMessage,
+  chatLanguages,
+  LANGUAGE_OPTIONS
 };

@@ -1014,12 +1014,12 @@
 
       </div>
 
-      <!-- Advanced Telegram Settings Card (Mode Akses & Model AI) -->
+      <!-- Advanced Telegram Settings Card (Mode Akses, Model AI & Bahasa) -->
       <div class="card" style="background: #0d111a; border: 1px solid #1e2433; border-radius: 12px; padding: 22px; margin-bottom: 24px;">
         <div class="card-header" style="margin-bottom: 16px;">
           <div>
-            <div class="card-title" style="font-size: 16px;">🛡️ Mode Akses &amp; Model AI Bot</div>
-            <div class="card-subtitle">Tentukan apakah bot bisa digunakan oleh publik atau khusus whitelist, serta pilih model AI yang aktif.</div>
+            <div class="card-title" style="font-size: 16px;">🛡️ Mode Akses, Model AI &amp; Bahasa Bot</div>
+            <div class="card-subtitle">Tentukan apakah bot bisa digunakan oleh publik atau khusus whitelist, pilih model AI, dan atur bahasa respons default.</div>
           </div>
         </div>
 
@@ -1037,6 +1037,24 @@
             <select id="cfgTelegramModel" class="input-select"></select>
             <div class="form-hint">Pilih model yang akan memproses pesan dari Telegram (atau otomatis ikuti router).</div>
           </div>
+        </div>
+
+        <!-- Language Selection Row -->
+        <div class="form-group" style="margin-top: 16px; margin-bottom: 0;">
+          <label class="form-label">🌐 Bahasa Default Respons Bot Telegram</label>
+          <select id="cfgTelegramLanguage" class="input-select">
+            <option value="id">🇮🇩 Bahasa Indonesia (Default)</option>
+            <option value="en">🇺🇸 English</option>
+            <option value="ja">🇯🇵 日本語 (Japanese)</option>
+            <option value="zh">🇨🇳 中文 (Chinese)</option>
+            <option value="es">🇪🇸 Español (Spanish)</option>
+            <option value="ar">🇸🇦 العربية (Arabic)</option>
+            <option value="de">🇩🇪 Deutsch (German)</option>
+            <option value="fr">🇫🇷 Français (French)</option>
+            <option value="ru">🇷🇺 Русский (Russian)</option>
+            <option value="ko">🇰🇷 한국어 (Korean)</option>
+          </select>
+          <div class="form-hint">Bahasa default untuk semua pengguna bot. Pengguna individual dapat mengubah bahasa mereka sendiri dengan perintah <code>/language</code> di Telegram.</div>
         </div>
       </div>
 

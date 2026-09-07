@@ -157,13 +157,24 @@ module.exports = async (req, res) => {
       const endpoints = currentCfg.endpoints || [];
       const targetName = body.providerName || null;
 
+      // Support inline url+keys from admin UI (before saving config)
+      if (body.url && Array.isArray(body.keys) && body.keys.length > 0) {
+        const inlineEp = {
+          name: targetName || body.url,
+          url: body.url,
+          keys: body.keys
+        };
+        const result = await fetchAvailableModels(inlineEp);
+        return res.json({ ok: true, results: [{ provider: inlineEp.name, url: inlineEp.url, ...result }] });
+      }
+
       // If a specific provider is targeted, only detect for that one
       const targets = targetName
         ? endpoints.filter(e => e.name === targetName || e.url === targetName)
         : endpoints.filter(e => e.status !== false && e.keys?.length > 0);
 
       if (!targets.length) {
-        return res.json({ ok: false, error: 'Tidak ada provider yang cocok atau tidak ada API Key.' });
+        return res.json({ ok: false, error: 'Tidak ada provider yang cocok atau tidak ada API Key. Simpan konfigurasi terlebih dahulu atau pastikan API Key sudah diisi.' });
       }
 
       const results = await Promise.all(

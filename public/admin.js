@@ -264,6 +264,9 @@ async function loadConfig() {
     }
 
     updateTelegramModelDropdown(c.telegramModel);
+    // Load language setting
+    const tgLang = document.getElementById('cfgTelegramLanguage');
+    if (tgLang) tgLang.value = c.telegramLanguage || 'id';
     loadTelegramStatus();
 
     renderProviders();
@@ -492,13 +495,16 @@ async function detectModels(i) {
   }
 
   try {
-    const adminToken = window.adminToken || '';
+    // Use module-level adminToken (not window.adminToken which is undefined)
     const r = await fetch('/api/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
       body: JSON.stringify({
         action: 'detect_models',
-        providerName: ep.name
+        providerName: ep.name,
+        // Pass url & keys directly so detect works even before saving config
+        url: ep.url,
+        keys: ep.keys
       })
     });
     const data = await r.json();
@@ -571,7 +577,7 @@ async function testModel(providerIdx, modelName) {
   if (btnEl) { btnEl.disabled = true; }
 
   try {
-    const adminToken = window.adminToken || '';
+    // Use module-level adminToken (not window.adminToken which is undefined)
     const r = await fetch('/api/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
@@ -1067,6 +1073,7 @@ async function saveAllConfig() {
     telegramAllowedUsers: document.getElementById('cfgTelegramWhitelist') ? document.getElementById('cfgTelegramWhitelist').value.trim() : '',
     telegramDomain: document.getElementById('cfgTelegramDomain') ? document.getElementById('cfgTelegramDomain').value.trim() : '',
     telegramModel: document.getElementById('cfgTelegramModel') ? document.getElementById('cfgTelegramModel').value.trim() : '',
+    telegramLanguage: document.getElementById('cfgTelegramLanguage') ? document.getElementById('cfgTelegramLanguage').value : 'id',
     telegramUsers: telegramUsers,
     // Cloud Persistence Settings
     upstashRedisUrl: document.getElementById('cfgUpstashUrl') ? document.getElementById('cfgUpstashUrl').value.trim() : '',
@@ -1278,11 +1285,13 @@ function saveTelegramToLocalStorage() {
     const dom = (document.getElementById('cfgTelegramDomain')?.value || '').trim();
     const mod = document.getElementById('cfgTelegramAccessMode')?.value || 'public';
     const aim = document.getElementById('cfgTelegramModel')?.value || '';
+    const lng = document.getElementById('cfgTelegramLanguage')?.value || 'id';
     if (tok) localStorage.setItem('bre_tg_token', tok);
     if (own) localStorage.setItem('bre_tg_owner', own);
     if (dom) localStorage.setItem('bre_tg_domain', dom);
     if (mod) localStorage.setItem('bre_tg_mode', mod);
     if (aim) localStorage.setItem('bre_tg_aimodel', aim);
+    localStorage.setItem('bre_tg_lang', lng);
   } catch (e) {}
 }
 
@@ -1308,6 +1317,10 @@ function restoreTelegramFromLocalStorage() {
 
     const selAim = document.getElementById('cfgTelegramModel');
     if (selAim && aim) selAim.value = aim;
+
+    const selLng = document.getElementById('cfgTelegramLanguage');
+    const lng = localStorage.getItem('bre_tg_lang');
+    if (selLng && lng) selLng.value = lng;
   } catch (e) {}
 }
 

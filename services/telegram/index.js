@@ -33,7 +33,9 @@ const {
 const {
   queryBreAIRouter,
   handleBroadcastCommand,
-  handleMessage
+  handleMessage,
+  chatLanguages,
+  LANGUAGE_OPTIONS
 } = require('./messageHandler');
 
 class TelegramBotService {
@@ -111,6 +113,55 @@ class TelegramBotService {
       if (ctx.ownerId) this.activeOwnerId = ctx.ownerId;
       if (ctx.accessMode) this.activeAccessMode = ctx.accessMode;
     }
+
+    // Handle language selection callbacks (available to all users, not just admin)
+    const data = cq.data || '';
+    if (data.startsWith('set_lang:')) {
+      const parts = data.split(':');
+      const targetChatId = parseInt(parts[1]);
+      const langCode = parts[2];
+      const token = this.activeToken || null;
+
+      if (langCode === 'close') {
+        // Close: delete language menu message
+        try {
+          await apiCall('deleteMessage', {
+            chat_id: cq.message?.chat?.id,
+            message_id: cq.message?.message_id
+          }, token);
+        } catch (e) {
+          await editTelegramMessage(cq.message?.chat?.id, cq.message?.message_id, '🌐 Menu bahasa ditutup. Kirim /language untuk membuka kembali.', null, token);
+        }
+        await answerCallback(cq.id, 'Menu ditutup', false, token);
+        return;
+      }
+
+      if (LANGUAGE_OPTIONS[langCode]) {
+        chatLanguages.set(targetChatId, langCode);
+        const selectedLabel = LANGUAGE_OPTIONS[langCode].label;
+        await answerCallback(cq.id, `✅ Bahasa diubah ke: ${selectedLabel}`, true, token);
+
+        // Update the language menu with new selection
+        const currentLang = langCode;
+        const langRows = Object.entries(LANGUAGE_OPTIONS).map(([code, info]) => ([
+          {
+            text: (code === currentLang ? '✅ ' : '') + info.label,
+            callback_data: `set_lang:${targetChatId}:${code}`
+          }
+        ]));
+        langRows.push([{ text: '❌ Tutup', callback_data: `set_lang:${targetChatId}:close` }]);
+
+        const langText = `🌐 *Pilih Bahasa Respons Bre AI*\n\n` +
+          `Bahasa aktif: *${selectedLabel}*\n\n` +
+          `Pilih bahasa lain atau tutup menu:`;
+
+        await editTelegramMessage(cq.message?.chat?.id, cq.message?.message_id, langText, { inline_keyboard: langRows }, token);
+      } else {
+        await answerCallback(cq.id, 'Bahasa tidak dikenal', false, token);
+      }
+      return;
+    }
+
     return handleAdminCallback(cq, this);
   }
 

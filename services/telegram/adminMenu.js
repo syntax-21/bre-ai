@@ -28,6 +28,9 @@ const adminActionState = new Map(); // ownerChatId -> { action: 'broadcast', ste
 // 1. Build Main Menu Keyboard
 function buildMainMenuMarkup(cfg) {
   const currentMode = (cfg.telegramAccessMode || 'public') === 'whitelist' ? '🔒 Whitelist' : '🟢 Publik';
+  const currentLang = cfg.telegramLanguage || 'id';
+  const LANG_LABELS = { id: '🇮🇩 ID', en: '🇺🇸 EN', ja: '🇯🇵 JA', zh: '🇨🇳 ZH', es: '🇪🇸 ES', ar: '🇸🇦 AR', de: '🇩🇪 DE', fr: '🇫🇷 FR', ru: '🇷🇺 RU', ko: '🇰🇷 KO' };
+  const langLabel = LANG_LABELS[currentLang] || '🌐 ID';
   return {
     inline_keyboard: [
       [
@@ -39,19 +42,22 @@ function buildMainMenuMarkup(cfg) {
         { text: `🛡️ Mode: ${currentMode}`, callback_data: 'adm_mode' }
       ],
       [
-        { text: '⚡ Benchmark Upstream', callback_data: 'adm_benchmark' },
+        { text: `🌐 Bahasa: ${langLabel}`, callback_data: 'adm_language' },
         { text: '⚙️ Parameter Suhu', callback_data: 'adm_params' }
       ],
       [
-        { text: '📢 Broadcast Pesan', callback_data: 'adm_broadcast' },
-        { text: '🩺 Diagnostik Webhook', callback_data: 'adm_diag' }
+        { text: '⚡ Benchmark Upstream', callback_data: 'adm_benchmark' },
+        { text: '📢 Broadcast Pesan', callback_data: 'adm_broadcast' }
       ],
       [
         { text: '📜 Log Terakhir', callback_data: 'adm_logs' },
         { text: '🗑️ Bersihkan Cache', callback_data: 'adm_flush_confirm' }
       ],
       [
-        { text: '🔄 Refresh Panel', callback_data: 'adm_main' },
+        { text: '🩺 Diagnostik Webhook', callback_data: 'adm_diag' },
+        { text: '🔄 Refresh Panel', callback_data: 'adm_main' }
+      ],
+      [
         { text: '❌ Tutup Panel', callback_data: 'adm_close' }
       ]
     ]
@@ -64,10 +70,13 @@ function getMainMenuText(senderName, conversationsCount = 0) {
   const accessMode = (cfg.telegramAccessMode || 'public') === 'whitelist' ? '🔒 Khusus Whitelist (Private)' : '🟢 Terbuka untuk Publik';
   const userCount = Array.isArray(cfg.telegramUsers) ? cfg.telegramUsers.length : 0;
   const m = getMetrics();
+  const LANG_LABELS = { id: '🇮🇩 Indonesia', en: '🇺🇸 English', ja: '🇯🇵 日本語', zh: '🇨🇳 中文', es: '🇪🇸 Español', ar: '🇸🇦 عربية', de: '🇩🇪 Deutsch', fr: '🇫🇷 Français', ru: '🇷🇺 Русский', ko: '🇰🇷 한국어' };
+  const activeLang = LANG_LABELS[cfg.telegramLanguage || 'id'] || '🇮🇩 Indonesia';
 
   return `👑 *Bre AI Master Control Panel*\n` +
     `Halo *${senderName}*! Kelola seluruh fungsi bot secara interaktif menggunakan tombol di bawah:\n\n` +
     `• *Model Aktif:* \`${activeModel}\`\n` +
+    `• *Bahasa Default:* ${activeLang}\n` +
     `• *Mode Akses:* ${accessMode}\n` +
     `• *Pengguna Terdaftar:* ${userCount} akun\n` +
     `• *Total Permintaan:* ${m.totalRequests} req\n` +
@@ -233,6 +242,51 @@ async function handleAdminCallback(cq, botService) {
     const markup = buildMainMenuMarkup(getConfig());
     await editTelegramMessage(chatId, messageId, text, markup, token);
     return;
+  }
+
+  // 5c. Language Selection Menu (Admin global default)
+  const LANGUAGE_OPTIONS_ADMIN = {
+    id: '🇮🇩 Bahasa Indonesia',
+    en: '🇺🇸 English',
+    ja: '🇯🇵 日本語 (Japanese)',
+    zh: '🇨🇳 中文 (Chinese)',
+    es: '🇪🇸 Español (Spanish)',
+    ar: '🇸🇦 العربية (Arabic)',
+    de: '🇩🇪 Deutsch (German)',
+    fr: '🇫🇷 Français (French)',
+    ru: '🇷🇺 Русский (Russian)',
+    ko: '🇰🇷 한국어 (Korean)'
+  };
+
+  if (data === 'adm_language') {
+    await answerCallback(cq.id, null, false, token);
+    const currentLang = cfg.telegramLanguage || 'id';
+    const langText = `🌐 *Pengaturan Bahasa Default Bot:*\n` +
+      `Bahasa aktif: *${LANGUAGE_OPTIONS_ADMIN[currentLang] || 'Bahasa Indonesia'}*\n\n` +
+      `Pilih bahasa default respons Bre AI untuk semua pengguna bot:\n` +
+      `_(Pengguna individual dapat mengubah bahasa mereka sendiri dengan perintah /language)_`;
+
+    const langRows = Object.entries(LANGUAGE_OPTIONS_ADMIN).map(([code, label]) => ([
+      {
+        text: (code === currentLang ? '✅ ' : '') + label,
+        callback_data: `adm_setlang:${code}`
+      }
+    ]));
+    langRows.push([{ text: '⬅️ Menu Utama', callback_data: 'adm_main' }]);
+
+    await editTelegramMessage(chatId, messageId, langText, { inline_keyboard: langRows }, token);
+    return;
+  }
+
+  // 5d. Set Language Action
+  if (data.startsWith('adm_setlang:')) {
+    const newLang = data.split(':')[1];
+    const langLabel = LANGUAGE_OPTIONS_ADMIN[newLang] || newLang;
+    saveConfig({ telegramLanguage: newLang });
+    await answerCallback(cq.id, `✅ Bahasa default diubah ke: ${langLabel}`, true, token);
+
+    cq.data = 'adm_language';
+    return handleAdminCallback(cq, botService);
   }
 
   // 6. User Management Menu

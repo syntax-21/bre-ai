@@ -45,6 +45,7 @@ const DEFAULT_CONFIG = {
   telegramBotToken: '',
   telegramAllowedUsers: '',
   telegramModel: '',
+  telegramLanguage: 'id',
   telegramOwnerId: '',
   telegramAccessMode: 'public',
   telegramDomain: '',
