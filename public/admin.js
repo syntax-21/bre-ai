@@ -1391,7 +1391,7 @@ function updateTelegramModelDropdown(selectedModel) {
   });
   if (!allModels.size) allModels.add('mercury-2');
   
-  sel.innerHTML = '<option value="">(Otomatis ikuti Router AI)</option>' +
+  sel.innerHTML = '<option value="auto">🌐 Otomatis ikuti Router AI (Rotasi)</option>' +
     Array.from(allModels).map(m => `<option value="${m}" ${m === selectedModel ? 'selected' : ''}>${m}</option>`).join('');
 }
 

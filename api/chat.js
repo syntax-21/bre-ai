@@ -84,7 +84,12 @@ module.exports = async (req, res) => {
   let targetModelName = requestedModel;
 
   const searchProv = requestedProvider || requestedModel;
-  if (searchProv) {
+  if (searchProv && searchProv.toLowerCase() === 'auto') {
+    // Implement random rotation across active endpoints for Auto Router
+    const randomIdx = Math.floor(Math.random() * activeEps.length);
+    primaryTarget = activeEps[randomIdx];
+    targetModelName = primaryTarget.models?.[0] || 'auto';
+  } else if (searchProv) {
     primaryTarget = activeEps.find(e => e.name && e.name.toLowerCase() === searchProv.toLowerCase())
                  || activeEps.find(e => e.name && (e.name.toLowerCase().includes(searchProv.toLowerCase()) || searchProv.toLowerCase().includes(e.name.toLowerCase())));
     if (primaryTarget) targetModelName = primaryTarget.models?.[0] || requestedModel;

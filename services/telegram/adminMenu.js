@@ -195,7 +195,7 @@ async function handleAdminCallback(cq, botService) {
   // 4b. Set Model Action
   if (data.startsWith('adm_setmodel:')) {
     const selected = data.split(':')[1];
-    const targetModel = selected === 'auto' ? '' : selected;
+    const targetModel = selected === 'auto' ? 'auto' : selected;
     saveConfig({ telegramModel: targetModel });
     await answerCallback(cq.id, `✅ Model diubah ke: ${targetModel || 'Auto Router'}`, false, token);
 
