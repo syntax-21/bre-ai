@@ -634,6 +634,111 @@ function sanitizeOutput(text) {
   return t;
 }
 
+// ========================================================
+// AUTO-DETECT MODELS: Fetch available models from /v1/models
+// ========================================================
+async function fetchAvailableModels(endpoint) {
+  const ep = endpoint || {};
+  const url = (ep.url || '').trim();
+  const keys = Array.isArray(ep.keys) ? ep.keys : parseKeys(ep.keys);
+
+  if (!url) return { ok: false, error: 'URL endpoint kosong', models: [] };
+
+  // Derive base URL from chat endpoint (strip /chat/completions, /completions, etc.)
+  const modelsUrl = url
+    .replace(/\/chat\/completions\/?$/, '/models')
+    .replace(/\/completions\/?$/, '/models')
+    .replace(/\/models\/?$/, '/models');
+
+  const key = keys[0] || '';
+  const headers = { 'Content-Type': 'application/json' };
+  if (key) headers['Authorization'] = key.startsWith('Bearer ') ? key : `Bearer ${key}`;
+
+  try {
+    const resp = await fetch(modelsUrl, {
+      method: 'GET',
+      headers,
+      signal: AbortSignal.timeout(8000)
+    });
+
+    if (!resp.ok) {
+      const txt = await resp.text();
+      return { ok: false, error: `HTTP ${resp.status}: ${txt.slice(0, 150)}`, models: [] };
+    }
+
+    const data = await resp.json();
+    // OpenAI-compatible /v1/models returns { data: [{ id, ... }, ...] }
+    let modelIds = [];
+    if (Array.isArray(data.data)) {
+      modelIds = data.data.map(m => m.id || m.name).filter(Boolean);
+    } else if (Array.isArray(data.models)) {
+      modelIds = data.models.map(m => (typeof m === 'string' ? m : m.id || m.name)).filter(Boolean);
+    } else if (Array.isArray(data)) {
+      modelIds = data.map(m => (typeof m === 'string' ? m : m.id || m.name)).filter(Boolean);
+    }
+
+    return { ok: true, models: modelIds, modelsUrl };
+  } catch (err) {
+    return { ok: false, error: err.message, models: [] };
+  }
+}
+
+// ========================================================
+// TEST SINGLE MODEL: Send a minimal dummy chat request
+// ========================================================
+async function testSingleModel(endpoint, modelName) {
+  const ep = endpoint || {};
+  const url = (ep.url || '').trim();
+  const keys = Array.isArray(ep.keys) ? ep.keys : parseKeys(ep.keys);
+  const model = (modelName || ep.models?.[0] || '').trim();
+
+  if (!url) return { ok: false, error: 'URL endpoint kosong', latencyMs: 0 };
+  if (!model) return { ok: false, error: 'Nama model kosong', latencyMs: 0 };
+  if (!keys.length) return { ok: false, error: 'Tidak ada API Key yang tersedia', latencyMs: 0 };
+
+  const key = keys[0];
+  const auth = key.startsWith('Bearer ') ? key : `Bearer ${key}`;
+
+  const dummyPayload = {
+    model,
+    messages: [{ role: 'user', content: 'hi' }],
+    max_tokens: 5,
+    stream: false
+  };
+
+  const start = Date.now();
+  try {
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: auth },
+      body: JSON.stringify(dummyPayload),
+      signal: AbortSignal.timeout(15000)
+    });
+
+    const latencyMs = Date.now() - start;
+
+    if (!resp.ok) {
+      const txt = await resp.text();
+      return { ok: false, error: `HTTP ${resp.status}: ${txt.slice(0, 200)}`, latencyMs };
+    }
+
+    // Try to parse response
+    try {
+      const data = await resp.json();
+      const content = data?.choices?.[0]?.message?.content || '';
+      return { ok: true, latencyMs, model, preview: content.slice(0, 80) };
+    } catch (e) {
+      return { ok: true, latencyMs, model, preview: '(Non-JSON response, but HTTP 200)' };
+    }
+  } catch (err) {
+    const latencyMs = Date.now() - start;
+    if (err.name === 'AbortError' || err.name === 'TimeoutError') {
+      return { ok: false, error: 'Timeout (>15s) - Model tidak merespons', latencyMs };
+    }
+    return { ok: false, error: err.message, latencyMs };
+  }
+}
+
 module.exports = {
   getConfig,
   syncCloudConfig,
@@ -654,5 +759,7 @@ module.exports = {
   getCachedResponse,
   setCachedResponse,
   clearResponseCache,
-  validateClientKey
+  validateClientKey,
+  fetchAvailableModels,
+  testSingleModel
 };

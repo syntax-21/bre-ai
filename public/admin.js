@@ -315,6 +315,7 @@ function renderProviders() {
         </div>
         <div style="display:flex; gap:8px;">
           <button class="btn btn-ping" onclick="pingProvider(${i})">⚡ Test Ping</button>
+          <button class="btn" style="background:#1e3a5f; color:#38bdf8; border:1px solid #38bdf8;" onclick="detectModels(${i})" title="Otomatis mengambil daftar model dari endpoint /v1/models">🔍 Detect Model</button>
           <button class="btn btn-danger" onclick="removeProvider(${i})">Hapus</button>
         </div>
       </div>
@@ -344,9 +345,24 @@ function renderProviders() {
       
       <div class="grid-2" style="margin-bottom:14px;">
         <div class="form-group" style="margin-bottom:0;">
-          <label class="form-label">Model Asli (Pisahkan dengan koma)</label>
-          <input type="text" class="input-text p-models" value="${(ep.models || []).join(', ')}" placeholder="mercury-2, gpt-4o">
-          <div class="form-hint">Model yang tersedia di upstream provider.</div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <label class="form-label" style="margin-bottom:0;">Model Asli (Pisahkan dengan koma)</label>
+          </div>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <input type="text" class="input-text p-models" id="pModels_${i}" value="${(ep.models || []).join(', ')}" placeholder="mercury-2, gpt-4o" style="flex:1;">
+          </div>
+          <div id="modelTestRow_${i}" style="margin-top:8px; display:flex; flex-wrap:wrap; gap:6px;">
+            ${(ep.models || []).map((m, mi) => `
+              <div style="display:flex; align-items:center; gap:4px; background:#141922; border:1px solid #232733; border-radius:6px; padding:3px 8px; font-size:12px;">
+                <span style="color:#e2e8f0;">${m}</span>
+                <button type="button" onclick="testModel(${i},'${m.replace(/'/g, "\\'")}')"
+                  id="testModelBtn_${i}_${mi}"
+                  style="background:#1e3a5f; color:#38bdf8; border:1px solid #38bdf8; border-radius:4px; padding:1px 7px; font-size:11px; cursor:pointer;">⚡ Tes</button>
+                <span id="testModelBadge_${i}_${mi}" style="display:none;"></span>
+              </div>
+            `).join('')}
+          </div>
+          <div class="form-hint">Model yang tersedia di upstream provider. <span style="color:#38bdf8;">Klik 🔍 Detect Model untuk isi otomatis dari endpoint.</span></div>
         </div>
         <div class="form-group" style="margin-bottom:0;">
           <label class="form-label">Model Mapping / Alias (alias:asli)</label>
@@ -456,6 +472,140 @@ async function pingProvider(i) {
       badge.textContent = '🔴 Offline';
     }
     toast('Error ping: ' + e.message, 'err');
+  }
+}
+
+// ========================================================
+// AUTO-DETECT MODELS from /v1/models endpoint
+// ========================================================
+async function detectModels(i) {
+  syncProvidersFromUI();
+  const ep = endpoints[i];
+  if (!ep || !ep.url) return toast('URL Endpoint belum diisi. Isi URL dulu, lalu simpan sementara.', 'err');
+  if (!ep.keys || !ep.keys.length) return toast('API Key belum diisi. Tambahkan minimal 1 key untuk deteksi model.', 'err');
+
+  const badge = document.getElementById(`pingBadge_${i}`);
+  if (badge) {
+    badge.style.display = 'inline-flex';
+    badge.className = 'ping-badge testing';
+    badge.textContent = '🔍 Mendeteksi model...';
+  }
+
+  try {
+    const adminToken = sessionStorage.getItem('adminToken') || '';
+    const r = await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
+      body: JSON.stringify({
+        action: 'detect_models',
+        providerName: ep.name
+      })
+    });
+    const data = await r.json();
+
+    if (!data.ok) {
+      if (badge) { badge.className = 'ping-badge fail'; badge.textContent = '🔴 Gagal'; }
+      return toast('Deteksi gagal: ' + (data.error || 'Unknown error'), 'err');
+    }
+
+    const provResult = data.results?.find(r => r.provider === ep.name) || data.results?.[0];
+    if (!provResult || !provResult.ok) {
+      if (badge) { badge.className = 'ping-badge fail'; badge.textContent = '🔴 Gagal'; }
+      return toast('Gagal mendeteksi model: ' + (provResult?.error || 'Endpoint tidak mendukung /v1/models'), 'err');
+    }
+
+    const models = provResult.models || [];
+    if (!models.length) {
+      if (badge) { badge.className = 'ping-badge testing'; badge.textContent = '🟡 0 model'; }
+      return toast('Endpoint tidak mengembalikan daftar model.', 'warn');
+    }
+
+    // Update the models input in the UI
+    const modelsInput = document.querySelector(`#providerCard_${i} .p-models`);
+    if (modelsInput) modelsInput.value = models.join(', ');
+
+    // Also update the in-memory endpoints list
+    endpoints[i].models = models;
+
+    // Re-render the test row with new models
+    const testRow = document.getElementById(`modelTestRow_${i}`);
+    if (testRow) {
+      testRow.innerHTML = models.map((m, mi) => `
+        <div style="display:flex; align-items:center; gap:4px; background:#141922; border:1px solid #232733; border-radius:6px; padding:3px 8px; font-size:12px;">
+          <span style="color:#e2e8f0;">${m}</span>
+          <button type="button" onclick="testModel(${i},'${m.replace(/'/g, "\\'")}')"
+            id="testModelBtn_${i}_${mi}"
+            style="background:#1e3a5f; color:#38bdf8; border:1px solid #38bdf8; border-radius:4px; padding:1px 7px; font-size:11px; cursor:pointer;">⚡ Tes</button>
+          <span id="testModelBadge_${i}_${mi}" style="display:none;"></span>
+        </div>
+      `).join('');
+    }
+
+    if (badge) {
+      badge.className = 'ping-badge ok';
+      badge.textContent = `✅ ${models.length} model terdeteksi`;
+    }
+    toast(`[${ep.name}] Berhasil mendeteksi ${models.length} model: ${models.slice(0,3).join(', ')}${models.length > 3 ? '...' : ''}`, 'ok');
+
+  } catch (e) {
+    if (badge) { badge.className = 'ping-badge fail'; badge.textContent = '🔴 Error'; }
+    toast('Error deteksi model: ' + e.message, 'err');
+  }
+}
+
+// ========================================================
+// TEST SINGLE MODEL — send dummy prompt and measure latency
+// ========================================================
+async function testModel(providerIdx, modelName) {
+  syncProvidersFromUI();
+  const ep = endpoints[providerIdx];
+  if (!ep) return;
+
+  // Find which badge to update
+  const models = (ep.models || []);
+  const mi = models.indexOf(modelName);
+  const badgeEl = mi >= 0 ? document.getElementById(`testModelBadge_${providerIdx}_${mi}`) : null;
+  const btnEl = mi >= 0 ? document.getElementById(`testModelBtn_${providerIdx}_${mi}`) : null;
+
+  if (badgeEl) { badgeEl.style.display = 'inline-flex'; badgeEl.textContent = '⏳'; badgeEl.style.cssText += ';color:#f59e0b;'; }
+  if (btnEl) { btnEl.disabled = true; }
+
+  try {
+    const adminToken = sessionStorage.getItem('adminToken') || '';
+    const r = await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
+      body: JSON.stringify({
+        action: 'test_model',
+        providerName: ep.name,
+        model: modelName,
+        url: ep.url,
+        keys: ep.keys
+      })
+    });
+    const data = await r.json();
+
+    if (data.ok) {
+      const ms = data.latencyMs || 0;
+      const color = ms < 500 ? '#22c55e' : ms < 2000 ? '#f59e0b' : '#ef4444';
+      if (badgeEl) {
+        badgeEl.style.cssText = `display:inline-flex; color:${color}; font-size:11px; font-weight:600;`;
+        badgeEl.textContent = `${ms}ms ✓`;
+      }
+      toast(`[${ep.name}] Model ${modelName}: ✅ OK (${ms}ms)`, 'ok');
+    } else {
+      if (badgeEl) {
+        badgeEl.style.cssText = 'display:inline-flex; color:#ef4444; font-size:11px;';
+        badgeEl.textContent = '✗ Gagal';
+        badgeEl.title = data.error || 'Error';
+      }
+      toast(`[${ep.name}] Model ${modelName}: ❌ ${(data.error || 'Gagal').slice(0, 80)}`, 'err');
+    }
+  } catch(e) {
+    if (badgeEl) { badgeEl.textContent = '✗'; badgeEl.style.color = '#ef4444'; }
+    toast('Error test model: ' + e.message, 'err');
+  } finally {
+    if (btnEl) { btnEl.disabled = false; }
   }
 }
 

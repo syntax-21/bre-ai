@@ -10,7 +10,9 @@ const {
   clearLoginAttempts,
   getMetrics,
   getLogs,
-  clearLogs
+  clearLogs,
+  fetchAvailableModels,
+  testSingleModel
 } = require('./_shared');
 
 function getIp(req) { return (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim(); }
@@ -147,6 +149,67 @@ module.exports = async (req, res) => {
 
     if (body.action === 'get_cloud_status') {
       return res.json({ ok: true, status: getCloudStorageInfo() });
+    }
+
+    // Auto-Detect Models from /v1/models endpoint
+    if (body.action === 'detect_models') {
+      const currentCfg = getConfig();
+      const endpoints = currentCfg.endpoints || [];
+      const targetName = body.providerName || null;
+
+      // If a specific provider is targeted, only detect for that one
+      const targets = targetName
+        ? endpoints.filter(e => e.name === targetName || e.url === targetName)
+        : endpoints.filter(e => e.status !== false && e.keys?.length > 0);
+
+      if (!targets.length) {
+        return res.json({ ok: false, error: 'Tidak ada provider yang cocok atau tidak ada API Key.' });
+      }
+
+      const results = await Promise.all(
+        targets.map(async ep => {
+          const result = await fetchAvailableModels(ep);
+          return { provider: ep.name, url: ep.url, ...result };
+        })
+      );
+
+      return res.json({ ok: true, results });
+    }
+
+    // Test a specific model on a specific provider
+    if (body.action === 'test_model') {
+      const cfg = getConfig();
+      const endpoints = cfg.endpoints || [];
+      const providerName = body.providerName || null;
+      const modelName = body.model || null;
+
+      if (!modelName) {
+        return res.status(400).json({ ok: false, error: 'Parameter model wajib diisi.' });
+      }
+
+      // Find target endpoint
+      let targetEp = null;
+      if (providerName) {
+        targetEp = endpoints.find(e => e.name === providerName || e.url === providerName);
+      }
+      // Fallback: find first endpoint that has this model listed
+      if (!targetEp) {
+        targetEp = endpoints.find(e =>
+          Array.isArray(e.models) && e.models.includes(modelName) && e.keys?.length > 0
+        );
+      }
+      // Fallback: use body.url + body.keys if provided (for dynamic testing)
+      if (!targetEp && body.url) {
+        const { parseKeys } = require('./_shared');
+        targetEp = { url: body.url, keys: parseKeys(body.keys || body.apiKey || '') };
+      }
+
+      if (!targetEp) {
+        return res.status(400).json({ ok: false, error: `Tidak ada provider yang memiliki model "${modelName}" atau URL tidak ditemukan.` });
+      }
+
+      const result = await testSingleModel(targetEp, modelName);
+      return res.json({ ok: result.ok, ...result, provider: targetEp.name || 'Manual' });
     }
 
     if (body.action === 'restart_telegram') {

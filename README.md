@@ -62,7 +62,13 @@ bre-ai-main/
 │   ├── index.html         # Halaman antarmuka obrolan utama
 │   └── style.css          # Gaya visual antarmuka web
 ├── services/
-│   └── telegramBot.js     # Engine bot Telegram (polling, webhook handler, & panel owner)
+│   ├── telegram/          # Arsitektur modular bot Telegram
+│   │   ├── accessControl.js   # Kontrol hak akses (Owner, Whitelist, Blocklist)
+│   │   ├── adminMenu.js       # Kontroler panel admin interaktif & inline keyboards
+│   │   ├── api.js             # Klien low-level Telegram Bot API & formatter pesan
+│   │   ├── index.js           # Orkesi layanan utama & polling loop
+│   │   └── messageHandler.js  # Pemroses pesan, media, dokumen kode, & broadcast
+│   └── telegramBot.js     # Wrapper backward-compatibility untuk layanan Telegram
 ├── .gitignore             # Daftar berkas yang diabaikan oleh Git
 ├── config.example.json    # Berkas contoh konfigurasi dasar
 ├── config.json            # Berkas konfigurasi aktif lokal

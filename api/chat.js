@@ -157,117 +157,132 @@ module.exports = async (req, res) => {
     const currKeys = currentTarget.keys || [];
     if (!currKeys.length) continue;
 
-    const currModel = currentTarget.models?.[0] || targetModelName;
-    const totalKeys = currKeys.length;
-    let startKeyIdx = keyRotations.get(currApiUrl) || 0;
-
-    for (let kIdx = 0; kIdx < totalKeys; kIdx++) {
-      const idx = (startKeyIdx + kIdx) % totalKeys;
-      const key = currKeys[idx];
-      const auth = key.startsWith('Bearer ') ? key : `Bearer ${key}`;
-
-      const payload = { model: currModel, messages: formattedMessages, max_tokens: maxTokens, temperature, stream };
-      if (cfg.topP !== undefined) payload.top_p = cfg.topP;
-      if (cfg.reasoningEffort && cfg.reasoningEffort !== 'none') payload.reasoning_effort = cfg.reasoningEffort;
-
-      try {
-        const ctrl = new AbortController();
-        const timeoutMs = isFailover ? 30000 : 60000;
-        const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-        let disconnected = false;
-        const onClose = () => { disconnected = true; ctrl.abort(); };
-        if (typeof req.on === 'function') req.on('close', onClose);
-
-        const upstream = await fetch(currApiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: auth },
-          body: JSON.stringify(payload),
-          signal: ctrl.signal
-        });
-
-        clearTimeout(timer);
-        if (typeof req.removeListener === 'function') {
-          req.removeListener('close', onClose);
-        } else if (typeof req.off === 'function') {
-          req.off('close', onClose);
-        }
-        if (disconnected) return;
-
-        const latencyMs = Date.now() - reqStartTime;
-
-        if (upstream.ok) {
-          keyRotations.set(currApiUrl, (idx + 1) % totalKeys);
-
-          if (stream && upstream.body) {
-            logRequest({
-              ip,
-              provider: currentTarget.name,
-              model: currModel,
-              status: 200,
-              latencyMs,
-              tokens: Math.round(allUserText.length / 4) + 150,
-              failover: isFailover
-            });
-
-            res.writeHead(200, {
-              'Content-Type': 'text/event-stream; charset=utf-8',
-              'Cache-Control': 'no-cache, no-transform',
-              'Connection': 'keep-alive',
-              'X-Accel-Buffering': 'no',
-              'X-Provider': currentTarget.name
-            });
-
-            const reader = upstream.body.getReader();
-            const dec = new TextDecoder('utf-8');
-            let buf = '';
-            let closed = false;
-            req.on('close', () => { closed = true; try { reader.cancel(); } catch {} });
-
-            try {
-              while (!closed) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                buf += dec.decode(value, { stream: true });
-                const lines = buf.split('\n'); buf = lines.pop();
-                for (const line of lines) res.write(sanitizeOutput(line) + '\n');
-              }
-              if (buf) res.write(sanitizeOutput(buf) + '\n');
-            } catch (e) {}
-            return res.end();
-          } else {
-            const data = await upstream.json();
-            if (data.choices?.[0]?.message) {
-              data.choices[0].message.content = sanitizeOutput(data.choices[0].message.content);
-            }
-
-            const estTok = (data.usage?.total_tokens) || (Math.round((allUserText.length + (data.choices?.[0]?.message?.content?.length || 0)) / 4));
-
-            logRequest({
-              ip,
-              provider: currentTarget.name,
-              model: currModel,
-              status: 200,
-              latencyMs,
-              tokens: estTok,
-              failover: isFailover
-            });
-
-            if (cfg.cacheEnabled) {
-              setCachedResponse(cacheKey, data, cfg.cacheTTL || 3600);
-            }
-
-            res.setHeader('X-Provider', currentTarget.name);
-            return res.status(200).json(data);
-          }
-        } else {
-          const errText = await upstream.text();
-          finalError = `HTTP ${upstream.status} [${currentTarget.name}]: ${errText.slice(0, 200)}`;
-        }
-      } catch (e) {
-        finalError = e.name === 'AbortError' ? `Timeout [${currentTarget.name}]` : e.message;
+    // Build ordered list of models to try for this provider
+    // Primary: the resolved target model, then all others in endpoint.models[]
+    const providerModels = [];
+    if (targetModelName && !providerModels.includes(targetModelName)) providerModels.push(targetModelName);
+    if (Array.isArray(currentTarget.models)) {
+      for (const m of currentTarget.models) {
+        if (m && !providerModels.includes(m)) providerModels.push(m);
       }
     }
-  }
+    if (!providerModels.length) providerModels.push(targetModelName || 'mercury-2');
+
+    for (let mIdx = 0; mIdx < providerModels.length; mIdx++) {
+      const currModel = providerModels[mIdx];
+      const totalKeys = currKeys.length;
+      let startKeyIdx = keyRotations.get(currApiUrl) || 0;
+
+      for (let kIdx = 0; kIdx < totalKeys; kIdx++) {
+        const idx = (startKeyIdx + kIdx) % totalKeys;
+        const key = currKeys[idx];
+        const auth = key.startsWith('Bearer ') ? key : `Bearer ${key}`;
+
+        const payload = { model: currModel, messages: formattedMessages, max_tokens: maxTokens, temperature, stream };
+        if (cfg.topP !== undefined) payload.top_p = cfg.topP;
+        if (cfg.reasoningEffort && cfg.reasoningEffort !== 'none') payload.reasoning_effort = cfg.reasoningEffort;
+
+        try {
+          const ctrl = new AbortController();
+          const timeoutMs = isFailover ? 30000 : 60000;
+          const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+          let disconnected = false;
+          const onClose = () => { disconnected = true; ctrl.abort(); };
+          if (typeof req.on === 'function') req.on('close', onClose);
+
+          const upstream = await fetch(currApiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: auth },
+            body: JSON.stringify(payload),
+            signal: ctrl.signal
+          });
+
+          clearTimeout(timer);
+          if (typeof req.removeListener === 'function') {
+            req.removeListener('close', onClose);
+          } else if (typeof req.off === 'function') {
+            req.off('close', onClose);
+          }
+          if (disconnected) return;
+
+          const latencyMs = Date.now() - reqStartTime;
+
+          if (upstream.ok) {
+            keyRotations.set(currApiUrl, (idx + 1) % totalKeys);
+
+            if (stream && upstream.body) {
+              logRequest({
+                ip,
+                provider: currentTarget.name,
+                model: currModel,
+                status: 200,
+                latencyMs,
+                tokens: Math.round(allUserText.length / 4) + 150,
+                failover: isFailover || mIdx > 0
+              });
+
+              res.writeHead(200, {
+                'Content-Type': 'text/event-stream; charset=utf-8',
+                'Cache-Control': 'no-cache, no-transform',
+                'Connection': 'keep-alive',
+                'X-Accel-Buffering': 'no',
+                'X-Provider': currentTarget.name,
+                'X-Model': currModel
+              });
+
+              const reader = upstream.body.getReader();
+              const dec = new TextDecoder('utf-8');
+              let buf = '';
+              let closed = false;
+              req.on('close', () => { closed = true; try { reader.cancel(); } catch {} });
+
+              try {
+                while (!closed) {
+                  const { done, value } = await reader.read();
+                  if (done) break;
+                  buf += dec.decode(value, { stream: true });
+                  const lines = buf.split('\n'); buf = lines.pop();
+                  for (const line of lines) res.write(sanitizeOutput(line) + '\n');
+                }
+                if (buf) res.write(sanitizeOutput(buf) + '\n');
+              } catch (e) {}
+              return res.end();
+            } else {
+              const data = await upstream.json();
+              if (data.choices?.[0]?.message) {
+                data.choices[0].message.content = sanitizeOutput(data.choices[0].message.content);
+              }
+
+              const estTok = (data.usage?.total_tokens) || (Math.round((allUserText.length + (data.choices?.[0]?.message?.content?.length || 0)) / 4));
+
+              logRequest({
+                ip,
+                provider: currentTarget.name,
+                model: currModel,
+                status: 200,
+                latencyMs,
+                tokens: estTok,
+                failover: isFailover || mIdx > 0
+              });
+
+              if (cfg.cacheEnabled) {
+                setCachedResponse(cacheKey, data, cfg.cacheTTL || 3600);
+              }
+
+              res.setHeader('X-Provider', currentTarget.name);
+              res.setHeader('X-Model', currModel);
+              return res.status(200).json(data);
+            }
+          } else {
+            const errText = await upstream.text();
+            finalError = `HTTP ${upstream.status} [${currentTarget.name}/${currModel}]: ${errText.slice(0, 200)}`;
+          }
+        } catch (e) {
+          finalError = e.name === 'AbortError' ? `Timeout [${currentTarget.name}/${currModel}]` : e.message;
+        }
+      } // end key loop
+    } // end model loop
+  } // end provider loop
 
   // All candidates failed
   const totalMs = Date.now() - reqStartTime;
