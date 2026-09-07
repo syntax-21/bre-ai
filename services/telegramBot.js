@@ -228,7 +228,8 @@ class TelegramBotService {
         const cfg = getConfig();
         const model = cfg.telegramModel || cfg.model || 'mercury-2';
 
-        const mockReq = {
+        const EventEmitter = require('events');
+        const mockReq = Object.assign(new EventEmitter(), {
           method: 'POST',
           headers: {
             'content-type': 'application/json',
@@ -240,9 +241,8 @@ class TelegramBotService {
             stream: false,
             customSystemPrompt: `Anda sedang melayani pengguna Telegram ${senderInfo}. Formatlah jawaban Anda rapi menggunakan format Markdown standar yang nyaman dibaca di layar HP/Telegram.`
           },
-          socket: { remoteAddress: '127.0.0.1' },
-          on: () => {}
-        };
+          socket: { remoteAddress: '127.0.0.1' }
+        });
 
         const mockRes = {
           statusCode: 200,
@@ -792,6 +792,9 @@ class TelegramBotService {
       } catch (err) {
         if (!this.isRunning) break;
         this.lastError = err.message;
+        if (err.message && (err.message.includes('webhook') || err.message.includes('409'))) {
+          try { await this.apiCall('deleteWebhook', { drop_pending_updates: false }); } catch (e) {}
+        }
         await new Promise(r => setTimeout(r, 3000));
       }
     }
@@ -800,8 +803,14 @@ class TelegramBotService {
   // Start the bot polling service
   async start() {
     const cfg = getConfig();
-    if (!cfg.telegramEnabled || !cfg.telegramBotToken) {
+    if (!cfg.telegramEnabled) {
       this.isRunning = false;
+      this.lastError = 'Fitur bot Telegram dinonaktifkan dalam konfigurasi.';
+      return false;
+    }
+    if (!cfg.telegramBotToken) {
+      this.isRunning = false;
+      this.lastError = 'Bot Token Telegram masih kosong. Masukkan token dari @BotFather lalu simpan.';
       return false;
     }
 
@@ -810,6 +819,12 @@ class TelegramBotService {
     try {
       const info = await this.apiCall('getMe');
       this.botInfo = info;
+
+      // Auto-clear webhook if previously set (e.g. from Vercel deployment), so long polling can run
+      try {
+        await this.apiCall('deleteWebhook', { drop_pending_updates: false });
+      } catch (e) {}
+
       this.isRunning = true;
       this.lastError = null;
       console.log(`[TelegramBot] 🟢 Berhasil terhubung sebagai @${info.username} (ID: ${info.id})`);

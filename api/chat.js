@@ -175,7 +175,7 @@ module.exports = async (req, res) => {
         const timer = setTimeout(() => ctrl.abort(), timeoutMs);
         let disconnected = false;
         const onClose = () => { disconnected = true; ctrl.abort(); };
-        req.on('close', onClose);
+        if (typeof req.on === 'function') req.on('close', onClose);
 
         const upstream = await fetch(currApiUrl, {
           method: 'POST',
@@ -185,7 +185,11 @@ module.exports = async (req, res) => {
         });
 
         clearTimeout(timer);
-        req.removeListener('close', onClose);
+        if (typeof req.removeListener === 'function') {
+          req.removeListener('close', onClose);
+        } else if (typeof req.off === 'function') {
+          req.off('close', onClose);
+        }
         if (disconnected) return;
 
         const latencyMs = Date.now() - reqStartTime;

@@ -1,99 +1,179 @@
-# ⚡ Bre AI - Asisten AI Cerdas & Serba Bisa (Vercel Ready)
+# Bre AI
 
-**Bre AI** adalah aplikasi web kecerdasan buatan serba bisa tanpa batasan kaku. Dirancang dengan arsitektur serverless modern yang dapat di-deploy ke **Vercel secara 100% GRATIS** tanpa biaya database maupun server tambahan.
-
----
-
-## ✨ Fitur Unggulan
-
-- ⚡ **Siap Deploy ke Vercel (100% Gratis)**: Menggunakan arsitektur native Vercel Serverless Functions (`/api/*`) dan static CDN. Zero setup, zero paid database.
-- 🤖 **Identitas Mutlak Bre AI**: Dalam bahasa apapun (Indonesia, Inggris, Mandarin, dll.), saat ditanya mengenai model/identitas/pembuatnya, Bre AI selalu menjawab dengan bangga bahwa dirinya adalah **Bre AI**.
-- 🚀 **Tanpa Limit Token Artifisial (Real-Time SSE Streaming)**: Menghasilkan output teks, kode panjang, atau esai tanpa terpotong dan tanpa terkena timeout gateway Vercel.
-- 🔑 **Multi-API Key & Smart Failover**:
-  - Mendukung input banyak API key sekaligus di panel admin.
-  - **Auto-Rotation & Fallback**: Jika salah satu API key terkena limit (HTTP 429) atau error kuota, Bre AI otomatis berpindah ke key berikutnya secara transparan tanpa mengganggu obrolan pengguna!
-- 🌐 **Custom Endpoint Fleksibel**: Kompatibel dengan semua API berstandar OpenAI (Inception Labs Mercury, OpenAI GPT-4o, OpenRouter, Groq, DeepSeek, Together, Ollama lokal, dll.).
-- ⚙️ **Panel Admin Interaktif**: Dilengkapi fitur uji koneksi (test latency & status tiap key), ubah endpoint, rotasi key, ganti model, hingga kustomisasi prompt.
-- 🎨 **Tampilan Ultra-Modern**: Desain Obsidian Dark dengan Glassmorphism, efek neon glow, animasi streaming, salin kode 1-klik, dan ekspor obrolan ke Markdown.
-- 🔒 **Privasi & Keamanan**: Riwayat obrolan tersimpan aman di browser masing-masing pengguna via `localStorage` (tanpa biaya database server).
+Bre AI adalah aplikasi antarmuka percakapan kecerdasan buatan berbasis web dan bot Telegram yang dilengkapi sistem manajemen proxy router (*multi-provider AI proxy*). Aplikasi ini dirancang agar dapat berjalan secara lokal menggunakan Node.js maupun di-deploy ke platform *cloud serverless* seperti Vercel tanpa memerlukan basis data eksternal.
 
 ---
 
-## 🚀 Panduan Deploy ke Vercel (Gratis & Cepat)
-
-### Langkah 1: Siapkan Repository GitHub
-1. Buat repository baru di [GitHub](https://github.com/new).
-2. Upload atau push seluruh file dalam folder proyek ini ke repository tersebut:
-   ```bash
-   git init
-   git add .
-   git commit -m "Initial commit Bre AI"
-   git branch -M main
-   git remote add origin https://github.com/USERNAME/NAMA-REPO.git
-   git push -u origin main
-   ```
-
-### Langkah 2: Import ke Vercel
-1. Buka [Vercel Dashboard](https://vercel.com/dashboard) dan klik **Add New...** > **Project**.
-2. Pilih repository GitHub yang baru saja Anda buat, lalu klik **Import**.
-3. Pada halaman konfigurasi:
-   - **Framework Preset**: Pilih `Other` (atau biarkan default).
-   - **Root Directory**: `./` (biarkan default).
-4. *(Opsional tapi Disarankan)* Buka bagian **Environment Variables** dan tambahkan:
-   - `BRE_API_KEYS` : API key Anda (bisa pisahkan dengan koma jika lebih dari satu, contoh: `sk_key1,sk_key2`).
-   - `BRE_API_URL` : `https://api.inceptionlabs.ai/v1/chat/completions` (atau endpoint pilihan Anda).
-   - `BRE_MODEL` : `mercury-2`
-   - `ADMIN_PASSWORD` : `admin` (atau password rahasia pilihan Anda).
-5. Klik tombol **Deploy**!
-6. Dalam hitungan detik, aplikasi Bre AI Anda sudah aktif di domain gratis seperti `https://nama-proyek.vercel.app`.
+## Daftar Isi
+- [Arsitektur Sistem](#arsitektur-sistem)
+- [Fitur Utama](#fitur-utama)
+- [Struktur Direktori](#struktur-direktori)
+- [Kebutuhan Sistem](#kebutuhan-sistem)
+- [Panduan Instalasi & Menjalankan Lokal](#panduan-instalasi--menjalankan-lokal)
+- [Panduan Deploy ke Vercel](#panduan-deploy-ke-vercel)
+- [Integrasi Bot Telegram](#integrasi-bot-telegram)
+- [Panel Admin (/admin)](#panel-admin-admin)
+- [Variabel Lingkungan (Environment Variables)](#variabel-lingkungan-environment-variables)
+- [Lisensi & Kredit](#lisensi--kredit)
 
 ---
 
-## 💻 Menjalankan Secara Lokal (Windows / Mac / Linux)
+## Arsitektur Sistem
 
-Pastikan Anda sudah menginstall [Node.js](https://nodejs.org) (versi 18 ke atas).
-
-1. Buka folder ini di Terminal / Command Prompt.
-2. Jalankan perintah:
-   ```bash
-   npm start
-   ```
-   *Atau di Windows, cukup klik dua kali file `start.bat`.*
-3. Buka browser di `http://localhost:3000`.
+Bre AI terdiri dari tiga komponen utama:
+1. **Frontend Web Chat (`public/index.html`, `app.js`, `style.css`)**: Antarmuka obrolan responsif berbasis peramban dengan dukungan *Server-Sent Events* (SSE) untuk efek teks mengalir (*streaming*), riwayat tersimpan pada `localStorage`, dan ekspor dokumen.
+2. **Serverless API Engine (`api/*`)**: Endpoint Node.js untuk perutean permintaan obrolan, rotasi kunci API (*key rotation*), *failover* otomatis antar-*provider*, *caching* respons di memori, pembatasan laju (*rate limiting*), serta penegakan kata kunci terlarang (*blacklist*).
+3. **Layanan Bot Telegram (`services/telegramBot.js`, `api/telegram.js`)**: Bot percakapan dua arah dengan panel admin interaktif (*inline keyboards*) dan sistem kontrol akses (*whitelist/blocklist*). Mendukung mode *long-polling* untuk server lokal dan mode *webhook* untuk lingkungan *serverless*.
 
 ---
 
-## ⚙️ Menggunakan Panel Admin
+## Fitur Utama
 
-1. Klik tombol **⚙️ Admin** di pojok kanan atas aplikasi.
-2. Masukkan password admin (default: `admin`).
-3. Anda dapat:
-   - Mengubah **API Endpoint URL** (tersedia preset cepat untuk Inception, OpenAI, OpenRouter, Groq, DeepSeek).
-   - Memasukkan **Banyak API Key** (satu baris per key).
-   - Mengklik tab **⚡ Uji Koneksi** untuk mengetes semua key dan melihat latensi.
-   - Mengedit **System Prompt** dan **Model ID**.
-   - Klik **Simpan Konfigurasi**.
+- **Multi-Provider AI Router & Failover**: Mendukung banyak endpoint AI berbasis OpenAI-compatible API (seperti Inception Labs, OpenAI, Groq, DeepSeek, OpenRouter, Together AI, maupun Ollama lokal). Jika satu endpoint atau kunci API mengalami kendala (misalnya HTTP 429 atau kuota habis), sistem dapat berpindah otomatis ke kunci atau endpoint cadangan.
+- **Server-Sent Events (SSE) Streaming**: Respon teks AI dikirimkan secara bertahap secara *real-time* ke klien web.
+- **In-Memory Response Caching**: Menyimpan respon dari kueri non-streaming yang identik di dalam memori (RAM) dengan pengaturan *Time-to-Live* (TTL) untuk menghemat penggunaan token upstream.
+- **Multi-Client API Keys**: Memungkinkan pembuatan kunci API klien (`sk-bre-...`) untuk menghubungkan aplikasi eksternal (seperti NextChat, LibreChat, atau ekstensi peramban) ke proxy Bre AI dengan autentikasi *Bearer token*.
+- **Inspeksi Latensi & Log Permintaan**: Menampilkan riwayat log permintaan (status HTTP, latensi milidetik, estimasi token) serta modul *batch benchmark* untuk menguji latensi tiap endpoint.
+- **Panel Admin Terisolasi**: Antarmuka administrasi berada pada rute `/admin` dan dilindungi oleh autentikasi password master. Rute ini tidak memiliki tautan langsung dari halaman obrolan umum untuk menjaga privasi pengelolaan.
+- **Integrasi Bot Telegram Penuh**:
+  - Chat langsung dengan AI melalui Telegram dengan ingatan percakapan per-pengguna.
+  - Panel kontrol pemilik (*Owner Control Panel*) di Telegram via perintah `/admin` menggunakan tombol interaktif (*inline keyboards*) tanpa mengetik perintah teks rumit.
+  - Manajemen akses pengguna (mode Publik atau khusus Pengguna Terdaftar).
 
 ---
 
-## 📂 Struktur Proyek
+## Struktur Direktori
 
-```
-ai_engine/
+```text
+bre-ai-main/
 ├── api/
-│   ├── _shared.js      # Helper konfigurasi, failover, & guardrail identitas Bre AI
-│   ├── chat.js         # Vercel Serverless Function: Chat completion & SSE streaming
-│   ├── config.js       # Vercel Serverless Function: Manajemen konfigurasi admin
-│   ├── info.js         # Vercel Serverless Function: Public info & status
-│   └── test.js         # Vercel Serverless Function: Uji koneksi & latensi multi API key
+│   ├── _shared.js         # Logika konfigurasi, logging, metrik, caching, & filter
+│   ├── chat.js            # Handler perutean chat completion & SSE streaming
+│   ├── config.js          # Endpoint administrasi & manajemen konfigurasi
+│   ├── info.js            # Endpoint informasi status sistem
+│   ├── search.js          # Utilitas pencarian web
+│   ├── telegram.js        # Endpoint webhook serverless untuk bot Telegram
+│   └── test.js            # Endpoint uji latensi koneksi upstream
 ├── public/
-│   ├── index.html      # Antarmuka web Bre AI
-│   ├── style.css       # Desain Obsidian Dark Glassmorphism
-│   └── app.js          # Logika client, streaming reader, & admin controller
-├── config.json         # Konfigurasi default lokal
-├── package.json        # Node.js metadata & scripts
-├── server.js           # Server lokal terintegrasi
-├── vercel.json         # Konfigurasi routing Vercel
-├── start.bat           # Launcher cepat untuk Windows
-└── README.md           # Dokumentasi resmi
+│   ├── admin.html         # Halaman antarmuka web panel admin
+│   ├── admin.js           # Logika interaktif panel admin
+│   ├── app.js             # Logika klien web chat
+│   ├── bre_ai_avatar.jpg  # Aset gambar resmi avatar Bre AI
+│   ├── index.html         # Halaman antarmuka obrolan utama
+│   └── style.css          # Gaya visual antarmuka web
+├── services/
+│   └── telegramBot.js     # Engine bot Telegram (polling, webhook handler, & panel owner)
+├── .gitignore             # Daftar berkas yang diabaikan oleh Git
+├── config.example.json    # Berkas contoh konfigurasi dasar
+├── config.json            # Berkas konfigurasi aktif lokal
+├── package.json           # Berkas manifest dependensi & script Node.js
+├── README.md              # Dokumentasi proyek
+├── server.js              # Server HTTP terintegrasi untuk penggunaan lokal
+├── start.bat              # Script otomasi peluncuran lokal di Windows
+└── vercel.json            # Konfigurasi routing platform Vercel
 ```
+
+---
+
+## Kebutuhan Sistem
+
+- **Node.js**: Versi 18.0.0 atau lebih baru (membutuhkan implementasi `fetch` bawaan).
+- **Akses Jaringan**: Koneksi internet keluar (*outbound*) ke endpoint API upstream (misalnya `api.inceptionlabs.ai` atau `api.telegram.org`).
+
+---
+
+## Panduan Instalasi & Menjalankan Lokal
+
+1. **Clone atau Unduh Proyek**:
+   Buka folder proyek di terminal atau command prompt:
+   ```bash
+   cd "bre-ai-main"
+   ```
+
+2. **Jalankan Server**:
+   - **Di Windows**: Klik dua kali berkas `start.bat`, atau jalankan:
+     ```cmd
+     start.bat
+     ```
+     *(Script ini otomatis memeriksa dan menutup proses lama yang masih menahan port 3000 jika terjadi konflik `EADDRINUSE`).*
+   - **Melalui Terminal (Windows/Linux/macOS)**:
+     ```bash
+     npm start
+     ```
+
+3. **Akses Aplikasi di Browser**:
+   - Obrolan Klien: `http://localhost:3000`
+   - Panel Admin: `http://localhost:3000/admin` (Password bawaan: `admin`)
+
+---
+
+## Panduan Deploy ke Vercel
+
+Aplikasi ini telah dilengkapi berkas `vercel.json` dan struktur folder `/api` yang kompatibel langsung dengan arsitektur *Vercel Serverless Functions*.
+
+### Berkas yang Diunggah ke Repository Git:
+- Folder: `api/`, `public/`, `services/`
+- Berkas: `package.json`, `vercel.json`, `config.json`, `.gitignore`, `README.md`
+- *Catatan:* Berkas `.env`, `start.bat`, dan folder `node_modules/` tidak perlu diunggah.
+
+### Langkah Penerapan:
+1. Dorong (*push*) proyek ke repository GitHub baru (disarankan mode **Private**).
+2. Masuk ke [Vercel Dashboard](https://vercel.com/) dan pilih **Add New...** > **Project**.
+3. Pilih repository Anda lalu klik **Import**.
+4. Buka bagian **Environment Variables** (lihat daftar variabel di bawah) untuk mengisi konfigurasi tanpa membocorkan kredensial.
+5. Klik **Deploy**. Selesai.
+
+---
+
+## Integrasi Bot Telegram
+
+Bot Telegram Bre AI dapat beroperasi dalam dua mode:
+
+### 1. Mode Polling Lokal (Penggunaan di Komputer/Server Pribadi/VPS)
+1. Buka `/admin` di peramban, lalu masuk ke tab **🤖 Telegram Bot**.
+2. Masukkan **Telegram Bot Token** yang diperoleh dari `@BotFather`.
+3. Masukkan ID Telegram Anda pada kolom **Telegram Owner ID** (dapat dicek via `@userinfobot`).
+4. Aktifkan sakelar **Aktifkan Integrasi Telegram Bot**.
+5. Klik tombol **`💾 Simpan & Mulai Bot`**. Sistem akan memulai *long-polling* secara lokal.
+
+### 2. Mode Webhook Cloud (Penggunaan di Vercel)
+Karena Vercel berjalan pada arsitektur *serverless stateless*, proses *long-polling* lokal tidak berjalan terus-menerus. Untuk itu, gunakan endpoint Webhook:
+1. Pastikan variabel lingkungan `TELEGRAM_BOT_TOKEN` dan `TELEGRAM_OWNER_ID` telah diatur di Vercel Dashboard.
+2. Daftarkan URL Webhook ke Telegram dengan membuka tautan berikut di peramban (jalankan satu kali):
+   ```text
+   https://api.telegram.org/bot<TOKEN_BOT_ANDA>/setWebhook?url=https://<DOMAIN-VERCEL-ANDA>/api/telegram
+   ```
+3. Telegram akan merespon dengan `{"ok":true,"result":true,"description":"Webhook was set"}`. Bot akan aktif merespon pesan melalui serverless function Vercel.
+
+---
+
+## Panel Admin (/admin)
+
+Panel admin menyediakan kontrol terpusat untuk konfigurasi proxy:
+- **Endpoints & Routing**: Menambahkan, mengedit, mengatur bobot (*weight*), memetakan alias model, dan memasukkan banyak kunci API per-provider.
+- **Global Engine**: Mengatur *System Prompt*, *Temperature*, *Top-P*, *Frequency Penalty*, *Presence Penalty*, batas *Max Tokens*, dan mode respons *caching*.
+- **Keamanan & Klien API**: Mengubah password admin, mengatur batas laju request (*Rate Limit*), serta membuat daftar kunci API untuk klien eksternal.
+- **Telegram Bot**: Pengaturan status bot, token API, mode akses (Publik vs Whitelist), dan tabel data pengguna khusus (Whitelist/Blocked).
+- **Live Model Tester**: Menguji kueri teks langsung ke model AI upstream untuk memantau respon dan latensi.
+- **Backup & Restore**: Mengekspor seluruh konfigurasi ke berkas `.json` atau memulihkan konfigurasi dari berkas cadangan.
+
+---
+
+## Variabel Lingkungan (Environment Variables)
+
+Variabel lingkungan berikut dapat digunakan untuk menggantikan atau menimpa nilai dalam `config.json`, terutama saat berjalan di lingkungan cloud Vercel:
+
+| Variabel | Deskripsi | Contoh Nilai |
+| :--- | :--- | :--- |
+| `ADMIN_PASSWORD` | Kata sandi untuk masuk ke panel web `/admin` | `KataSandiKuat123` |
+| `API_KEY` / `INCEPTION_API_KEY` | Kunci API utama untuk provider AI upstream | `sk_683f99...` |
+| `TELEGRAM_BOT_TOKEN` | Token bot Telegram dari `@BotFather` | `1234567890:ABCdef...` |
+| `TELEGRAM_OWNER_ID` | User ID akun pemilik bot untuk akses panel `/admin` di Telegram | `425134037` |
+| `BRE_CONFIG` | *(Opsional)* String format JSON untuk menimpa seluruh konfigurasi | `{"temperature":0.7}` |
+
+---
+
+## Lisensi & Kredit
+
+- **Pengembang**: Amirun Rayan Ariandi
+- **Lisensi**: MIT License

@@ -1003,15 +1003,15 @@ async function loadTelegramStatus() {
       if (desc) desc.textContent = `Aktif polling Telegram API. Sedang melayani ${st.activeConversations || 0} percakapan.`;
       if (userTag) userTag.textContent = st.botInfo?.username ? `@${st.botInfo.username}` : 'Online';
     } else if (st.enabled && !st.running) {
-      if (dot) { dot.className = 'ping-badge fail'; dot.textContent = '🔴 Gagal Terhubung'; }
-      if (title) title.textContent = 'Layanan Bot Gagal Dimulai';
-      if (desc) desc.textContent = st.lastError || 'Token tidak valid atau terjadi kendala jaringan ke Telegram.';
-      if (userTag) userTag.textContent = '';
+      if (dot) { dot.className = 'ping-badge fail'; dot.textContent = '🔴 Belum Terhubung'; }
+      if (title) title.textContent = 'Layanan Bot Belum Aktif';
+      if (desc) desc.textContent = st.lastError || 'Token belum disimpan atau belum berhasil terhubung ke Telegram API.';
+      if (userTag && st.botInfo?.username) userTag.textContent = `@${st.botInfo.username}`;
     } else {
       if (dot) { dot.className = 'ping-badge fail'; dot.textContent = '🔴 Nonaktif'; }
       if (title) title.textContent = 'Bot Sedang Tidak Aktif';
-      if (desc) desc.textContent = 'Aktifkan switch di bawah dan simpan untuk memulai bot.';
-      if (userTag) userTag.textContent = '';
+      if (desc) desc.textContent = 'Nyalakan switch "Aktifkan Integrasi Telegram Bot" lalu klik "Simpan & Mulai Bot".';
+      if (userTag && st.botInfo?.username) userTag.textContent = `@${st.botInfo.username}`;
     }
   } catch (e) {
     console.error('loadTelegramStatus error:', e);
@@ -1043,7 +1043,8 @@ async function testTelegramToken() {
 }
 
 async function restartTelegramBot() {
-  toast('🔄 Me-restart bot service...', 'ok');
+  toast('💾 Menyimpan pengaturan & me-restart bot...', 'ok');
+  await saveAllConfig();
   try {
     const r = await fetch('/api/config', {
       method: 'POST',
@@ -1052,7 +1053,12 @@ async function restartTelegramBot() {
     });
     const data = await r.json();
     if (data.ok) {
-      toast(data.running ? '✅ Bot service berhasil dijalankan!' : 'Bot service dimatikan (periksa token & toggle)', 'ok');
+      if (data.running) {
+        toast('✅ Bot Telegram berhasil aktif & berjalan!', 'ok');
+      } else {
+        const errDesc = data.status?.lastError || 'Periksa token bot & pastikan switch aktif';
+        toast('⚠️ Bot tidak aktif: ' + errDesc, 'err');
+      }
       loadTelegramStatus();
     } else {
       toast('Gagal restart bot: ' + data.error, 'err');
