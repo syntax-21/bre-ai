@@ -1383,14 +1383,12 @@ function updateTelegramModelDropdown(selectedModel) {
   if (!sel) return;
   const allModels = new Set();
   endpoints.forEach(ep => {
-    (ep.models || []).forEach(m => allModels.add(m));
-    (ep.mapping || []).forEach(map => {
-      const alias = map.split(':')[0]?.trim();
-      if (alias) allModels.add(alias);
-    });
+    if (ep.name) allModels.add(ep.name.trim());
   });
-  if (!allModels.size) allModels.add('mercury-2');
+  if (!allModels.size) allModels.add('Default Provider');
   
+  allModels.delete('auto');
+
   sel.innerHTML = '<option value="auto">🌐 Otomatis ikuti Router AI (Rotasi)</option>' +
     Array.from(allModels).map(m => `<option value="${m}" ${m === selectedModel ? 'selected' : ''}>${m}</option>`).join('');
 }

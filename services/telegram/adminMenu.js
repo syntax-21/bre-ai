@@ -160,19 +160,18 @@ async function handleAdminCallback(cq, botService) {
     const allModels = new Set();
     allModels.add(currentModel);
 
-    // Collect all models from configured endpoints
+    // Collect all Provider Names from configured endpoints
     if (Array.isArray(cfg.endpoints)) {
       cfg.endpoints.forEach(ep => {
-        (ep.models || []).forEach(m => allModels.add(m));
-        (ep.mapping || []).forEach(map => {
-          const alias = map.split(':')[0]?.trim();
-          if (alias) allModels.add(alias);
-        });
+        if (ep.name) allModels.add(ep.name.trim());
       });
     }
 
+    // Remove literal 'auto' if it was added from endpoints since we have a dedicated button
+    allModels.delete('auto');
+
     const rows = [];
-    Array.from(allModels).slice(0, 10).forEach(m => {
+    Array.from(allModels).slice(0, 40).forEach(m => {
       const isSelected = (m === currentModel);
       rows.push([{
         text: isSelected ? `✅ ${m}` : m,
@@ -181,7 +180,7 @@ async function handleAdminCallback(cq, botService) {
     });
 
     rows.push([
-      { text: currentModel === '' ? '✅ Auto Router' : '🌐 Ikuti Auto Router', callback_data: 'adm_setmodel:auto' }
+      { text: currentModel === 'auto' ? '✅ Auto Router' : '🌐 Ikuti Auto Router', callback_data: 'adm_setmodel:auto' }
     ]);
     rows.push([{ text: '⬅️ Menu Utama', callback_data: 'adm_main' }]);
 
