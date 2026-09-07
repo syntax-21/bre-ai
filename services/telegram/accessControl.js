@@ -1,18 +1,23 @@
 // ========================================================
 // Bre AI v3.0 - Telegram Access Control & User Tracking
+// Multi-role permissions, Whitelist/Blocklist, and Owner Alerts
 // Created by Amirun Rayan Ariandi
 // ========================================================
 const { getConfig, saveConfig } = require('../../api/_shared');
+const { sendTelegramMessage } = require('./api');
 
-const recentUsers = new Map(); // userId -> { id, username, name, lastSeen }
+const recentUsers = new Map(); // userId -> { id, username, name, lastSeen, notified }
+const notifiedUsers = new Set(); // userId -> already sent new user alert to owner
 
 function recordRecentUser(fromUser) {
   if (!fromUser || !fromUser.id) return;
+  const existing = recentUsers.get(fromUser.id);
   recentUsers.set(fromUser.id, {
     id: fromUser.id,
     username: fromUser.username || '',
     name: [fromUser.first_name, fromUser.last_name].filter(Boolean).join(' ') || fromUser.username || 'User',
-    lastSeen: Date.now()
+    lastSeen: Date.now(),
+    notified: existing ? existing.notified : false
   });
 }
 
@@ -41,6 +46,22 @@ function isOwner(fromUser, activeOwnerId = null) {
     if (found && found.role === 'owner') return true;
   }
 
+  return false;
+}
+
+// Check if user is explicitly registered in database
+function isUserRegistered(fromUser) {
+  if (!fromUser) return false;
+  const cfg = getConfig();
+  const uId = String(fromUser.id);
+  const uName = (fromUser.username || '').toLowerCase().replace(/^@/, '');
+
+  if (Array.isArray(cfg.telegramUsers)) {
+    return cfg.telegramUsers.some(u =>
+      String(u.id) === uId ||
+      (u.username && u.username.toLowerCase().replace(/^@/, '') === uName)
+    );
+  }
   return false;
 }
 
@@ -83,10 +104,114 @@ function isUserAllowed(fromUser, activeOwnerId = null, activeAccessMode = null) 
   return true;
 }
 
+// Add or update user role in telegramUsers config
+function setUserRole(userId, username = '', name = '', role = 'whitelist') {
+  const cfg = getConfig();
+  const users = Array.isArray(cfg.telegramUsers) ? [...cfg.telegramUsers] : [];
+  const uIdStr = String(userId);
+  const uNameClean = (username || '').replace(/^@/, '');
+
+  const idx = users.findIndex(u =>
+    String(u.id) === uIdStr ||
+    (uNameClean && u.username && u.username.toLowerCase().replace(/^@/, '') === uNameClean.toLowerCase())
+  );
+
+  const userEntry = {
+    id: uIdStr,
+    username: uNameClean,
+    name: name || (uNameClean ? `@${uNameClean}` : `User ${uIdStr}`),
+    role: role,
+    updatedAt: new Date().toISOString()
+  };
+
+  if (idx >= 0) {
+    users[idx] = { ...users[idx], ...userEntry };
+  } else {
+    userEntry.addedAt = new Date().toISOString();
+    users.push(userEntry);
+  }
+
+  saveConfig({ telegramUsers: users });
+  return userEntry;
+}
+
+// Remove user from telegramUsers config
+function removeUserRole(targetIdOrUsername) {
+  const cfg = getConfig();
+  const users = Array.isArray(cfg.telegramUsers) ? [...cfg.telegramUsers] : [];
+  const cleanTarget = String(targetIdOrUsername).toLowerCase().replace(/^@/, '');
+
+  const filtered = users.filter(u =>
+    String(u.id).toLowerCase() !== cleanTarget &&
+    (u.username || '').toLowerCase().replace(/^@/, '') !== cleanTarget
+  );
+
+  saveConfig({ telegramUsers: filtered });
+  return filtered.length < users.length;
+}
+
+// Notify Owner when a new user enters/starts the bot with interactive Action Buttons
+async function notifyOwnerNewUser(fromUser, initialText = '', botService = null) {
+  if (!fromUser || !fromUser.id) return;
+  const cfg = getConfig();
+  const ownerId = botService?.activeOwnerId || cfg.telegramOwnerId;
+  const token = botService?.activeToken || null;
+
+  if (!ownerId) return; // No owner configured
+  if (isOwner(fromUser, ownerId)) return; // Don't notify if owner themselves
+
+  // Only notify once per user session
+  const uId = fromUser.id;
+  if (notifiedUsers.has(uId)) return;
+  notifiedUsers.add(uId);
+
+  const fullName = [fromUser.first_name, fromUser.last_name].filter(Boolean).join(' ') || 'Tanpa Nama';
+  const usernameTag = fromUser.username ? `@${fromUser.username}` : '_(tidak ada username)_';
+  const timeStr = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
+  const modeLabel = (cfg.telegramAccessMode || 'public') === 'whitelist' ? '🔒 Whitelist (Private)' : '🟢 Publik';
+  const previewText = (initialText || '').slice(0, 100);
+
+  const alertText = `🔔 *NOTIFIKASI PENGGUNA BARU MASUK*\n` +
+    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+    `Ada pengguna baru yang baru saja berinteraksi dengan Bre AI di Telegram:\n\n` +
+    `• *Nama:* ${fullName}\n` +
+    `• *Username:* ${usernameTag}\n` +
+    `• *ID Telegram:* \`${uId}\`\n` +
+    `• *Waktu:* ${timeStr}\n` +
+    `• *Mode Bot Saat Ini:* ${modeLabel}\n` +
+    (previewText ? `• *Pesan Awal:* _"${previewText}"_\n` : '') +
+    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+    `_Silakan pilih tindakan otorisasi di bawah ini:_`;
+
+  const markup = {
+    inline_keyboard: [
+      [
+        { text: '🟢 Izinkan (Whitelist)', callback_data: `adm_appr_wl:${uId}` },
+        { text: '🔴 Tolak / Blokir', callback_data: `adm_appr_bl:${uId}` }
+      ],
+      [
+        { text: '👥 Buka Manajemen User', callback_data: 'adm_users' },
+        { text: '✕ Abaikan', callback_data: `adm_appr_ign:${uId}` }
+      ]
+    ]
+  };
+
+  try {
+    await sendTelegramMessage(ownerId, alertText, markup, null, token);
+  } catch (err) {
+    console.warn('[TelegramBot] Gagal mengirim notifikasi new user ke Owner:', err.message);
+  }
+}
+
 module.exports = {
   recentUsers,
+  notifiedUsers,
   recordRecentUser,
   getRecentUsersList,
   isOwner,
-  isUserAllowed
+  isUserRegistered,
+  isUserAllowed,
+  setUserRole,
+  removeUserRole,
+  notifyOwnerNewUser
 };

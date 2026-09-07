@@ -228,9 +228,135 @@ api.editTelegramMessage = editTelegramMessage;
 api.answerCallback = answerCallback;
 api.sendTyping = sendTyping;
 api.downloadTelegramFile = downloadTelegramFile;
+api.sendTelegramDocument = sendTelegramDocument;
+api.sendTelegramPoll = sendTelegramPoll;
+api.sendTelegramDice = sendTelegramDice;
+api.sendTelegramLocation = sendTelegramLocation;
+api.sendTelegramVenue = sendTelegramVenue;
+api.sendTelegramContact = sendTelegramContact;
+api.sendTelegramPhoto = sendTelegramPhoto;
 api.testToken = testToken;
 
 module.exports = api;
+
+// Send native interactive Telegram Poll / Quiz
+async function sendTelegramPoll(chatId, question, options, isAnonymous = true, type = 'regular', correctOptionId = null, explanation = '', token = null) {
+  if (!question || !Array.isArray(options) || options.length < 2) return null;
+  const payload = {
+    chat_id: chatId,
+    question: question.slice(0, 300),
+    options: options.slice(0, 10).map(opt => (typeof opt === 'string' ? opt.slice(0, 100) : String(opt?.text || opt).slice(0, 100))),
+    is_anonymous: Boolean(isAnonymous),
+    type: type === 'quiz' ? 'quiz' : 'regular'
+  };
+  if (type === 'quiz' && typeof correctOptionId === 'number') {
+    payload.correct_option_id = correctOptionId;
+    if (explanation) payload.explanation = explanation.slice(0, 200);
+  }
+  return api.apiCall('sendPoll', payload, token);
+}
+
+// Send animated Telegram Dice / Game widget
+async function sendTelegramDice(chatId, emoji = '🎲', token = null) {
+  const allowed = ['🎲', '🎯', '🏀', '⚽', '🎳', '🎰'];
+  const em = allowed.includes(emoji) ? emoji : '🎲';
+  return api.apiCall('sendDice', { chat_id: chatId, emoji: em }, token);
+}
+
+// Send interactive map location pin
+async function sendTelegramLocation(chatId, latitude, longitude, token = null) {
+  return api.apiCall('sendLocation', { chat_id: chatId, latitude: parseFloat(latitude), longitude: parseFloat(longitude) }, token);
+}
+
+// Send interactive venue / place location
+async function sendTelegramVenue(chatId, latitude, longitude, title, address = '', token = null) {
+  return api.apiCall('sendVenue', {
+    chat_id: chatId,
+    latitude: parseFloat(latitude),
+    longitude: parseFloat(longitude),
+    title: title || 'Lokasi',
+    address: address || 'Alamat Lokasi'
+  }, token);
+}
+
+// Send native contact card
+async function sendTelegramContact(chatId, phoneNumber, firstName, lastName = '', vcard = '', token = null) {
+  const payload = {
+    chat_id: chatId,
+    phone_number: String(phoneNumber),
+    first_name: firstName || 'Kontak'
+  };
+  if (lastName) payload.last_name = lastName;
+  if (vcard) payload.vcard = vcard;
+  return api.apiCall('sendContact', payload, token);
+}
+
+// Send photo from URL or file
+async function sendTelegramPhoto(chatId, photoUrl, caption = '', token = null) {
+  const payload = {
+    chat_id: chatId,
+    photo: photoUrl,
+    parse_mode: 'Markdown'
+  };
+  if (caption) payload.caption = cleanTelegramText(caption).slice(0, 1024);
+  return api.apiCall('sendPhoto', payload, token);
+}
+
+// Send a document / file (e.g. config.json backup, created code files, etc) directly to chat
+async function sendTelegramDocument(chatId, filename, bufferOrString, caption = '', token = null) {
+  const cfg = getConfig();
+  const effectiveToken = token || cfg.telegramBotToken;
+  if (!effectiveToken) return Promise.reject(new Error('Bot token tidak tersedia'));
+
+  const boundary = '----BreAIBoundary' + Math.random().toString(36).substring(2);
+  const fileBuf = Buffer.isBuffer(bufferOrString) ? bufferOrString : Buffer.from(String(bufferOrString), 'utf-8');
+
+  let header = `--${boundary}\r\n`;
+  header += `Content-Disposition: form-data; name="chat_id"\r\n\r\n${chatId}\r\n`;
+  if (caption) {
+    header += `--${boundary}\r\nContent-Disposition: form-data; name="caption"\r\n\r\n${cleanTelegramText(caption).slice(0, 1000)}\r\n`;
+  }
+  header += `--${boundary}\r\n`;
+  header += `Content-Disposition: form-data; name="document"; filename="${filename}"\r\n`;
+  header += `Content-Type: application/octet-stream\r\n\r\n`;
+
+  const footer = `\r\n--${boundary}--\r\n`;
+  const headerBuf = Buffer.from(header, 'utf-8');
+  const footerBuf = Buffer.from(footer, 'utf-8');
+  const fullBody = Buffer.concat([headerBuf, fileBuf, footerBuf]);
+
+  return new Promise((resolve, reject) => {
+    const req = https.request({
+      hostname: 'api.telegram.org',
+      port: 443,
+      path: `/bot${effectiveToken}/sendDocument`,
+      method: 'POST',
+      agent: httpsAgent,
+      headers: {
+        'Content-Type': `multipart/form-data; boundary=${boundary}`,
+        'Content-Length': fullBody.length
+      },
+      timeout: 35000
+    }, res => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.ok) resolve(parsed.result);
+          else reject(new Error(parsed.description || 'Gagal mengirim dokumen'));
+        } catch (e) {
+          reject(new Error('Invalid response saat kirim dokumen: ' + data.slice(0, 100)));
+        }
+      });
+    });
+
+    req.on('error', err => reject(err));
+    req.on('timeout', () => { req.destroy(); reject(new Error('Timeout kirim berkas ke Telegram')); });
+    req.write(fullBody);
+    req.end();
+  });
+}
 
 // Test a bot token by calling getMe
 async function testToken(token) {
@@ -242,4 +368,5 @@ async function testToken(token) {
     return { ok: false, error: err.message };
   }
 }
+
 

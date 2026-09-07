@@ -12,7 +12,14 @@ const {
   sendTelegramMessage,
   editTelegramMessage,
   answerCallback,
-  sendTyping
+  sendTyping,
+  sendTelegramDocument,
+  sendTelegramPoll,
+  sendTelegramDice,
+  sendTelegramLocation,
+  sendTelegramVenue,
+  sendTelegramContact,
+  sendTelegramPhoto
 } = require('./api');
 
 const {
@@ -83,6 +90,34 @@ class TelegramBotService {
 
   sendTyping(chatId, customToken = null) {
     return sendTyping(chatId, customToken || this.activeToken);
+  }
+
+  sendTelegramDocument(chatId, filename, bufferOrString, caption = '', customToken = null) {
+    return sendTelegramDocument(chatId, filename, bufferOrString, caption, customToken || this.activeToken);
+  }
+
+  sendTelegramPoll(chatId, question, options, isAnonymous = true, type = 'regular', correctOptionId = null, explanation = '', customToken = null) {
+    return sendTelegramPoll(chatId, question, options, isAnonymous, type, correctOptionId, explanation, customToken || this.activeToken);
+  }
+
+  sendTelegramDice(chatId, emoji = '🎲', customToken = null) {
+    return sendTelegramDice(chatId, emoji, customToken || this.activeToken);
+  }
+
+  sendTelegramLocation(chatId, latitude, longitude, customToken = null) {
+    return sendTelegramLocation(chatId, latitude, longitude, customToken || this.activeToken);
+  }
+
+  sendTelegramVenue(chatId, latitude, longitude, title, address = '', customToken = null) {
+    return sendTelegramVenue(chatId, latitude, longitude, title, address, customToken || this.activeToken);
+  }
+
+  sendTelegramContact(chatId, phoneNumber, firstName, lastName = '', vcard = '', customToken = null) {
+    return sendTelegramContact(chatId, phoneNumber, firstName, lastName, vcard, customToken || this.activeToken);
+  }
+
+  sendTelegramPhoto(chatId, photoUrl, caption = '', customToken = null) {
+    return sendTelegramPhoto(chatId, photoUrl, caption, customToken || this.activeToken);
   }
 
   // Delegated Access Control
