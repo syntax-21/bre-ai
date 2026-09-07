@@ -147,8 +147,8 @@ module.exports = async (req, res) => {
 
   // 7. Execute Request across candidate providers (Auto-Failover)
   const basePrompt = cfg.systemPrompt || '';
-  const extraPrompt = body.customSystemPrompt ? `\n\n[INSTRUKSI AKTIF]:\n${body.customSystemPrompt}` : '';
-  const formattedMessages = [{ role: 'system', content: basePrompt + extraPrompt }, ...userMessages];
+  const extraPrompt = body.customSystemPrompt ? `[INSTRUKSI WAJIB DIPATUHI]:\n${body.customSystemPrompt}\n\n` : '';
+  const formattedMessages = [{ role: 'system', content: extraPrompt + basePrompt }, ...userMessages];
 
   const maxTokens = body.max_tokens || cfg.maxTokens || 16384;
   const temperature = body.temperature !== undefined ? body.temperature : (cfg.temperature || 0.7);

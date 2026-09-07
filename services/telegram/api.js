@@ -114,7 +114,7 @@ const api = {
 };
 
 // Send message with automatic chunking (>4000 chars) and Markdown fallback
-async function sendTelegramMessage(chatId, text, replyMarkup = null, replyToId = null, token = null) {
+async function sendTelegramMessage(chatId, text, replyMarkup = null, replyToId = null, token = null, editMessageId = null) {
   if (!text) return;
   const cleanText = cleanTelegramText(text);
   const CHUNK_SIZE = 4000;
@@ -124,6 +124,7 @@ async function sendTelegramMessage(chatId, text, replyMarkup = null, replyToId =
     chunks.push(cleanText.slice(i, i + CHUNK_SIZE));
   }
 
+  const results = [];
   for (let i = 0; i < chunks.length; i++) {
     const isLast = (i === chunks.length - 1);
     const payload = {
@@ -131,21 +132,32 @@ async function sendTelegramMessage(chatId, text, replyMarkup = null, replyToId =
       text: chunks[i],
       parse_mode: 'Markdown'
     };
-    if (replyToId && i === 0) payload.reply_to_message_id = replyToId;
+    
+    let method = 'sendMessage';
+    if (i === 0 && editMessageId) {
+      method = 'editMessageText';
+      payload.message_id = editMessageId;
+    } else if (replyToId && i === 0) {
+      payload.reply_to_message_id = replyToId;
+    }
+    
     if (isLast && replyMarkup) payload.reply_markup = replyMarkup;
 
     try {
-      await api.apiCall('sendMessage', payload, token);
+      const res = await api.apiCall(method, payload, token);
+      if (res) results.push(res);
     } catch (err) {
       // Fallback to plain text if Markdown syntax fails
       delete payload.parse_mode;
       try {
-        await api.apiCall('sendMessage', payload, token);
+        const res = await api.apiCall(method, payload, token);
+        if (res) results.push(res);
       } catch (plainErr) {
         console.error('[TelegramBot] Gagal kirim pesan ke', chatId, plainErr.message);
       }
     }
   }
+  return results.length === 1 ? results[0] : results;
 }
 
 // Edit message helper for inline menus
