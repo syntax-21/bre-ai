@@ -98,6 +98,7 @@ async function doLogin() {
     });
     if (r.ok) {
       adminToken = pw;
+      try { sessionStorage.setItem('bre_admin_pw', pw); } catch(e){}
       document.getElementById('loginOverlay').style.display = 'none';
       document.getElementById('appContainer').style.display = 'flex';
       await loadConfig();
@@ -853,10 +854,19 @@ async function saveAllConfig() {
     });
     
     if (r.ok) {
-      if (newPw) adminToken = newPw;
+      let data = {};
+      try { data = await r.json(); } catch(e){}
+      if (newPw) {
+        adminToken = newPw;
+        try { sessionStorage.setItem('bre_admin_pw', newPw); } catch(e){}
+      }
       document.getElementById('cfgNewPw').value = '';
       loadTelegramStatus();
-      toast('✅ Seluruh konfigurasi proxy berhasil disimpan permanen!', 'ok');
+      if (data.isReadOnlyFS) {
+        toast('⚠️ Disimpan di memori! Di Vercel (Read-Only), atur di menu Environment Variables Vercel agar tersimpan permanen.', 'ok');
+      } else {
+        toast('✅ Seluruh konfigurasi berhasil disimpan permanen ke config.json!', 'ok');
+      }
     } else {
       toast('❌ Gagal menyimpan konfigurasi', 'err');
     }
@@ -997,24 +1007,56 @@ async function loadTelegramStatus() {
     const desc = document.getElementById('telegramStatusDesc');
     const userTag = document.getElementById('telegramBotUsernameTag');
 
-    if (st.running) {
-      if (dot) { dot.className = 'ping-badge ok'; dot.textContent = '🟢 Aktif & Polling'; }
+    if (st.isWebhookActive) {
+      if (dot) { dot.className = 'ping-badge ok'; dot.textContent = '🟢 Aktif 24/7 (Cloud Webhook)'; }
+      if (title) title.textContent = 'Bot Aktif 24 Jam Nonstop di Vercel';
+      if (desc) desc.textContent = `Terkoneksi ke Webhook: ${st.webhookUrl}. Bot akan selalu merespon pesan otomatis tanpa perlu login atau membuka panel admin!`;
+      if (userTag) userTag.textContent = st.botInfo?.username ? `@${st.botInfo.username}` : 'Cloud 24/7';
+    } else if (st.running) {
+      if (dot) { dot.className = 'ping-badge ok'; dot.textContent = '🟢 Aktif (Polling Lokal)'; }
       if (title) title.textContent = 'Bot Berhasil Terhubung & Siap Melayani';
-      if (desc) desc.textContent = `Aktif polling Telegram API. Sedang melayani ${st.activeConversations || 0} percakapan.`;
+      if (desc) desc.textContent = `Aktif polling Telegram API di server lokal. Sedang melayani ${st.activeConversations || 0} percakapan.`;
       if (userTag) userTag.textContent = st.botInfo?.username ? `@${st.botInfo.username}` : 'Online';
-    } else if (st.enabled && !st.running) {
-      if (dot) { dot.className = 'ping-badge fail'; dot.textContent = '🔴 Belum Terhubung'; }
-      if (title) title.textContent = 'Layanan Bot Belum Aktif';
-      if (desc) desc.textContent = st.lastError || 'Token belum disimpan atau belum berhasil terhubung ke Telegram API.';
+    } else if (st.enabled && st.hasToken) {
+      if (dot) { dot.className = 'ping-badge testing'; dot.textContent = '🟡 Siap Dihubungkan'; }
+      if (title) title.textContent = 'Token Tersimpan - Siap Dihubungkan';
+      if (desc) desc.textContent = 'Klik tombol "🌐 Hubungkan Webhook Cloud (24/7)" agar bot aktif terus di Vercel tanpa perlu membuka panel admin.';
       if (userTag && st.botInfo?.username) userTag.textContent = `@${st.botInfo.username}`;
     } else {
       if (dot) { dot.className = 'ping-badge fail'; dot.textContent = '🔴 Nonaktif'; }
       if (title) title.textContent = 'Bot Sedang Tidak Aktif';
-      if (desc) desc.textContent = 'Nyalakan switch "Aktifkan Integrasi Telegram Bot" lalu klik "Simpan & Mulai Bot".';
+      if (desc) desc.textContent = 'Nyalakan switch "Aktifkan Integrasi Telegram Bot" dan masukkan token bot Anda.';
       if (userTag && st.botInfo?.username) userTag.textContent = `@${st.botInfo.username}`;
     }
   } catch (e) {
     console.error('loadTelegramStatus error:', e);
+  }
+}
+
+async function setupTelegramWebhook() {
+  const token = (document.getElementById('cfgTelegramToken')?.value || '').trim();
+  if (!token) return toast('Harap masukkan token Telegram bot terlebih dahulu', 'err');
+
+  toast('⏳ Menyimpan & mendaftarkan Webhook Cloud 24/7...', 'ok');
+  await saveAllConfig();
+
+  try {
+    const origin = window.location.origin;
+    const webhookUrl = `${origin}/api/telegram`;
+    const r = await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
+      body: JSON.stringify({ action: 'setup_webhook', url: webhookUrl })
+    });
+    const data = await r.json();
+    if (data.ok) {
+      toast('🎉 Webhook Cloud Berhasil Diaktifkan! Bot aktif 24 jam nonstop tanpa perlu login admin.', 'ok');
+      loadTelegramStatus();
+    } else {
+      toast('Gagal mengaktifkan webhook: ' + (data.error || 'Periksa token'), 'err');
+    }
+  } catch (e) {
+    toast('Error: ' + e.message, 'err');
   }
 }
 
@@ -1165,5 +1207,18 @@ function deleteTelegramUser(idx) {
   saveAllConfig();
   toast('Pengguna dihapus dari daftar', 'ok');
 }
+
+// Auto-restore login session on page refresh
+window.addEventListener('DOMContentLoaded', () => {
+  try {
+    const saved = sessionStorage.getItem('bre_admin_pw');
+    if (saved) {
+      const inp = document.getElementById('pwInput');
+      if (inp) inp.value = saved;
+      doLogin();
+    }
+  } catch(e) {}
+});
+
 
 

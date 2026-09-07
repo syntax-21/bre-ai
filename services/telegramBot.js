@@ -1055,6 +1055,49 @@ class TelegramBotService {
       activeConversations: this.conversations.size
     };
   }
+
+  // Get detailed status including Telegram Webhook info
+  async getDetailedStatus(currentHost = null) {
+    const cfg = getConfig();
+    const hasToken = !!cfg.telegramBotToken;
+    const isVercel = Boolean(process.env.VERCEL || process.env.VERCEL_URL);
+
+    let webhookInfo = null;
+    let botInfo = this.botInfo || null;
+
+    if (hasToken) {
+      try {
+        if (!botInfo) {
+          botInfo = await this.apiCall('getMe');
+          this.botInfo = botInfo;
+        }
+      } catch (e) {
+        this.lastError = e.message;
+      }
+
+      try {
+        webhookInfo = await this.apiCall('getWebhookInfo');
+      } catch (e) {}
+    }
+
+    const hasActiveWebhook = Boolean(webhookInfo && webhookInfo.url && webhookInfo.url.length > 0);
+
+    return {
+      enabled: !!cfg.telegramEnabled,
+      hasToken,
+      running: this.isRunning,
+      isVercel,
+      isWebhookActive: hasActiveWebhook,
+      webhookUrl: webhookInfo?.url || '',
+      pendingUpdates: webhookInfo?.pending_update_count || 0,
+      botInfo,
+      ownerId: cfg.telegramOwnerId || '',
+      accessMode: cfg.telegramAccessMode || 'public',
+      userCount: Array.isArray(cfg.telegramUsers) ? cfg.telegramUsers.length : 0,
+      lastError: this.lastError,
+      activeConversations: this.conversations.size
+    };
+  }
 }
 
 const telegramBot = new TelegramBotService();

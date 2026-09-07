@@ -81,8 +81,39 @@ module.exports = async (req, res) => {
     if (body.action === 'get_telegram_status') {
       let telegramBot;
       try { telegramBot = require('../services/telegramBot'); } catch(e){}
-      const status = telegramBot ? telegramBot.getStatus() : { running: false };
+      const host = req.headers['x-forwarded-host'] || req.headers.host || '';
+      const status = telegramBot ? await telegramBot.getDetailedStatus(host) : { running: false };
       return res.json({ ok: true, status });
+    }
+
+    if (body.action === 'setup_webhook') {
+      let telegramBot;
+      try { telegramBot = require('../services/telegramBot'); } catch(e){}
+      if (!telegramBot) return res.status(500).json({ ok: false, error: 'Telegram service unavailable' });
+      const host = body.host || req.headers['x-forwarded-host'] || req.headers.host || '';
+      const webhookUrl = body.url || (host ? `https://${host}/api/telegram` : '');
+      if (!webhookUrl) return res.status(400).json({ ok: false, error: 'URL Webhook tidak valid' });
+
+      try {
+        await telegramBot.apiCall('setWebhook', { url: webhookUrl });
+        const status = await telegramBot.getDetailedStatus(host);
+        return res.json({ ok: true, webhookUrl, status });
+      } catch (err) {
+        return res.status(500).json({ ok: false, error: err.message });
+      }
+    }
+
+    if (body.action === 'delete_webhook') {
+      let telegramBot;
+      try { telegramBot = require('../services/telegramBot'); } catch(e){}
+      if (!telegramBot) return res.status(500).json({ ok: false, error: 'Telegram service unavailable' });
+      try {
+        await telegramBot.apiCall('deleteWebhook', { drop_pending_updates: false });
+        const status = await telegramBot.getDetailedStatus();
+        return res.json({ ok: true, status });
+      } catch (err) {
+        return res.status(500).json({ ok: false, error: err.message });
+      }
     }
 
     if (body.action === 'restart_telegram') {
@@ -90,7 +121,8 @@ module.exports = async (req, res) => {
       try { telegramBot = require('../services/telegramBot'); } catch(e){}
       if (!telegramBot) return res.status(500).json({ ok: false, error: 'Telegram service unavailable' });
       const started = await telegramBot.restart();
-      return res.json({ ok: true, running: started, status: telegramBot.getStatus() });
+      const status = await telegramBot.getDetailedStatus();
+      return res.json({ ok: true, running: started, status });
     }
 
     // Save config
@@ -107,7 +139,12 @@ module.exports = async (req, res) => {
       } catch(e){}
     }
 
-    return res.json({ ok: true, config: updated }); 
+    return res.json({ 
+      ok: true, 
+      config: updated, 
+      isReadOnlyFS: !!updated._isReadOnlyFS,
+      warning: updated._saveError ? 'Sistem file serverless Vercel bersifat Read-Only. Untuk konfigurasi permanen di Vercel, atur di menu Environment Variables Dashboard Vercel.' : null
+    }); 
   }
 
   // GET

@@ -266,9 +266,23 @@ function saveConfig(updated) {
     merged.clientKeys = updated.clientKeys;
   }
   
+  if (updated.telegramEnabled !== undefined) merged.telegramEnabled = Boolean(updated.telegramEnabled);
+  if (updated.telegramBotToken !== undefined) merged.telegramBotToken = String(updated.telegramBotToken).trim();
+  if (updated.telegramOwnerId !== undefined) merged.telegramOwnerId = String(updated.telegramOwnerId).trim();
+  if (updated.telegramAccessMode !== undefined) merged.telegramAccessMode = updated.telegramAccessMode;
+  if (updated.telegramModel !== undefined) merged.telegramModel = updated.telegramModel;
+  if (updated.telegramAllowedUsers !== undefined) merged.telegramAllowedUsers = updated.telegramAllowedUsers;
+  if (updated.telegramUsers !== undefined && Array.isArray(updated.telegramUsers)) merged.telegramUsers = updated.telegramUsers;
+
   memConfig = merged;
-  try { fs.writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2), 'utf-8'); } catch (e) {}
-  return merged;
+  let saveError = null;
+  try {
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2), 'utf-8');
+  } catch (e) {
+    saveError = e.message;
+    console.warn('[Config] Gagal menulis ke config.json (Read-Only FS/Vercel):', e.message);
+  }
+  return { ...merged, _isReadOnlyFS: Boolean(saveError), _saveError: saveError };
 }
 
 function checkRateLimit(ip) {
