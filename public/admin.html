@@ -939,96 +939,105 @@
 
     <!-- TAB: TELEGRAM BOT INTEGRATION -->
     <div id="tabTelegram" class="tab-content" style="display: none;">
-      <div class="card">
-        <div class="card-header">
+      <!-- Exact Setup Bot Telegram Card (sesuai screenshot) -->
+      <div class="card" style="background: #0b0f19; border: 1px solid #1c2438; border-radius: 12px; padding: 24px; margin-bottom: 22px;">
+        
+        <!-- Header Row -->
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 20px;">
           <div>
-            <div class="card-title">🤖 Integrasi Telegram Bot (Bre AI on Telegram)</div>
-            <div class="card-subtitle">Hubungkan Bre AI langsung ke akun bot Telegram Anda menggunakan teknologi Long-Polling tanpa perlu domain publik atau webhook SSL.</div>
-          </div>
-          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-            <button class="btn btn-outline" style="border-color: #0284c7; color: #38bdf8;" onclick="testTelegramToken()">⚡ Uji Token (getMe)</button>
-            <button class="btn btn-outline" style="border-color: #10b981; color: #34d399;" onclick="setupTelegramWebhook()">🌐 Hubungkan Webhook Cloud (24/7)</button>
-            <button class="btn btn-save" onclick="restartTelegramBot()">💾 Simpan & Mulai Bot</button>
-          </div>
-        </div>
-
-        <!-- Connection Status Banner -->
-        <div id="telegramStatusBanner" style="background: #090c13; border: 1px solid #1e2433; border-radius: 10px; padding: 16px 20px; margin-bottom: 22px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
-          <div style="display: flex; align-items: center; gap: 12px;">
-            <span id="telegramStatusDot" class="ping-badge fail" style="font-size: 13px; padding: 4px 10px;">🔴 Nonaktif</span>
-            <div>
-              <div id="telegramStatusTitle" style="font-weight: 600; color: #f1f5f9; font-size: 14px;">Bot Sedang Tidak Aktif</div>
-              <div id="telegramStatusDesc" style="font-size: 12px; color: #64748b;">Masukkan token dan aktifkan switch di bawah untuk memulai layanan.</div>
+            <div style="font-size: 19px; font-weight: 700; color: #f8fafc; display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 20px;">🌐</span> Setup Bot Telegram
+            </div>
+            <div style="font-size: 13px; color: #94a3b8; margin-top: 4px;">
+              Atur Token dari <b>@BotFather</b> dan ID Admin Anda untuk mengendalikan &amp; menggunakan Bre AI di Telegram.
             </div>
           </div>
-          <div id="telegramBotUsernameTag" style="font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #38bdf8; font-weight: 600;"></div>
+
+          <!-- Top-Right Pill Badge: @bot_username (Buka Bot) -->
+          <div id="tgBotBadgeContainer">
+            <a id="tgBotLinkBadge" href="https://t.me/bre_ai_bot" target="_blank" style="display: inline-flex; align-items: center; gap: 6px; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35); color: #34d399; font-size: 12px; font-weight: 600; padding: 6px 14px; border-radius: 9999px; text-decoration: none; transition: all 0.2s;">
+              <span style="width: 7px; height: 7px; border-radius: 50%; background: #10b981; display: inline-block;"></span>
+              <span id="tgBotBadgeText">@bre_ai_bot (Buka Bot)</span>
+            </a>
+          </div>
         </div>
 
-        <!-- Bot Settings Form -->
-        <div class="form-group">
-          <label class="toggle-wrap" style="font-size: 14px; color: #e2e8f0; margin-bottom: 8px;">
-            <span class="toggle-switch">
-              <input type="checkbox" id="cfgTelegramEnabled">
-              <span class="toggle-slider"></span>
-            </span>
-            <div>
-              <div style="font-weight: 600; color: #f1f5f9;">Aktifkan Integrasi Telegram Bot</div>
-              <div style="font-size: 12px; color: #64748b;">Nyalakan long-polling untuk menerima dan menjawab pesan Telegram secara real-time.</div>
-            </div>
-          </label>
-        </div>
-
-        <div class="form-group" style="margin-top: 18px;">
+        <!-- Row 1: TELEGRAM BOT TOKEN -->
+        <div class="form-group" style="margin-bottom: 16px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-            <label class="form-label" style="margin-bottom: 0;">Telegram Bot Token (dari @BotFather)</label>
-            <button type="button" class="btn btn-outline" style="font-size: 11px; padding: 3px 8px;" onclick="toggleTelegramTokenMask()" id="btnMaskTelegram">👁️ Tampilkan Token</button>
+            <label class="form-label" style="font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0;">
+              TELEGRAM BOT TOKEN
+            </label>
+            <button type="button" class="btn btn-outline" style="font-size: 11px; padding: 2px 8px; border-color: #2a3449;" onclick="toggleTelegramTokenMask()" id="btnMaskTelegram">👁️ Tampilkan</button>
           </div>
-          <input type="password" id="cfgTelegramToken" class="input-text" placeholder="1234567890:ABCdefGhIJKlmNoPQRsTUVwxyZ...">
-          <div class="form-hint">Dapatkan bot token gratis dengan membuat bot baru di Telegram melalui <b>@BotFather</b>.</div>
+          <input type="password" id="cfgTelegramToken" class="input-text" placeholder="1234567890:ABCdefGhIJKlmNoPQRsTUVwxyZ..." style="background: #060911; border: 1px solid #1c2438; border-radius: 8px; padding: 13px 14px; color: #f1f5f9; font-family: monospace; font-size: 14px; width: 100%;">
         </div>
 
-        <div class="grid-2" style="margin-top: 14px;">
-          <div class="form-group">
-            <label class="form-label">👑 Telegram Owner ID / Username (Wajib untuk Akses Panel Bot)</label>
-            <input type="text" id="cfgTelegramOwner" class="input-text" placeholder="123456789 atau @username_anda">
-            <div class="form-hint">Akun ini memiliki hak akses eksklusif membuka panel kontrol interaktif <code>/admin</code> di Telegram.</div>
+        <!-- Row 2: Grid 2 Columns (Admin ID & Domain Bot) -->
+        <div class="grid-2" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 22px;">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label" style="font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">
+              TELEGRAM ADMIN ID (Chat ID)
+            </label>
+            <input type="text" id="cfgTelegramOwner" class="input-text" placeholder="425134037" style="background: #060911; border: 1px solid #1c2438; border-radius: 8px; padding: 13px 14px; color: #f1f5f9; font-family: monospace; font-size: 14px; width: 100%;">
           </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label" style="font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">
+              DOMAIN BOT (Default: URL Web)
+            </label>
+            <input type="text" id="cfgTelegramDomain" class="input-text" placeholder="temp-email-git-main-mrsimples-projects-db90aaf6.vercel.app" style="background: #060911; border: 1px solid #1c2438; border-radius: 8px; padding: 13px 14px; color: #f1f5f9; font-family: monospace; font-size: 14px; width: 100%;">
+          </div>
+        </div>
+
+        <!-- Row 3: 4 Action Buttons Bar -->
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;">
+          <button type="button" class="btn" onclick="saveTelegramSetupOnly()" style="background: #19202e; color: #f1f5f9; border: 1px solid #283449; border-radius: 8px; padding: 13px 16px; font-weight: 600; font-size: 13px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='#232c3f'" onmouseout="this.style.background='#19202e'">
+            1. Simpan
+          </button>
+          
+          <button type="button" class="btn" onclick="setupTelegramWebhookFromDomain()" style="background: #2563eb; color: #ffffff; border: none; border-radius: 8px; padding: 13px 16px; font-weight: 600; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;" onmouseover="this.style.background='#1d4ed8'" onmouseout="this.style.background='#2563eb'">
+            <span>🔄</span> 2. Set Webhook
+          </button>
+          
+          <button type="button" class="btn" onclick="testTelegramBotFlow()" style="background: #059669; color: #ffffff; border: none; border-radius: 8px; padding: 13px 16px; font-weight: 600; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;" onmouseover="this.style.background='#047857'" onmouseout="this.style.background='#059669'">
+            <span>⚡</span> 3. Tes Bot
+          </button>
+          
+          <button type="button" class="btn" onclick="showDetailedTelegramStatusModal()" style="background: #6d28d9; color: #ffffff; border: none; border-radius: 8px; padding: 13px 16px; font-weight: 600; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;" onmouseover="this.style.background='#5b21b6'" onmouseout="this.style.background='#6d28d9'">
+            <span>🔍</span> Cek Status
+          </button>
+        </div>
+
+        <!-- Hidden inputs for backward compatibility -->
+        <input type="checkbox" id="cfgTelegramEnabled" checked style="display: none;">
+        <input type="text" id="cfgTelegramWhitelist" style="display: none;">
+
+      </div>
+
+      <!-- Advanced Telegram Settings Card (Mode Akses & Model AI) -->
+      <div class="card" style="background: #0d111a; border: 1px solid #1e2433; border-radius: 12px; padding: 22px; margin-bottom: 24px;">
+        <div class="card-header" style="margin-bottom: 16px;">
+          <div>
+            <div class="card-title" style="font-size: 16px;">🛡️ Mode Akses &amp; Model AI Bot</div>
+            <div class="card-subtitle">Tentukan apakah bot bisa digunakan oleh publik atau khusus whitelist, serta pilih model AI yang aktif.</div>
+          </div>
+        </div>
+
+        <div class="grid-2">
           <div class="form-group">
             <label class="form-label">Mode Akses Bot Telegram</label>
             <select id="cfgTelegramAccessMode" class="input-select">
               <option value="public">🟢 Terbuka untuk Publik (Semua Bisa Chat)</option>
               <option value="whitelist">🔒 Khusus Pengguna Terdaftar (Private Whitelist)</option>
             </select>
-            <div class="form-hint">Tentukan apakah bot bisa digunakan oleh siapa saja atau hanya daftar pengguna yang diizinkan.</div>
+            <div class="form-hint">Di mode Whitelist, hanya Admin dan akun terdaftar di bawah yang diizinkan chat dengan Bre AI.</div>
           </div>
-        </div>
-
-        <div class="grid-2" style="margin-top: 14px;">
           <div class="form-group">
-            <label class="form-label">Model Default untuk Telegram</label>
+            <label class="form-label">Model AI Default untuk Telegram</label>
             <select id="cfgTelegramModel" class="input-select"></select>
             <div class="form-hint">Pilih model yang akan memproses pesan dari Telegram (atau otomatis ikuti router).</div>
           </div>
-          <div class="form-group">
-            <label class="form-label">Legacy Whitelist Tambahan (Opsional)</label>
-            <input type="text" id="cfgTelegramWhitelist" class="input-text" placeholder="123456789, @username_anda">
-            <div class="form-hint">ID atau username tambahan dipisahkan koma.</div>
-          </div>
         </div>
-
-        <!-- Quick Setup Guide -->
-        <div style="background: #080a10; border: 1px dashed #1e2433; border-radius: 8px; padding: 16px; margin-top: 18px;">
-          <div style="font-weight: 600; font-size: 13px; color: #38bdf8; margin-bottom: 8px;">💡 Panduan Singkat Menghubungkan Bot Telegram:</div>
-          <ol style="margin-left: 20px; font-size: 12px; color: #94a3b8; line-height: 1.8;">
-            <li>Buka Telegram di HP / Desktop dan cari akun resmi <b>@BotFather</b>.</li>
-            <li>Kirim perintah <code>/newbot</code> lalu ikuti panduan untuk memberi nama dan username bot Anda.</li>
-            <li>Salin <b>HTTP API Token</b> yang diberikan @BotFather dan tempelkan ke kolom token di atas.</li>
-            <li>Isi kolom <b>Telegram Owner ID</b> dengan ID / username Telegram Anda agar bisa membuka panel kontrol bot.</li>
-            <li>Centang tombol <b>Aktifkan Integrasi Telegram Bot</b> di atas lalu klik <b>💾 Simpan Semua Pengaturan</b>.</li>
-            <li>Buka bot Anda di Telegram dan kirim <code>/start</code> atau kirim <code>/admin</code> untuk membuka panel kontrol interaktif!</li>
-          </ol>
-        </div>
-
       </div>
 
       <!-- Telegram User List Management Card -->

@@ -80,6 +80,18 @@ module.exports = async (req, res) => {
       try { telegramBot = require('../services/telegramBot'); } catch(e){}
       if (!telegramBot) return res.status(500).json({ ok: false, error: 'Telegram service unavailable' });
       const testRes = await telegramBot.testToken(body.token);
+      if (testRes.ok && body.chatId) {
+        try {
+          await telegramBot.apiCall('sendMessage', {
+            chat_id: body.chatId,
+            text: `⚡ *Tes Bot Berhasil!*\n\nHalo Admin! Bot Bre AI (@${testRes.bot?.username || 'bot'}) berhasil terhubung dan siap melayani percakapan 24/7.`,
+            parse_mode: 'Markdown'
+          }, body.token);
+          testRes.messageSent = true;
+        } catch (mErr) {
+          testRes.messageError = mErr.message;
+        }
+      }
       return res.json(testRes);
     }
 

@@ -47,6 +47,7 @@ const DEFAULT_CONFIG = {
   telegramModel: '',
   telegramOwnerId: '',
   telegramAccessMode: 'public',
+  telegramDomain: '',
   telegramUsers: [],
   // Cloud Persistence Engine (Vercel & GitHub Deployments)
   cloudStorageType: 'auto', // 'auto' | 'upstash' | 'github' | 'none'
@@ -381,6 +382,7 @@ async function saveConfig(updated) {
   if (updated.telegramAccessMode !== undefined) merged.telegramAccessMode = updated.telegramAccessMode;
   if (updated.telegramModel !== undefined) merged.telegramModel = updated.telegramModel;
   if (updated.telegramAllowedUsers !== undefined) merged.telegramAllowedUsers = updated.telegramAllowedUsers;
+  if (updated.telegramDomain !== undefined) merged.telegramDomain = String(updated.telegramDomain).trim();
   if (updated.telegramUsers !== undefined && Array.isArray(updated.telegramUsers)) merged.telegramUsers = updated.telegramUsers;
 
   // Cloud Persistence Options
