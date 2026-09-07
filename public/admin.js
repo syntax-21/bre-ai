@@ -316,9 +316,10 @@ function renderProviders() {
           </span>
           <span id="pingBadge_${i}" class="ping-badge" style="display:none;"></span>
         </div>
-        <div style="display:flex; gap:8px;">
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
           <button class="btn btn-ping" onclick="pingProvider(${i})">⚡ Test Ping</button>
           <button class="btn" style="background:#1e3a5f; color:#38bdf8; border:1px solid #38bdf8;" onclick="detectModels(${i})" title="Otomatis mengambil daftar model dari endpoint /v1/models">🔍 Detect Model</button>
+          <button class="btn" style="background:#1a2e1a; color:#4ade80; border:1px solid #4ade80;" onclick="testAllModels(${i})" id="testAllBtn_${i}" title="Uji semua model sekaligus dan tandai yang berhasil">🧪 Test All Models</button>
           <button class="btn btn-danger" onclick="removeProvider(${i})">Hapus</button>
         </div>
       </div>
@@ -356,7 +357,7 @@ function renderProviders() {
           </div>
           <div id="modelTestRow_${i}" style="margin-top:8px; display:flex; flex-wrap:wrap; gap:6px;">
             ${(ep.models || []).map((m, mi) => `
-              <div style="display:flex; align-items:center; gap:4px; background:#141922; border:1px solid #232733; border-radius:6px; padding:3px 8px; font-size:12px;">
+              <div id="modelCard_${i}_${mi}" style="display:flex; align-items:center; gap:4px; background:#141922; border:1px solid #232733; border-radius:6px; padding:3px 8px; font-size:12px; transition: border-color 0.3s;">
                 <span style="color:#e2e8f0;">${m}</span>
                 <button type="button" onclick="testModel(${i},'${m.replace(/'/g, "\\'")}')"
                   id="testModelBtn_${i}_${mi}"
@@ -365,7 +366,9 @@ function renderProviders() {
               </div>
             `).join('')}
           </div>
-          <div class="form-hint">Model yang tersedia di upstream provider. <span style="color:#38bdf8;">Klik 🔍 Detect Model untuk isi otomatis dari endpoint.</span></div>
+          <!-- Test All Results Summary -->
+          <div id="testAllSummary_${i}" style="display:none; margin-top:10px;"></div>
+          <div class="form-hint">Model yang tersedia di upstream provider. <span style="color:#38bdf8;">Klik 🔍 Detect Model untuk isi otomatis dari endpoint.</span> <span style="color:#4ade80;">Klik 🧪 Test All untuk uji semua sekaligus.</span></div>
         </div>
         <div class="form-group" style="margin-bottom:0;">
           <label class="form-label">Model Mapping / Alias (alias:asli)</label>
@@ -615,6 +618,147 @@ async function testModel(providerIdx, modelName) {
   }
 }
 
+// ========================================================
+// TEST ALL MODELS — parallel test all models for a provider
+// ========================================================
+async function testAllModels(providerIdx) {
+  syncProvidersFromUI();
+  const ep = endpoints[providerIdx];
+  if (!ep) return;
+  if (!ep.models || !ep.models.length) return toast('Tidak ada model untuk diuji. Klik Detect Model terlebih dahulu.', 'err');
+  if (!ep.keys || !ep.keys.length) return toast('API Key belum diisi.', 'err');
+
+  const btn = document.getElementById(`testAllBtn_${providerIdx}`);
+  const summaryEl = document.getElementById(`testAllSummary_${providerIdx}`);
+  const models = ep.models;
+
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Menguji...'; }
+  if (summaryEl) { summaryEl.style.display = 'none'; }
+
+  // Set all model cards to "testing" state
+  models.forEach((m, mi) => {
+    const card = document.getElementById(`modelCard_${providerIdx}_${mi}`);
+    const badge = document.getElementById(`testModelBadge_${providerIdx}_${mi}`);
+    const btnEl = document.getElementById(`testModelBtn_${providerIdx}_${mi}`);
+    if (card) card.style.borderColor = '#374151';
+    if (badge) { badge.style.display = 'inline-flex'; badge.textContent = '⏳'; badge.style.color = '#94a3b8'; }
+    if (btnEl) btnEl.disabled = true;
+  });
+
+  toast(`[${ep.name}] Menguji ${models.length} model secara paralel...`, 'ok');
+
+  // Test all in parallel
+  const results = await Promise.all(
+    models.map(async (modelName, mi) => {
+      try {
+        const r = await fetch('/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
+          body: JSON.stringify({
+            action: 'test_model',
+            providerName: ep.name,
+            model: modelName,
+            url: ep.url,
+            keys: ep.keys
+          })
+        });
+        const data = await r.json();
+        return { model: modelName, mi, ok: data.ok, latencyMs: data.latencyMs || 0, error: data.error || null };
+      } catch (e) {
+        return { model: modelName, mi, ok: false, latencyMs: 0, error: e.message };
+      }
+    })
+  );
+
+  // Update model card UI based on results
+  const working = [];
+  const failed = [];
+
+  results.forEach(({ model, mi, ok, latencyMs, error }) => {
+    const card = document.getElementById(`modelCard_${providerIdx}_${mi}`);
+    const badge = document.getElementById(`testModelBadge_${providerIdx}_${mi}`);
+    const btnEl = document.getElementById(`testModelBtn_${providerIdx}_${mi}`);
+
+    if (ok) {
+      working.push({ model, latencyMs });
+      const color = latencyMs < 500 ? '#22c55e' : latencyMs < 2000 ? '#f59e0b' : '#ef4444';
+      if (card) card.style.borderColor = '#22c55e';
+      if (badge) { badge.style.cssText = `display:inline-flex; color:${color}; font-size:11px; font-weight:600;`; badge.textContent = `${latencyMs}ms ✓`; }
+    } else {
+      failed.push({ model, error });
+      if (card) { card.style.borderColor = '#ef4444'; card.style.opacity = '0.6'; }
+      if (badge) { badge.style.cssText = 'display:inline-flex; color:#ef4444; font-size:11px;'; badge.textContent = '✗ Gagal'; badge.title = error || 'Error'; }
+    }
+    if (btnEl) btnEl.disabled = false;
+  });
+
+  // Show summary and apply button
+  if (summaryEl) {
+    summaryEl.style.display = 'block';
+    const workingList = working.map(w => `<span style="color:#4ade80;">✅ ${w.model}</span> <span style="color:#94a3b8; font-size:10px;">(${w.latencyMs}ms)</span>`).join(', ');
+    const failedList = failed.map(f => `<span style="color:#f87171;">❌ ${f.model}</span>`).join(', ');
+    summaryEl.innerHTML = `
+      <div style="background:#0d1a0d; border:1px solid #166534; border-radius:8px; padding:12px 14px;">
+        <div style="font-size:13px; font-weight:600; color:#4ade80; margin-bottom:8px;">
+          🧪 Hasil Test All: <span style="color:#4ade80;">${working.length} berhasil</span> / <span style="color:#f87171;">${failed.length} gagal</span> dari ${models.length} model
+        </div>
+        ${working.length > 0 ? `<div style="font-size:12px; margin-bottom:6px;">✅ Bekerja: ${workingList}</div>` : ''}
+        ${failed.length > 0 ? `<div style="font-size:12px; margin-bottom:8px;">❌ Gagal: ${failedList}</div>` : ''}
+        ${working.length > 0 ? `
+          <button onclick="applyWorkingModels(${providerIdx}, ${JSON.stringify(working.map(w => w.model)).replace(/"/g, '&quot;')})" 
+            style="background: linear-gradient(135deg, #166534, #15803d); color:#fff; border:none; border-radius:6px; padding:8px 16px; font-size:12px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
+            ✅ Pakai ${working.length} Model Berhasil Saja
+          </button>
+          <span style="font-size:11px; color:#94a3b8; margin-left:8px;">Model gagal akan dihapus dari daftar</span>
+        ` : '<div style="color:#f87171; font-size:12px;">⚠️ Tidak ada model yang berhasil. Periksa API Key atau endpoint Anda.</div>'}
+      </div>
+    `;
+  }
+
+  if (btn) { btn.disabled = false; btn.textContent = '🧪 Test All Models'; }
+  toast(`[${ep.name}] Selesai: ${working.length}/${models.length} model berfungsi`, working.length > 0 ? 'ok' : 'err');
+}
+
+// ========================================================
+// APPLY WORKING MODELS — filter out failed models
+// ========================================================
+function applyWorkingModels(providerIdx, workingModels) {
+  if (!workingModels || !workingModels.length) return toast('Tidak ada model yang berhasil untuk diterapkan.', 'err');
+  
+  endpoints[providerIdx].models = workingModels;
+  const modelsInput = document.getElementById(`pModels_${providerIdx}`);
+  if (modelsInput) modelsInput.value = workingModels.join(', ');
+
+  // Re-render test row with only working models
+  const testRow = document.getElementById(`modelTestRow_${providerIdx}`);
+  if (testRow) {
+    testRow.innerHTML = workingModels.map((m, mi) => `
+      <div id="modelCard_${providerIdx}_${mi}" style="display:flex; align-items:center; gap:4px; background:#0d1a0d; border:1px solid #22c55e; border-radius:6px; padding:3px 8px; font-size:12px;">
+        <span style="color:#4ade80;">✅</span>
+        <span style="color:#e2e8f0;">${m}</span>
+        <button type="button" onclick="testModel(${providerIdx},'${m.replace(/'/g, "\\'")}')"
+          id="testModelBtn_${providerIdx}_${mi}"
+          style="background:#1e3a5f; color:#38bdf8; border:1px solid #38bdf8; border-radius:4px; padding:1px 7px; font-size:11px; cursor:pointer;">⚡ Tes</button>
+        <span id="testModelBadge_${providerIdx}_${mi}" style="display:none;"></span>
+      </div>
+    `).join('');
+  }
+
+  // Hide summary and show confirmation
+  const summaryEl = document.getElementById(`testAllSummary_${providerIdx}`);
+  if (summaryEl) {
+    summaryEl.innerHTML = `<div style="background:#0d1a0d; border:1px solid #22c55e; border-radius:8px; padding:10px 14px; font-size:13px; color:#4ade80;">
+      ✅ Diterapkan! ${workingModels.length} model aktif: <strong>${workingModels.join(', ')}</strong>.<br>
+      <span style="font-size:11px; color:#94a3b8;">Klik <b>Simpan Semua Pengaturan</b> untuk menyimpan perubahan ini.</span>
+    </div>`;
+  }
+
+  toast(`✅ Daftar model diperbarui: hanya ${workingModels.length} model yang berfungsi tersisa.`, 'ok');
+}
+
+// ========================================================
+// BATCH LATENCY BENCHMARK — test all providers in parallel
+// ========================================================
 async function runBatchLatencyTest() {
   syncProvidersFromUI();
   const box = document.getElementById('benchmarkLeaderboardBox');
@@ -1332,6 +1476,48 @@ async function saveTelegramSetupOnly() {
   toast('💾 Konfigurasi Bot Telegram tersimpan di browser & memori!', 'ok');
   await saveAllConfig();
   await loadTelegramStatus();
+}
+
+async function restartTelegramBotService() {
+  if (!adminToken) return toast('Admin token tidak ditemukan, harap login ulang.', 'err');
+  toast('♻️ Merestart service bot Telegram...', 'ok');
+  try {
+    const r = await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
+      body: JSON.stringify({ action: 'restart_bot' })
+    });
+    const data = await r.json();
+    if (data.ok) {
+      toast(`✅ ${data.message || 'Bot direstart'}`, 'ok');
+      await loadTelegramStatus();
+    } else {
+      toast(`❌ Gagal: ${data.error}`, 'err');
+    }
+  } catch(e) {
+    toast(`❌ Error: ${e.message}`, 'err');
+  }
+}
+
+async function stopTelegramBotService() {
+  if (!adminToken) return toast('Admin token tidak ditemukan, harap login ulang.', 'err');
+  toast('🛑 Menghentikan service bot Telegram...', 'ok');
+  try {
+    const r = await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
+      body: JSON.stringify({ action: 'stop_bot' })
+    });
+    const data = await r.json();
+    if (data.ok) {
+      toast(`✅ ${data.message || 'Bot dihentikan'}`, 'ok');
+      await loadTelegramStatus();
+    } else {
+      toast(`❌ Gagal: ${data.error}`, 'err');
+    }
+  } catch(e) {
+    toast(`❌ Error: ${e.message}`, 'err');
+  }
 }
 
 // Button 2: 🔄 2. Set Webhook

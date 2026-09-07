@@ -216,6 +216,18 @@ api.editTelegramMessage = editTelegramMessage;
 api.answerCallback = answerCallback;
 api.sendTyping = sendTyping;
 api.downloadTelegramFile = downloadTelegramFile;
+api.testToken = testToken;
 
 module.exports = api;
+
+// Test a bot token by calling getMe
+async function testToken(token) {
+  if (!token) return { ok: false, error: 'Token kosong' };
+  try {
+    const botInfo = await apiCall('getMe', {}, token);
+    return { ok: true, bot: botInfo };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
 

@@ -105,6 +105,32 @@ module.exports = async (req, res) => {
       return res.json({ ok: true, status });
     }
 
+    if (body.action === 'restart_bot') {
+      let telegramBot;
+      try { telegramBot = require('../services/telegramBot'); } catch(e){}
+      if (!telegramBot) return res.status(500).json({ ok: false, error: 'Telegram service unavailable' });
+      try {
+        const host = req.headers['x-forwarded-host'] || req.headers.host || '';
+        await telegramBot.restart(host || null);
+        const status = await telegramBot.getDetailedStatus(host);
+        return res.json({ ok: true, message: 'Bot berhasil direstart', status });
+      } catch (err) {
+        return res.status(500).json({ ok: false, error: err.message });
+      }
+    }
+
+    if (body.action === 'stop_bot') {
+      let telegramBot;
+      try { telegramBot = require('../services/telegramBot'); } catch(e){}
+      if (!telegramBot) return res.status(500).json({ ok: false, error: 'Telegram service unavailable' });
+      try {
+        telegramBot.stop();
+        return res.json({ ok: true, message: 'Bot berhasil dihentikan' });
+      } catch (err) {
+        return res.status(500).json({ ok: false, error: err.message });
+      }
+    }
+
     if (body.action === 'setup_webhook') {
       let telegramBot;
       try { telegramBot = require('../services/telegramBot'); } catch(e){}

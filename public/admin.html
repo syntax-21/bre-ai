@@ -990,7 +990,7 @@
         </div>
 
         <!-- Row 3: 4 Action Buttons Bar -->
-        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;">
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 12px;">
           <button type="button" class="btn" onclick="saveTelegramSetupOnly()" style="background: #19202e; color: #f1f5f9; border: 1px solid #283449; border-radius: 8px; padding: 13px 16px; font-weight: 600; font-size: 13px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='#232c3f'" onmouseout="this.style.background='#19202e'">
             1. Simpan
           </button>
@@ -1005,6 +1005,16 @@
           
           <button type="button" class="btn" onclick="showDetailedTelegramStatusModal()" style="background: #6d28d9; color: #ffffff; border: none; border-radius: 8px; padding: 13px 16px; font-weight: 600; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;" onmouseover="this.style.background='#5b21b6'" onmouseout="this.style.background='#6d28d9'">
             <span>🔍</span> Cek Status
+          </button>
+        </div>
+
+        <!-- Row 4: Restart & Stop Buttons -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <button type="button" id="btnRestartBot" class="btn" onclick="restartTelegramBotService()" style="background: #92400e; color: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 11px 16px; font-weight: 600; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;" onmouseover="this.style.background='#b45309'" onmouseout="this.style.background='#92400e'">
+            <span>♻️</span> Restart Bot Service
+          </button>
+          <button type="button" id="btnStopBot" class="btn" onclick="stopTelegramBotService()" style="background: #7f1d1d; color: #fecaca; border: 1px solid #ef4444; border-radius: 8px; padding: 11px 16px; font-weight: 600; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;" onmouseover="this.style.background='#991b1b'" onmouseout="this.style.background='#7f1d1d'">
+            <span>🛑</span> Stop Bot Service
           </button>
         </div>
 
