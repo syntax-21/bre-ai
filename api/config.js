@@ -112,8 +112,9 @@ module.exports = async (req, res) => {
       if (!webhookUrl) return res.status(400).json({ ok: false, error: 'URL Webhook tidak valid' });
 
       try {
-        await telegramBot.apiCall('setWebhook', { url: webhookUrl });
-        const status = await telegramBot.getDetailedStatus(host);
+        const tokenToUse = body.token || cfg.telegramBotToken;
+        await telegramBot.apiCall('setWebhook', { url: webhookUrl }, tokenToUse);
+        const status = await telegramBot.getDetailedStatus(host, tokenToUse);
         return res.json({ ok: true, webhookUrl, status });
       } catch (err) {
         return res.status(500).json({ ok: false, error: err.message });

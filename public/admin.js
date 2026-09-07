@@ -107,7 +107,7 @@ async function doLogin() {
       loadLogs();
       loadCloudStorageStatus();
       initTimers();
-      toast('Login berhasil! Selamat datang di Bre AI Control Center.', 'ok');
+      toast('Login berhasil! Selamat datang di Bre AI Settings.', 'ok');
     } else {
       let err = 'Password salah';
       try { const d = await r.json(); if (d.error) err = d.error; } catch(e){}
@@ -116,6 +116,21 @@ async function doLogin() {
   } catch(e) {
     toast('Gagal menghubungi server', 'err');
   }
+}
+
+function doLogout() {
+  if (!confirm('Apakah Anda yakin ingin keluar dari panel admin?')) return;
+  adminToken = '';
+  try {
+    sessionStorage.removeItem('bre_admin_pw');
+  } catch(e) {}
+  if (metricsTimer) { clearInterval(metricsTimer); metricsTimer = null; }
+  if (logsTimer) { clearInterval(logsTimer); logsTimer = null; }
+  document.getElementById('appContainer').style.display = 'none';
+  document.getElementById('loginOverlay').style.display = 'flex';
+  const pwInput = document.getElementById('pwInput');
+  if (pwInput) pwInput.value = '';
+  toast('Berhasil keluar (logout)', 'ok');
 }
 
 function initTimers() {
@@ -181,6 +196,9 @@ async function loadConfig() {
     if (tgMode) tgMode.value = c.telegramAccessMode || 'public';
     const tgDom = document.getElementById('cfgTelegramDomain');
     if (tgDom) tgDom.value = c.telegramDomain || (window.location.host || '');
+
+    // Restore from localStorage if empty (Zero-DB / Serverless fallback)
+    restoreTelegramFromLocalStorage();
 
     telegramUsers = Array.isArray(c.telegramUsers) ? c.telegramUsers : [];
     renderTelegramUsersTable();
@@ -1049,11 +1067,52 @@ async function loadTelegramStatus() {
   }
 }
 
+function saveTelegramToLocalStorage() {
+  try {
+    const tok = (document.getElementById('cfgTelegramToken')?.value || '').trim();
+    const own = (document.getElementById('cfgTelegramOwner')?.value || '').trim();
+    const dom = (document.getElementById('cfgTelegramDomain')?.value || '').trim();
+    const mod = document.getElementById('cfgTelegramAccessMode')?.value || 'public';
+    const aim = document.getElementById('cfgTelegramModel')?.value || '';
+    if (tok) localStorage.setItem('bre_tg_token', tok);
+    if (own) localStorage.setItem('bre_tg_owner', own);
+    if (dom) localStorage.setItem('bre_tg_domain', dom);
+    if (mod) localStorage.setItem('bre_tg_mode', mod);
+    if (aim) localStorage.setItem('bre_tg_aimodel', aim);
+  } catch (e) {}
+}
+
+function restoreTelegramFromLocalStorage() {
+  try {
+    const tok = localStorage.getItem('bre_tg_token');
+    const own = localStorage.getItem('bre_tg_owner');
+    const dom = localStorage.getItem('bre_tg_domain');
+    const mod = localStorage.getItem('bre_tg_mode');
+    const aim = localStorage.getItem('bre_tg_aimodel');
+
+    const inpTok = document.getElementById('cfgTelegramToken');
+    if (inpTok && !inpTok.value && tok) inpTok.value = tok;
+
+    const inpOwn = document.getElementById('cfgTelegramOwner');
+    if (inpOwn && !inpOwn.value && own) inpOwn.value = own;
+
+    const inpDom = document.getElementById('cfgTelegramDomain');
+    if (inpDom && !inpDom.value && dom) inpDom.value = dom;
+
+    const selMod = document.getElementById('cfgTelegramAccessMode');
+    if (selMod && mod) selMod.value = mod;
+
+    const selAim = document.getElementById('cfgTelegramModel');
+    if (selAim && aim) selAim.value = aim;
+  } catch (e) {}
+}
+
 // Button 1: 1. Simpan
 async function saveTelegramSetupOnly() {
+  saveTelegramToLocalStorage();
   const enCheck = document.getElementById('cfgTelegramEnabled');
   if (enCheck) enCheck.checked = true;
-  toast('💾 Menyimpan konfigurasi Bot Telegram...', 'ok');
+  toast('💾 Konfigurasi Bot Telegram tersimpan di browser & memori!', 'ok');
   await saveAllConfig();
   await loadTelegramStatus();
 }
@@ -1069,11 +1128,20 @@ async function setupTelegramWebhookFromDomain() {
   }
   
   // Bersihkan format domain
-  domain = domain.replace(/^https?:\/\//i, '').replace(/\/api\/telegram\/?$/i, '').replace(/\/+$/, '');
+  domain = domain.replace(/^https?:\/\//i, '').replace(/\/api\/telegram\/?.*$/i, '').replace(/\/+$/, '');
   const domainInp = document.getElementById('cfgTelegramDomain');
   if (domainInp) domainInp.value = domain;
 
-  const webhookUrl = `https://${domain}/api/telegram`;
+  const adminId = (document.getElementById('cfgTelegramOwner')?.value || '').trim();
+  const accessMode = document.getElementById('cfgTelegramAccessMode')?.value || 'public';
+
+  saveTelegramToLocalStorage();
+
+  // URL Webhook Self-Contained (Persis seperti temp-email: Token & Admin ID dibawa langsung oleh Telegram)
+  let webhookUrl = `https://${domain}/api/telegram?t=${encodeURIComponent(token)}`;
+  if (adminId) webhookUrl += `&o=${encodeURIComponent(adminId)}`;
+  if (accessMode && accessMode !== 'public') webhookUrl += `&m=${encodeURIComponent(accessMode)}`;
+
   toast(`🔄 Memasang Webhook Cloud 24/7 ke ${domain}...`, 'ok');
 
   const enCheck = document.getElementById('cfgTelegramEnabled');
@@ -1084,7 +1152,7 @@ async function setupTelegramWebhookFromDomain() {
     const r = await fetch('/api/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
-      body: JSON.stringify({ action: 'setup_webhook', url: webhookUrl })
+      body: JSON.stringify({ action: 'setup_webhook', url: webhookUrl, token: token })
     });
     const data = await r.json();
     if (data.ok) {
@@ -1353,16 +1421,16 @@ function updateStorageBadges(info, cloudStatus = null) {
     }
   } else if (info.isServerless) {
     if (headerBadge) {
-      headerBadge.className = 'ping-badge testing';
-      headerBadge.textContent = '🟡 Serverless /tmp Cache';
+      headerBadge.className = 'ping-badge ok';
+      headerBadge.textContent = '🟢 Serverless 24/7 (Zero-DB)';
     }
     if (cardBadge) {
-      cardBadge.className = 'ping-badge testing';
-      cardBadge.textContent = '🟡 Cache Sementara (Vercel Read-Only)';
+      cardBadge.className = 'ping-badge ok';
+      cardBadge.textContent = '🟢 Serverless Mode Aktif (Tanpa DB)';
     }
-    if (cardTitle) cardTitle.textContent = 'Sistem File Vercel Read-Only';
+    if (cardTitle) cardTitle.textContent = 'Sistem Bot Berjalan 24 Jam Nonstop';
     if (cardDesc) {
-      cardDesc.innerHTML = '⚠️ Anda saat ini mendeploy di Vercel tanpa cloud storage permanen. Pengaturan tersimpan di cache <code>/tmp</code> selama serverless container masih hangat, namun dapat kembali ke default saat container baru dimulai.<br><b>Saran:</b> Hubungkan <b>Vercel KV</b> (1-klik di Vercel Dashboard → Storage) atau isi <b>Token GitHub</b> di bawah agar konfigurasi tersimpan 100% permanen!';
+      cardDesc.innerHTML = '✅ Bot Telegram Anda menggunakan arsitektur <b>Self-Contained Webhook</b> (persis seperti temp-email). Bot otomatis aktif 24 jam di Vercel tanpa perlu database cloud atau Redis!';
     }
   } else {
     if (headerBadge) {

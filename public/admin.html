@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bre AI - Enterprise Proxy Router & Control Center</title>
+  <title>Bre AI Settings</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
@@ -546,13 +546,13 @@
   <!-- Always-Visible Sticky Header with Save Button -->
   <header class="top-nav">
     <div class="brand-title">
-      ⚡ Bre AI Control Center
-      <span class="brand-badge">9Router Enterprise Proxy</span>
+      ⚡ Bre AI Settings
     </div>
     <div class="top-actions">
-      <span id="storageHeaderBadge" class="ping-badge testing" style="font-size: 11px; cursor: pointer;" onclick="switchTab('tabCloud', document.getElementById('tabBtnCloud'))" title="Klik untuk membuka pengaturan Cloud Storage">☁️ Memeriksa Storage...</span>
+      <span id="storageHeaderBadge" class="ping-badge ok" style="font-size: 11px;">🟢 Serverless 24/7 Ready</span>
       <a href="/" class="btn btn-outline" style="padding: 8px 16px; font-size: 13px;">Chat Utama</a>
       <button class="btn btn-save" onclick="saveAllConfig()">💾 Simpan Semua Pengaturan</button>
+      <button class="btn btn-danger" style="padding: 8px 14px; font-size: 13px;" onclick="doLogout()" title="Keluar dari Panel Admin">🚪 Keluar</button>
     </div>
   </header>
 
@@ -566,7 +566,7 @@
       <button class="tab-btn" onclick="switchTab('tabEngine', this)">⚙️ Global Engine</button>
       <button class="tab-btn" onclick="switchTab('tabSecurity', this)">🛡️ Keamanan & Klien API</button>
       <button class="tab-btn" onclick="switchTab('tabTelegram', this)">🤖 Telegram Bot</button>
-      <button class="tab-btn" onclick="switchTab('tabCloud', this)" id="tabBtnCloud">☁️ Cloud Storage (Vercel 24/7)</button>
+      <button class="tab-btn" onclick="switchTab('tabCloud', this)" id="tabBtnCloud">☁️ Cloud DB (Opsional)</button>
       <button class="tab-btn" onclick="switchTab('tabTester', this)">🧪 Live Model Tester</button>
       <button class="tab-btn" onclick="switchTab('tabBackup', this)">📦 Backup & Restore</button>
     </div>
@@ -1245,10 +1245,7 @@
       </div>
     </div>
 
-    <!-- Bottom Secondary Save Button -->
-    <div style="display: flex; justify-content: flex-end; margin-top: 30px;">
-      <button class="btn btn-save" style="padding: 14px 32px; font-size: 15px;" onclick="saveAllConfig()">💾 Simpan Semua Pengaturan</button>
-    </div>
+
 
   </main>
 </div>

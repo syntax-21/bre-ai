@@ -23,12 +23,15 @@ class TelegramBotService {
     this.conversations = new Map(); // chatId -> Array<{ role, content }>
     this.recentUsers = new Map();   // userId -> { id, username, name, lastSeen }
     this.MAX_HISTORY = 12;
+    this.activeToken = null;
+    this.activeOwnerId = null;
+    this.activeAccessMode = null;
   }
 
   // Raw Telegram Bot API request
   apiCall(method, payload = {}, customToken = null) {
     const cfg = getConfig();
-    const token = customToken || cfg.telegramBotToken;
+    const token = customToken || this.activeToken || cfg.telegramBotToken;
     if (!token) return Promise.reject(new Error('Telegram Bot Token tidak ditemukan'));
 
     const postData = JSON.stringify(payload);
@@ -110,7 +113,7 @@ class TelegramBotService {
   isOwner(fromUser) {
     if (!fromUser) return false;
     const cfg = getConfig();
-    const ownerId = String(cfg.telegramOwnerId || '').trim().toLowerCase().replace(/^@/, '');
+    const ownerId = String(this.activeOwnerId || cfg.telegramOwnerId || '').trim().toLowerCase().replace(/^@/, '');
     if (!ownerId) return false;
 
     const uId = String(fromUser.id);
@@ -159,7 +162,7 @@ class TelegramBotService {
     }
 
     // 3. Check access mode
-    const mode = cfg.telegramAccessMode || 'public';
+    const mode = this.activeAccessMode || cfg.telegramAccessMode || 'public';
     if (mode === 'whitelist') {
       // In whitelist-only mode, unlisted users are rejected
       return false;
@@ -395,8 +398,13 @@ class TelegramBotService {
   }
 
   // Handle Callback Queries (Button Clicks)
-  async handleCallbackQuery(cq) {
+  async handleCallbackQuery(cq, ctx = null) {
     if (!cq || !cq.from) return;
+    if (ctx) {
+      if (ctx.token) this.activeToken = ctx.token;
+      if (ctx.ownerId) this.activeOwnerId = ctx.ownerId;
+      if (ctx.accessMode) this.activeAccessMode = ctx.accessMode;
+    }
     const fromUser = cq.from;
     const chatId = cq.message?.chat?.id;
     const messageId = cq.message?.message_id;
@@ -705,8 +713,13 @@ class TelegramBotService {
   }
 
   // Handle a single Telegram message
-  async handleMessage(msg) {
+  async handleMessage(msg, ctx = null) {
     if (!msg || !msg.chat) return;
+    if (ctx) {
+      if (ctx.token) this.activeToken = ctx.token;
+      if (ctx.ownerId) this.activeOwnerId = ctx.ownerId;
+      if (ctx.accessMode) this.activeAccessMode = ctx.accessMode;
+    }
     const chatId = msg.chat.id;
     const fromUser = msg.from || {};
     const senderName = fromUser.first_name || fromUser.username || 'Sahabat';
@@ -1073,9 +1086,10 @@ class TelegramBotService {
   }
 
   // Get detailed status including Telegram Webhook info
-  async getDetailedStatus(currentHost = null) {
+  async getDetailedStatus(currentHost = null, customToken = null) {
     const cfg = getConfig();
-    const hasToken = !!cfg.telegramBotToken;
+    const effectiveToken = customToken || this.activeToken || cfg.telegramBotToken;
+    const hasToken = !!effectiveToken;
     const isVercel = Boolean(process.env.VERCEL || process.env.VERCEL_URL);
 
     let webhookInfo = null;
@@ -1083,16 +1097,14 @@ class TelegramBotService {
 
     if (hasToken) {
       try {
-        if (!botInfo) {
-          botInfo = await this.apiCall('getMe');
-          this.botInfo = botInfo;
-        }
+        botInfo = await this.apiCall('getMe', {}, effectiveToken);
+        this.botInfo = botInfo;
       } catch (e) {
         this.lastError = e.message;
       }
 
       try {
-        webhookInfo = await this.apiCall('getWebhookInfo');
+        webhookInfo = await this.apiCall('getWebhookInfo', {}, effectiveToken);
       } catch (e) {}
     }
 
