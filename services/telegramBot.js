@@ -82,6 +82,30 @@ class TelegramBotService {
     }
   }
 
+  // Download file from Telegram API (for reading documents and code files)
+  async downloadTelegramFile(fileId) {
+    const cfg = getConfig();
+    const token = cfg.telegramBotToken;
+    if (!token) throw new Error('Bot token tidak ditemukan');
+    const fileInfo = await this.apiCall('getFile', { file_id: fileId });
+    if (!fileInfo || !fileInfo.file_path) throw new Error('Berkas tidak ditemukan di Telegram');
+
+    const fileUrl = `https://api.telegram.org/file/bot${token}/${fileInfo.file_path}`;
+    return new Promise((resolve, reject) => {
+      const req = https.get(fileUrl, { agent: httpsAgent, timeout: 30000 }, res => {
+        if (res.statusCode !== 200) {
+          return reject(new Error(`Gagal mengunduh file: HTTP ${res.statusCode}`));
+        }
+        const data = [];
+        res.on('data', chunk => data.push(chunk));
+        res.on('end', () => resolve(Buffer.concat(data)));
+        res.on('error', err => reject(err));
+      });
+      req.on('error', err => reject(err));
+      req.on('timeout', () => { req.destroy(); reject(new Error('Koneksi timeout saat download berkas')); });
+    });
+  }
+
   // Check if sender is Bot Owner
   isOwner(fromUser) {
     if (!fromUser) return false;
@@ -145,14 +169,58 @@ class TelegramBotService {
     return true;
   }
 
+  // Clean raw HTML tags (like <br>, <script>, etc) and format tables cleanly for Telegram
+  cleanTelegramText(text) {
+    if (!text || typeof text !== 'string') return '';
+    let cleaned = text;
+
+    // 1. Ganti tag <br>, <br/>, <br /> dengan baris baru asli (\n)
+    cleaned = cleaned.replace(/<br\s*\/?>/gi, '\n');
+
+    // 2. Bersihkan tag script atau tag HTML umum lain yang sering dimasukkan LLM
+    cleaned = cleaned.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+    cleaned = cleaned.replace(/<\/?(p|div|span|strong|b|em|i)[^>]*>/gi, '');
+
+    // 3. Konversi format tabel markdown kasar menjadi format list terstruktur jika ada tabel
+    if (cleaned.includes('|') && cleaned.includes('---')) {
+      try {
+        cleaned = cleaned.replace(/((?:^[ \t]*\|.+?\|[ \t]*\r?\n)(?:^[ \t]*\|[-:\s|]+?\|[ \t]*\r?\n)(?:^[ \t]*\|.+?\|[ \t]*(?:\r?\n|$))+)/gm, (match) => {
+          const lines = match.trim().split('\n').map(l => l.trim()).filter(Boolean);
+          if (lines.length < 3) return match;
+          const headers = lines[0].split('|').map(c => c.trim()).filter(Boolean);
+          const rows = lines.slice(2);
+          let out = [];
+          for (const row of rows) {
+            const cols = row.split('|').map(c => c.trim()).filter(Boolean);
+            if (!cols.length) continue;
+            let title = cols[0];
+            let block = `📌 *${title}*`;
+            for (let i = 1; i < cols.length; i++) {
+              let hName = headers[i] ? `_${headers[i]}_: ` : '';
+              let val = cols[i].replace(/<br\s*\/?>/gi, '\n  • ');
+              block += `\n  • ${hName}${val}`;
+            }
+            out.push(block);
+          }
+          return '\n\n' + out.join('\n\n') + '\n\n';
+        });
+      } catch (e) {}
+    }
+
+    // 4. Bersihkan baris baru berlebih (maksimal 2 baris kosong)
+    cleaned = cleaned.replace(/\n{3,}/g, '\n\n').trim();
+    return cleaned;
+  }
+
   // Send message helper with auto-split if > 4000 chars and markdown fallback
   async sendTelegramMessage(chatId, text, replyMarkup = null, replyToId = null) {
     if (!text) return;
+    const cleanText = this.cleanTelegramText(text);
     const CHUNK_SIZE = 4000;
     const chunks = [];
 
-    for (let i = 0; i < text.length; i += CHUNK_SIZE) {
-      chunks.push(text.slice(i, i + CHUNK_SIZE));
+    for (let i = 0; i < cleanText.length; i += CHUNK_SIZE) {
+      chunks.push(cleanText.slice(i, i + CHUNK_SIZE));
     }
 
     for (let i = 0; i < chunks.length; i++) {
@@ -239,7 +307,12 @@ class TelegramBotService {
             model: model,
             messages: history,
             stream: false,
-            customSystemPrompt: `Anda sedang melayani pengguna Telegram ${senderInfo}. Formatlah jawaban Anda rapi menggunakan format Markdown standar yang nyaman dibaca di layar HP/Telegram.`
+            customSystemPrompt: `Anda sedang melayani pengguna Telegram ${senderInfo}.
+[PANDUAN FORMAT TAMPILAN TELEGRAM]:
+- DILARANG KERAS menggunakan tag HTML apa pun (JANGAN gunakan <br>, <p>, <div>, <script>, dll). Gunakan baris baru biasa (Enter/newline) untuk jeda antar-kalimat.
+- DILARANG membuat tabel markdown (| kolom | kolom |) karena Telegram ponsel tidak mendukung tabel dan tampilannya akan berantakan.
+- GANTILAH TABEL dengan format daftar poin/bullet points (• atau -) dengan judul tebal (*Judul*) yang ringkas, rapi, dan mudah dibaca di layar HP.
+- Gunakan format Telegram Markdown yang sah: *teks tebal*, _teks miring_, \`kode ringkas\`, dan \`\`\`blok kode\`\`\`.`
           },
           socket: { remoteAddress: '127.0.0.1' }
         });
@@ -633,9 +706,8 @@ class TelegramBotService {
 
   // Handle a single Telegram message
   async handleMessage(msg) {
-    if (!msg || !msg.chat || !msg.text) return;
+    if (!msg || !msg.chat) return;
     const chatId = msg.chat.id;
-    const text = msg.text.trim();
     const fromUser = msg.from || {};
     const senderName = fromUser.first_name || fromUser.username || 'Sahabat';
     const senderTag = fromUser.username ? `@${fromUser.username}` : `ID:${fromUser.id}`;
@@ -656,6 +728,110 @@ class TelegramBotService {
         chatId,
         `⚠️ *Akses Dibatasi*\n\nMaaf ${senderName}, bot ini saat ini berada dalam mode khusus. Akun Anda (${senderTag}) belum terdaftar dalam whitelist. Silakan hubungi pemilik bot untuk meminta izin akses.`
       );
+      return;
+    }
+
+    let text = (msg.text || '').trim();
+
+    // 1. STICKER
+    if (msg.sticker) {
+      const emoji = msg.sticker.emoji || '😄';
+      await this.sendTelegramMessage(
+        chatId,
+        `👋 ${emoji} Terima kasih stikernya! Ada pertanyaan, analisis kode, atau tugas yang bisa Bre AI bantu hari ini?`
+      );
+      return;
+    }
+
+    // 2. VOICE / AUDIO
+    if (msg.voice || msg.audio) {
+      const caption = (msg.caption || '').trim();
+      if (caption) {
+        text = `[Pengguna melampirkan pesan audio dengan catatan]: ${caption}`;
+      } else {
+        await this.sendTelegramMessage(
+          chatId,
+          `🎙️ *Pesan Suara Diterima*\n\nBre AI saat ini berfokus pada pemrosesan teks dan dokumen kode. Silakan ketikkan pertanyaan atau topik Anda melalui pesan teks agar saya dapat membantu secara maksimal!`
+        );
+        return;
+      }
+    }
+
+    // 3. VIDEO / VIDEO NOTE
+    if (msg.video || msg.video_note) {
+      const caption = (msg.caption || '').trim();
+      if (caption) {
+        text = `[Pengguna melampirkan video dengan catatan]: ${caption}`;
+      } else {
+        await this.sendTelegramMessage(
+          chatId,
+          `🎬 *Video Diterima*\n\nBre AI saat ini berfokus pada asisten percakapan teks, pemrograman, dan penulisan dokumen. Silakan tanyakan hal yang ingin Anda diskusikan melalui teks!`
+        );
+        return;
+      }
+    }
+
+    // 4. PHOTO
+    if (msg.photo && Array.isArray(msg.photo) && msg.photo.length > 0) {
+      const caption = (msg.caption || '').trim();
+      if (caption) {
+        text = `[Pengguna melampirkan gambar/foto dengan keterangan]: ${caption}`;
+      } else {
+        await this.sendTelegramMessage(
+          chatId,
+          `📷 *Foto Diterima!*\n\nSaya telah menerima foto yang Anda kirimkan. Saat ini model AI utama berfokus pada pemrosesan teks, kode, dan logika.\n\n💡 *Tips:* Anda bisa mengirim ulang foto dengan menyertakan teks *caption* (misal: _"Tuliskan caption untuk foto ini"_ atau _"Jelaskan konsep gambar ini"_) agar saya dapat membantu Anda!`
+        );
+        return;
+      }
+    }
+
+    // 5. DOCUMENT / FILE (Direct code/text analysis)
+    if (msg.document) {
+      const doc = msg.document;
+      const fileName = doc.file_name || 'file.txt';
+      const caption = (msg.caption || '').trim();
+      const ext = fileName.includes('.') ? fileName.split('.').pop().toLowerCase() : '';
+      const textExts = ['txt', 'py', 'js', 'json', 'md', 'html', 'css', 'sql', 'sh', 'ts', 'csv', 'xml', 'yaml', 'yml', 'c', 'cpp', 'java', 'rs', 'go', 'php', 'env', 'bat'];
+
+      if (textExts.includes(ext) && (doc.file_size || 0) <= 250000) { // <= 250 KB
+        await this.sendTyping(chatId);
+        try {
+          const buf = await this.downloadTelegramFile(doc.file_id);
+          const content = buf.toString('utf-8');
+          const snippet = content.length > 12000 ? content.slice(0, 12000) + '\n... [dipotong karena terlalu panjang]' : content;
+          text = caption
+            ? `[Pengguna melampirkan file dokumen: "${fileName}"]:\n\`\`\`${ext}\n${snippet}\n\`\`\`\n\nPertanyaan/Instruksi dari pengguna:\n${caption}`
+            : `[Pengguna melampirkan file dokumen: "${fileName}"]:\n\`\`\`${ext}\n${snippet}\n\`\`\`\n\nJelaskan isi file ini, analisislah strukturnya, dan berikan ringkasan atau poin-poin pentingnya.`;
+        } catch (err) {
+          console.error('[TelegramBot] Gagal download file teks:', err.message);
+          await this.sendTelegramMessage(chatId, `⚠️ Gagal membaca berkas \`${fileName}\`: ${err.message}`);
+          return;
+        }
+      } else {
+        const sizeStr = doc.file_size ? `${(doc.file_size / 1024).toFixed(1)} KB` : 'Dokumen';
+        const captionNote = caption ? `\n\nCatatan Anda: "${caption}"` : '';
+        await this.sendTelegramMessage(
+          chatId,
+          `📄 *Berkas Diterima: \`${fileName}\`* (${sizeStr})${captionNote}\n\n` +
+          `💡 *Tips:* Bre AI dapat membaca dan menganalisis berkas kode/teks langsung (.txt, .py, .js, .json, .md, .csv, dll). Untuk berkas biner/PDF/Word, silakan salin teks penting ke dalam pesan teks agar dapat dianalisis!`
+        );
+        return;
+      }
+    }
+
+    // 6. CONTACT / LOCATION
+    if (msg.location) {
+      await this.sendTelegramMessage(chatId, `📍 *Lokasi Diterima* (Lat: ${msg.location.latitude}, Long: ${msg.location.longitude}). Ada hal yang ingin ditanyakan seputar lokasi ini?`);
+      return;
+    }
+    if (msg.contact) {
+      await this.sendTelegramMessage(chatId, `👤 *Kontak Diterima* (${msg.contact.first_name || ''} ${msg.contact.phone_number || ''}). Kontak tersimpan di riwayat obrolan.`);
+      return;
+    }
+
+    // If still empty text after checking all types
+    if (!text) {
+      await this.sendTelegramMessage(chatId, `💬 Pesan diterima. Kirimkan teks, pertanyaan, atau lampiran dokumen teks untuk mulai berdiskusi.`);
       return;
     }
 
