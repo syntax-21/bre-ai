@@ -1,6 +1,6 @@
 // ========================================================
 // Bre AI v3.0 - Telegram Access Control & User Tracking
-// Multi-role permissions, Whitelist/Blocklist, and Owner Alerts
+// Multi-role permissions, Pengguna Diizinkan / Blocklist, and Owner Alerts
 // Created by Amirun Rayan Ariandi
 // ========================================================
 const { getConfig, saveConfig } = require('../../api/_shared');
@@ -25,15 +25,15 @@ function getRecentUsersList() {
   return Array.from(recentUsers.values()).sort((a, b) => b.lastSeen - a.lastSeen);
 }
 
-// Check if sender is Bot Owner
+// Check if user is the Owner
 function isOwner(fromUser, activeOwnerId = null) {
   if (!fromUser) return false;
   const cfg = getConfig();
   const ownerId = String(activeOwnerId || cfg.telegramOwnerId || '').trim().toLowerCase().replace(/^@/, '');
   if (!ownerId) return false;
 
-  const uId = String(fromUser.id);
-  const uName = (fromUser.username || '').toLowerCase().replace(/^@/, '');
+  const uId = typeof fromUser === 'object' && fromUser !== null ? String(fromUser.id || '') : String(fromUser || '');
+  const uName = typeof fromUser === 'object' && fromUser !== null ? (fromUser.username || '').toLowerCase().replace(/^@/, '') : '';
 
   if (ownerId === uId || (uName && ownerId === uName)) return true;
 
@@ -41,7 +41,7 @@ function isOwner(fromUser, activeOwnerId = null) {
   if (Array.isArray(cfg.telegramUsers)) {
     const found = cfg.telegramUsers.find(u =>
       String(u.id) === uId ||
-      (u.username && u.username.toLowerCase().replace(/^@/, '') === uName)
+      (uName && u.username && u.username.toLowerCase().replace(/^@/, '') === uName)
     );
     if (found && found.role === 'owner') return true;
   }
@@ -53,13 +53,13 @@ function isOwner(fromUser, activeOwnerId = null) {
 function isUserRegistered(fromUser) {
   if (!fromUser) return false;
   const cfg = getConfig();
-  const uId = String(fromUser.id);
-  const uName = (fromUser.username || '').toLowerCase().replace(/^@/, '');
+  const uId = typeof fromUser === 'object' && fromUser !== null ? String(fromUser.id || '') : String(fromUser || '');
+  const uName = typeof fromUser === 'object' && fromUser !== null ? (fromUser.username || '').toLowerCase().replace(/^@/, '') : '';
 
   if (Array.isArray(cfg.telegramUsers)) {
     return cfg.telegramUsers.some(u =>
       String(u.id) === uId ||
-      (u.username && u.username.toLowerCase().replace(/^@/, '') === uName)
+      (uName && u.username && u.username.toLowerCase().replace(/^@/, '') === uName)
     );
   }
   return false;
@@ -71,22 +71,22 @@ function isUserAllowed(fromUser, activeOwnerId = null, activeAccessMode = null) 
   if (isOwner(fromUser, activeOwnerId)) return true; // Owner always allowed
 
   const cfg = getConfig();
-  const uId = String(fromUser.id);
-  const uName = (fromUser.username || '').toLowerCase().replace(/^@/, '');
+  const uId = typeof fromUser === 'object' && fromUser !== null ? String(fromUser.id || '') : String(fromUser || '');
+  const uName = typeof fromUser === 'object' && fromUser !== null ? (fromUser.username || '').toLowerCase().replace(/^@/, '') : '';
 
   // 1. Check specific roles in telegramUsers list
   if (Array.isArray(cfg.telegramUsers)) {
     const match = cfg.telegramUsers.find(u =>
       String(u.id) === uId ||
-      (u.username && u.username.toLowerCase().replace(/^@/, '') === uName)
+      (uName && u.username && u.username.toLowerCase().replace(/^@/, '') === uName)
     );
     if (match) {
       if (match.role === 'blocked') return false; // Blocked user always rejected
-      if (match.role === 'whitelist' || match.role === 'owner') return true;
+      if (match.role === 'diizinkan' || match.role === 'whitelist' || match.role === 'owner') return true;
     }
   }
 
-  // 2. Check legacy comma-separated whitelist if provided
+  // 2. Check legacy comma-separated allowed list if provided
   const rawLegacyWhitelist = (cfg.telegramAllowedUsers || '').trim();
   if (rawLegacyWhitelist) {
     const allowed = rawLegacyWhitelist.split(/[\n,;]+/).map(s => s.trim().replace(/^@/, '').toLowerCase()).filter(Boolean);
@@ -95,8 +95,8 @@ function isUserAllowed(fromUser, activeOwnerId = null, activeAccessMode = null) 
 
   // 3. Check access mode
   const mode = activeAccessMode || cfg.telegramAccessMode || 'public';
-  if (mode === 'whitelist') {
-    // In whitelist-only mode, unlisted users are rejected
+  if (mode === 'whitelist' || mode === 'diizinkan') {
+    // In restricted mode, unlisted users are rejected
     return false;
   }
 
@@ -105,11 +105,12 @@ function isUserAllowed(fromUser, activeOwnerId = null, activeAccessMode = null) 
 }
 
 // Add or update user role in telegramUsers config
-function setUserRole(userId, username = '', name = '', role = 'whitelist') {
+function setUserRole(userId, username = '', name = '', role = 'diizinkan') {
   const cfg = getConfig();
   const users = Array.isArray(cfg.telegramUsers) ? [...cfg.telegramUsers] : [];
   const uIdStr = String(userId);
   const uNameClean = (username || '').replace(/^@/, '');
+  const normalizedRole = (role === 'whitelist') ? 'diizinkan' : role;
 
   const idx = users.findIndex(u =>
     String(u.id) === uIdStr ||
@@ -120,7 +121,7 @@ function setUserRole(userId, username = '', name = '', role = 'whitelist') {
     id: uIdStr,
     username: uNameClean,
     name: name || (uNameClean ? `@${uNameClean}` : `User ${uIdStr}`),
-    role: role,
+    role: normalizedRole,
     updatedAt: new Date().toISOString()
   };
 
@@ -168,7 +169,8 @@ async function notifyOwnerNewUser(fromUser, initialText = '', botService = null)
   const fullName = [fromUser.first_name, fromUser.last_name].filter(Boolean).join(' ') || 'Tanpa Nama';
   const usernameTag = fromUser.username ? `@${fromUser.username}` : '_(tidak ada username)_';
   const timeStr = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB';
-  const modeLabel = (cfg.telegramAccessMode || 'public') === 'whitelist' ? '🔒 Whitelist (Private)' : '🟢 Publik';
+  const mode = cfg.telegramAccessMode || 'public';
+  const modeLabel = (mode === 'whitelist' || mode === 'diizinkan') ? '🔒 Khusus Diizinkan' : '🟢 Publik';
   const previewText = (initialText || '').slice(0, 100);
 
   const alertText = `🔔 *NOTIFIKASI PENGGUNA BARU MASUK*\n` +
@@ -178,7 +180,7 @@ async function notifyOwnerNewUser(fromUser, initialText = '', botService = null)
     `• *Username:* ${usernameTag}\n` +
     `• *ID Telegram:* \`${uId}\`\n` +
     `• *Waktu:* ${timeStr}\n` +
-    `• *Mode Bot Saat Ini:* ${modeLabel}\n` +
+    `• *Mode Akses Bot:* ${modeLabel}\n` +
     (previewText ? `• *Pesan Awal:* _"${previewText}"_\n` : '') +
     `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
     `_Silakan pilih tindakan otorisasi di bawah ini:_`;
@@ -186,11 +188,11 @@ async function notifyOwnerNewUser(fromUser, initialText = '', botService = null)
   const markup = {
     inline_keyboard: [
       [
-        { text: '🟢 Izinkan (Whitelist)', callback_data: `adm_appr_wl:${uId}` },
+        { text: '🟢 Izinkan Akses', callback_data: `adm_appr_wl:${uId}` },
         { text: '🔴 Tolak / Blokir', callback_data: `adm_appr_bl:${uId}` }
       ],
       [
-        { text: '👥 Buka Manajemen User', callback_data: 'adm_users' },
+        { text: '👥 Buka Kelola Pengguna', callback_data: 'adm_users' },
         { text: '✕ Abaikan', callback_data: `adm_appr_ign:${uId}` }
       ]
     ]

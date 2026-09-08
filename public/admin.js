@@ -180,6 +180,8 @@ function restoreFullConfigFromLocalStorage(c) {
     if (s.telegramDomain) c.telegramDomain = s.telegramDomain;
     if (s.telegramAccessMode) c.telegramAccessMode = s.telegramAccessMode;
     if (s.telegramModel) c.telegramModel = s.telegramModel;
+    if (s.telegramStyle) c.telegramStyle = s.telegramStyle;
+    if (s.defaultStyle) c.defaultStyle = s.defaultStyle;
     if (s.telegramUsers && Array.isArray(s.telegramUsers) && s.telegramUsers.length) c.telegramUsers = s.telegramUsers;
   } catch(e) {}
   return c;
@@ -224,6 +226,8 @@ async function loadConfig() {
     document.getElementById('cfgPresPenalty').value = c.presencePenalty ?? 0.0;
     document.getElementById('cfgMaxTokens').value = c.maxTokens || 16384;
     document.getElementById('cfgStream').value = c.forceStream === true ? 'true' : (c.forceStream === false ? 'false' : 'auto');
+    const defStEl = document.getElementById('cfgDefaultStyle');
+    if (defStEl) defStEl.value = c.defaultStyle || 'santai';
     
     // Security
     document.getElementById('cfgClientKey').value = c.clientApiKey || '';
@@ -238,9 +242,11 @@ async function loadConfig() {
     const tgOwner = document.getElementById('cfgTelegramOwner');
     if (tgOwner) tgOwner.value = c.telegramOwnerId || '';
     const tgMode = document.getElementById('cfgTelegramAccessMode');
-    if (tgMode) tgMode.value = c.telegramAccessMode || 'public';
+    if (tgMode) tgMode.value = (c.telegramAccessMode === 'whitelist' ? 'diizinkan' : (c.telegramAccessMode || 'public'));
     const tgDom = document.getElementById('cfgTelegramDomain');
     if (tgDom) tgDom.value = c.telegramDomain || (window.location.host || '');
+    const tgStEl = document.getElementById('cfgTelegramStyle');
+    if (tgStEl) tgStEl.value = c.telegramStyle || 'santai';
 
     // Restore from localStorage if empty (Zero-DB / Serverless fallback)
     restoreTelegramFromLocalStorage();
@@ -264,7 +270,6 @@ async function loadConfig() {
       updateStorageBadges(data.cloudStorageInfo);
     }
 
-    updateTelegramModelDropdown(c.telegramModel);
     // Load language setting
     const tgLang = document.getElementById('cfgTelegramLanguage');
     if (tgLang) tgLang.value = c.telegramLanguage || 'id';
@@ -1261,6 +1266,7 @@ async function saveAllConfig() {
     frequencyPenalty: parseNum(document.getElementById('cfgFreqPenalty')?.value, 0.0),
     presencePenalty: parseNum(document.getElementById('cfgPresPenalty')?.value, 0.0),
     maxTokens: parseInt(document.getElementById('cfgMaxTokens')?.value) || 16384,
+    defaultStyle: document.getElementById('cfgDefaultStyle') ? document.getElementById('cfgDefaultStyle').value : 'santai',
     clientApiKey: document.getElementById('cfgClientKey').value.trim(),
     rateLimitMax: parseInt(document.getElementById('cfgRateMax').value) || 5,
     rateLimitWindow: parseInt(document.getElementById('cfgRateWin').value) || 30,
@@ -1270,7 +1276,7 @@ async function saveAllConfig() {
     telegramAccessMode: document.getElementById('cfgTelegramAccessMode') ? document.getElementById('cfgTelegramAccessMode').value : 'public',
     telegramAllowedUsers: document.getElementById('cfgTelegramWhitelist') ? document.getElementById('cfgTelegramWhitelist').value.trim() : '',
     telegramDomain: document.getElementById('cfgTelegramDomain') ? document.getElementById('cfgTelegramDomain').value.trim() : '',
-    telegramModel: document.getElementById('cfgTelegramModel') ? document.getElementById('cfgTelegramModel').value.trim() : '',
+    telegramStyle: document.getElementById('cfgTelegramStyle') ? document.getElementById('cfgTelegramStyle').value : 'santai',
     telegramLanguage: document.getElementById('cfgTelegramLanguage') ? document.getElementById('cfgTelegramLanguage').value : 'id',
     telegramUsers: telegramUsers,
     // Cloud Persistence Settings
@@ -1480,13 +1486,13 @@ function saveTelegramToLocalStorage() {
     const own = (document.getElementById('cfgTelegramOwner')?.value || '').trim();
     const dom = (document.getElementById('cfgTelegramDomain')?.value || '').trim();
     const mod = document.getElementById('cfgTelegramAccessMode')?.value || 'public';
-    const aim = document.getElementById('cfgTelegramModel')?.value || '';
+    const sty = document.getElementById('cfgTelegramStyle')?.value || 'santai';
     const lng = document.getElementById('cfgTelegramLanguage')?.value || 'id';
     if (tok) localStorage.setItem('bre_tg_token', tok);
     if (own) localStorage.setItem('bre_tg_owner', own);
     if (dom) localStorage.setItem('bre_tg_domain', dom);
     if (mod) localStorage.setItem('bre_tg_mode', mod);
-    if (aim) localStorage.setItem('bre_tg_aimodel', aim);
+    if (sty) localStorage.setItem('bre_tg_style', sty);
     localStorage.setItem('bre_tg_lang', lng);
   } catch (e) {}
 }
@@ -1497,7 +1503,7 @@ function restoreTelegramFromLocalStorage() {
     const own = localStorage.getItem('bre_tg_owner');
     const dom = localStorage.getItem('bre_tg_domain');
     const mod = localStorage.getItem('bre_tg_mode');
-    const aim = localStorage.getItem('bre_tg_aimodel');
+    const sty = localStorage.getItem('bre_tg_style');
 
     const inpTok = document.getElementById('cfgTelegramToken');
     if (inpTok && !inpTok.value && tok) inpTok.value = tok;
@@ -1509,10 +1515,10 @@ function restoreTelegramFromLocalStorage() {
     if (inpDom && !inpDom.value && dom) inpDom.value = dom;
 
     const selMod = document.getElementById('cfgTelegramAccessMode');
-    if (selMod && mod) selMod.value = mod;
+    if (selMod && mod) selMod.value = (mod === 'whitelist' ? 'diizinkan' : mod);
 
-    const selAim = document.getElementById('cfgTelegramModel');
-    if (selAim && aim) selAim.value = aim;
+    const selSty = document.getElementById('cfgTelegramStyle');
+    if (selSty && sty) selSty.value = sty;
 
     const selLng = document.getElementById('cfgTelegramLanguage');
     const lng = localStorage.getItem('bre_tg_lang');
@@ -1681,7 +1687,7 @@ async function showDetailedTelegramStatusModal() {
       if (badgeLink) badgeLink.href = `https://t.me/${st.botInfo.username}`;
     }
 
-    const modeText = st.accessMode === 'whitelist' ? '🔒 Khusus Whitelist (Private)' : '🟢 Terbuka untuk Publik';
+    const modeText = (st.accessMode === 'diizinkan' || st.accessMode === 'whitelist') ? '🔒 Khusus Pengguna Diizinkan (Akses Terbatas)' : '🟢 Terbuka untuk Publik';
     const webhookText = st.isWebhookActive ? `🟢 Aktif 24/7 (${st.webhookUrl})` : '🟡 Belum Terhubung (Klik "2. Set Webhook")';
     const botName = st.botInfo?.username ? `@${st.botInfo.username} (${st.botInfo.first_name || 'Bot'})` : '(Token belum valid)';
 
@@ -1708,36 +1714,100 @@ async function setupTelegramWebhook() { return setupTelegramWebhookFromDomain();
 async function testTelegramToken() { return testTelegramBotFlow(); }
 async function restartTelegramBot() { return setupTelegramWebhookFromDomain(); }
 
-// Telegram User List CRUD Controllers
+// Telegram User List CRUD Controllers with Live Search & Tabs
+let activeTgUserFilter = 'all';
+
+function filterTelegramUsersUI(filterVal) {
+  if (filterVal) {
+    activeTgUserFilter = filterVal;
+    const btnAll = document.getElementById('btnTgUserAll');
+    const btnAllowed = document.getElementById('btnTgUserAllowed');
+    const btnBlocked = document.getElementById('btnTgUserBlocked');
+    if (btnAll) {
+      btnAll.style.background = activeTgUserFilter === 'all' ? '#0284c7' : 'transparent';
+      btnAll.style.color = activeTgUserFilter === 'all' ? '#fff' : '#94a3b8';
+    }
+    if (btnAllowed) {
+      btnAllowed.style.background = activeTgUserFilter === 'diizinkan' ? '#0284c7' : 'transparent';
+      btnAllowed.style.color = activeTgUserFilter === 'diizinkan' ? '#fff' : '#86efac';
+    }
+    if (btnBlocked) {
+      btnBlocked.style.background = activeTgUserFilter === 'blocked' ? '#0284c7' : 'transparent';
+      btnBlocked.style.color = activeTgUserFilter === 'blocked' ? '#fff' : '#fca5a5';
+    }
+  }
+  renderTelegramUsersTable();
+}
+
 function renderTelegramUsersTable() {
   const tbody = document.getElementById('telegramUsersTableBody');
   if (!tbody) return;
+
+  // Calculate counts
+  const totalCount = telegramUsers.length;
+  const allowedCount = telegramUsers.filter(u => u.role === 'diizinkan' || u.role === 'whitelist' || u.role === 'owner').length;
+  const blockedCount = telegramUsers.filter(u => u.role === 'blocked').length;
+
+  const countAllEl = document.getElementById('tgCountAll');
+  if (countAllEl) countAllEl.textContent = totalCount;
+  const countAllowedEl = document.getElementById('tgCountAllowed');
+  if (countAllowedEl) countAllowedEl.textContent = allowedCount;
+  const countBlockedEl = document.getElementById('tgCountBlocked');
+  if (countBlockedEl) countBlockedEl.textContent = blockedCount;
+
   if (!telegramUsers.length) {
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #64748b; padding: 20px;">Belum ada daftar pengguna khusus. Tambahkan di atas.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #64748b; padding: 20px;">Belum ada daftar pengguna khusus. Tambahkan pengguna di atas.</td></tr>`;
     return;
   }
 
-  tbody.innerHTML = telegramUsers.map((u, i) => {
-    let roleBadge = '<span class="ping-badge ok">🟢 Whitelist</span>';
+  const query = (document.getElementById('tgUserSearchInput')?.value || '').toLowerCase().trim();
+
+  // Filter list
+  const filtered = telegramUsers.map((u, originalIndex) => ({ ...u, originalIndex })).filter(u => {
+    // Filter by tab
+    if (activeTgUserFilter === 'diizinkan' && u.role === 'blocked') return false;
+    if (activeTgUserFilter === 'blocked' && u.role !== 'blocked') return false;
+
+    // Filter by search query
+    if (query) {
+      const matchId = String(u.id || '').toLowerCase().includes(query);
+      const matchUsername = String(u.username || '').toLowerCase().includes(query);
+      const matchName = String(u.name || '').toLowerCase().includes(query);
+      if (!matchId && !matchUsername && !matchName) return false;
+    }
+    return true;
+  });
+
+  if (!filtered.length) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #64748b; padding: 20px;">Tidak ada pengguna yang cocok dengan filter / pencarian.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(u => {
+    let roleBadge = '<span class="ping-badge ok">🟢 Diizinkan</span>';
     if (u.role === 'owner') roleBadge = '<span class="ping-badge ok" style="border-color:#38bdf8; color:#38bdf8;">👑 Owner</span>';
-    else if (u.role === 'blocked') roleBadge = '<span class="ping-badge fail">🔴 Blocked</span>';
+    else if (u.role === 'blocked') roleBadge = '<span class="ping-badge fail">🔴 Diblokir</span>';
 
     const dateStr = u.addedAt ? new Date(u.addedAt).toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
     const userTag = u.username ? `@${u.username.replace(/^@/, '')}` : (u.id ? `ID: ${u.id}` : '-');
+    const isAllowed = u.role === 'diizinkan' || u.role === 'whitelist';
 
     return `
       <tr>
         <td style="font-family: monospace; font-size: 13px; color: #38bdf8; font-weight: 600;">${userTag}</td>
-        <td style="color: #f1f5f9;">${u.name || '-'}</td>
+        <td style="color: #f1f5f9;">
+          <span>${u.name || '-'}</span>
+          ${u.role !== 'owner' ? `<button class="btn" onclick="editTelegramUserNote(${u.originalIndex})" title="Edit Catatan/Nama" style="background:transparent; border:none; color:#64748b; cursor:pointer; padding:0 4px; font-size:11px;">✏️</button>` : ''}
+        </td>
         <td>${roleBadge}</td>
         <td style="font-size: 12px; color: #94a3b8;">${dateStr}</td>
         <td style="text-align: right;">
           <div style="display: inline-flex; gap: 6px;">
             ${u.role !== 'owner' ? `
-              <button class="btn btn-outline" style="font-size: 11px; padding: 4px 8px;" onclick="toggleTelegramUserRole(${i})">
-                ${u.role === 'whitelist' ? 'Blokir' : 'Whitelist'}
+              <button class="btn btn-outline" style="font-size: 11px; padding: 4px 8px; ${isAllowed ? 'color:#fca5a5; border-color:rgba(239,68,68,0.4);' : 'color:#86efac; border-color:rgba(34,197,94,0.4);'}" onclick="toggleTelegramUserRole(${u.originalIndex})">
+                ${isAllowed ? '🔴 Blokir' : '🟢 Izinkan'}
               </button>
-              <button class="btn btn-danger" style="font-size: 11px; padding: 4px 8px;" onclick="deleteTelegramUser(${i})">Hapus</button>
+              <button class="btn btn-danger" style="font-size: 11px; padding: 4px 8px;" onclick="deleteTelegramUser(${u.originalIndex})">🗑️ Hapus</button>
             ` : '<span style="font-size: 12px; color: #64748b; padding: 4px;">Utama</span>'}
           </div>
         </td>
@@ -1764,7 +1834,8 @@ function addTelegramUser() {
   }
 
   const name = (nameInput?.value || '').trim() || (username ? `@${username}` : `User ${id}`);
-  const role = roleSelect?.value || 'whitelist';
+  let role = roleSelect?.value || 'diizinkan';
+  if (role === 'whitelist') role = 'diizinkan';
 
   const existing = telegramUsers.find(u => String(u.id) === String(id) || (username && u.username === username));
   if (existing) {
@@ -1788,9 +1859,22 @@ function addTelegramUser() {
   toast(`Pengguna ${name} berhasil didaftarkan!`, 'ok');
 }
 
+function editTelegramUserNote(idx) {
+  if (!telegramUsers[idx]) return;
+  const current = telegramUsers[idx];
+  const newName = prompt(`Ubah Nama / Catatan untuk "${current.username ? '@' + current.username : current.id}":`, current.name || '');
+  if (newName !== null) {
+    telegramUsers[idx].name = newName.trim();
+    renderTelegramUsersTable();
+    saveAllConfig();
+    toast(`Catatan pengguna diperbarui!`, 'ok');
+  }
+}
+
 function toggleTelegramUserRole(idx) {
   if (!telegramUsers[idx]) return;
-  telegramUsers[idx].role = telegramUsers[idx].role === 'whitelist' ? 'blocked' : 'whitelist';
+  const isAllowed = telegramUsers[idx].role === 'diizinkan' || telegramUsers[idx].role === 'whitelist';
+  telegramUsers[idx].role = isAllowed ? 'blocked' : 'diizinkan';
   renderTelegramUsersTable();
   saveAllConfig();
   toast(`Status ${telegramUsers[idx].name || telegramUsers[idx].id} diperbarui`, 'ok');

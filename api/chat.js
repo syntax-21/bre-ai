@@ -9,7 +9,8 @@ const {
   getCachedResponse,
   setCachedResponse,
   validateClientKey,
-  getNextRoundRobinIndex
+  getNextRoundRobinIndex,
+  STYLE_PROMPTS
 } = require('./_shared');
 
 const keyRotations = new Map();
@@ -18,7 +19,7 @@ module.exports = async (req, res) => {
   const reqStartTime = Date.now();
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-custom-endpoint, x-custom-keys, x-custom-model, x-custom-provider');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-custom-endpoint, x-custom-keys, x-custom-model, x-custom-provider, x-custom-style');
 
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -171,9 +172,11 @@ module.exports = async (req, res) => {
   }
 
   // 7. Execute Request across candidate providers (Auto-Failover)
+  const requestedStyle = (req.headers['x-custom-style'] || body.style || cfg.defaultStyle || '').trim();
+  const stylePrompt = (requestedStyle && STYLE_PROMPTS[requestedStyle]) ? `${STYLE_PROMPTS[requestedStyle]}\n\n` : '';
   const basePrompt = cfg.systemPrompt || '';
   const extraPrompt = body.customSystemPrompt ? `[INSTRUKSI WAJIB DIPATUHI]:\n${body.customSystemPrompt}\n\n` : '';
-  const formattedMessages = [{ role: 'system', content: extraPrompt + basePrompt }, ...userMessages];
+  const formattedMessages = [{ role: 'system', content: stylePrompt + extraPrompt + basePrompt }, ...userMessages];
 
   const maxTokens = body.max_tokens || cfg.maxTokens || 16384;
   const temperature = body.temperature !== undefined ? body.temperature : (cfg.temperature || 0.7);

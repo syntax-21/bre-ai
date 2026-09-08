@@ -9,6 +9,7 @@ let mic = null, recording = false, autoTTS = false;
 let persona = 'default', sandboxCode = '';
 let currentLang = localStorage.getItem('bre_lang') || 'en';
 let currentTheme = localStorage.getItem('bre_theme') || 'system';
+let currentStyle = localStorage.getItem('bre_style') || 'santai';
 
 // AI Parameters & State Enhancements
 let selectedModel = localStorage.getItem('bre_model') || 'mercury-2';
@@ -24,6 +25,63 @@ let isIncognito = false;
 let tempIncognitoChat = null;
 let isWebSearch = localStorage.getItem('bre_web_search') === 'true';
 let customPersonas = [];
+
+const STYLE_LABELS = {
+  santai: '✨ Santai & Friendly',
+  jakarta: '🗣️ Jakarta / Gaul (Gue-Lu)',
+  jawa_halus: '🙏 Jawa Halus (Kromo)',
+  jawa_kasar: '😎 Jawa Kasar / Ngoko',
+  sunda: '🍃 Sunda (Akrab)',
+  sopan: '👔 Sopan & Formal',
+  medan: '⚡ Medan / Batak',
+  makassar: '🌊 Makassar / Bugis',
+  standar: '🤖 Standar Bre AI'
+};
+
+const STYLE_PROMPTS = {
+  santai: `[GAYA BAHASA & TONE]:
+- Gunakan gaya bahasa santai, ramah, hangat, dan bersahabat layaknya teman diskusi yang asyik.
+- Boleh gunakan kosakata kasual yang natural (misal: "yuk", "nih", "oke", "siap", "mantap").
+- Tetap berikan informasi yang akurat, berbobot, dan solutif.`,
+
+  jakarta: `[GAYA BAHASA & TONE - JAKARTA / GAUL]:
+- Gunakan gaya bahasa percakapan khas Jakarta / Betawi gaul (kata ganti: "gue" / "gua" dan "lu" / "lo").
+- Gunakan partikel & slang khas Jakarta yang luwes (misal: "nih", "tuh", "banget", "beneran", "udah", "dong", "gitu", "asik", "kuy", "santuy").
+- Nada bicara asik, santai, ceplas-ceplos bersahabat, tapi tetap cerdas dan membantu.`,
+
+  jawa_halus: `[GAYA BAHASA & TONE - JAWA HALUS / KROMO]:
+- Gunakan bahasa yang sopan, santun, dan halus dengan sentuhan unggah-ungguh budaya Jawa (Kromo Inggil).
+- Sisipkan kata sapaan dan ungkapan santun khas Jawa (misal: "Nggih", "Matur nuwun", "Monggo", "Pripun", "Saestu", "Dalem", "Nyuwun sewu").
+- Bersikap sangat rendah hati, ramah, dan menghormati pengguna (tata krama luhur).`,
+
+  jawa_kasar: `[GAYA BAHASA & TONE - JAWA NGOKO / AKRAB]:
+- Gunakan gaya bahasa Jawa Ngoko yang medok, akrab, santai, dan blak-blakan layaknya sahabat karib (cangkrukan).
+- Sisipkan kata-kata khas Jawa ngoko yang ekspresif (misal: "Rek", "Cak", "Bro", "Iki", "Piye", "Mantep tenan", "Wes", "Ojo lali", "Iyo").
+- Bersahabat, humoris, guyub, dan seru tanpa rasa kaku.`,
+
+  sunda: `[GAYA BAHASA & TONE - SUNDA]:
+- Gunakan gaya bahasa yang ramah, sopan, lembut, dan bersahabat dengan sentuhan bahasa Sunda.
+- Sisipkan partikel dan kosakata khas Sunda yang akrab (misal: "Punten", "Hatur nuhun", "Muhun", "Euy", "Atuh", "Teh", "Kang / Teteh", "Kumaha", "Sugan").
+- Nada tutur kata manis, penuh kehangatan, dan bersahaja.`,
+
+  sopan: `[GAYA BAHASA & TONE - SOPAN & FORMAL]:
+- Gunakan Bahasa Indonesia yang baik, benar, formal, elegan, dan profesional.
+- Gunakan kata ganti "Saya" dan "Anda".
+- Struktur kalimat rapi, berwibawa, objektif, dan sangat menghargai pengguna.`,
+
+  medan: `[GAYA BAHASA & TONE - MEDAN / BATAK]:
+- Gunakan gaya bahasa khas Medan/Batak yang enerjik, tegas, blak-blakan, bersahabat, dan bersemangat.
+- Sisipkan kosakata & sapaan khas Medan (misal: "Horas", "Lae", "Ito", "Kelen", "Kombur", "Kali", "Mantap kali", "Tengoklah", "Bah").
+- Nada bicara lugas, percaya diri, hangat, dan solutif.`,
+
+  makassar: `[GAYA BAHASA & TONE - MAKASSAR / BUGIS]:
+- Gunakan gaya bahasa khas Makassar/Bugis yang akrab, hangat, dan bersahabat.
+- Sisipkan partikel & kata khas Makassar (misal: "Tabe'", "Ji", "Mi", "Mo", "Ki'", "Tawwa", "Beda'na", "Iye'").
+- Nada bicara ramah, bersahaja, dan penuh rasa kekeluargaan.`,
+
+  standar: `[GAYA BAHASA & TONE - STANDAR BRE AI]:
+- Berikan respon dengan gaya khas Bre AI yang cerdas, lugas, netral, dan solutif.`
+};
 
 const PERSONAS = {
   default:    '',
@@ -150,6 +208,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (window.marked) marked.setOptions({ breaks: true, gfm: true });
   initTheme();
   initLanguage();
+  initStyle();
   initParams();
   initModelSelect();
   loadCustomPersonas();
@@ -163,6 +222,24 @@ document.addEventListener('DOMContentLoaded', () => {
   setupScrollDetection();
   if (!chats.length) newChat(); else switchChat(chats[0].id);
 });
+
+function initStyle() {
+  const sel = document.getElementById('styleSelect');
+  if (sel) sel.value = currentStyle;
+  const modalSel = document.getElementById('modalStyleSelect');
+  if (modalSel) modalSel.value = currentStyle;
+}
+
+function setStyle(val) {
+  currentStyle = val || 'santai';
+  localStorage.setItem('bre_style', currentStyle);
+  const sel = document.getElementById('styleSelect');
+  if (sel) sel.value = currentStyle;
+  const modalSel = document.getElementById('modalStyleSelect');
+  if (modalSel) modalSel.value = currentStyle;
+  const label = STYLE_LABELS[currentStyle] || currentStyle;
+  toast('🎭 Gaya Bahasa: ' + label, 'ok');
+}
 
 function initLanguage() {
   const sel = document.getElementById('langSelect');
@@ -1496,6 +1573,10 @@ async function executeBotGeneration(targetBotIdx = null, searchResults = []) {
   if (langPrompt) {
     pExtra = (pExtra ? pExtra + '\n\n' : '') + `[LANGUAGE INSTRUCTION]: ${langPrompt}`;
   }
+  const stylePrompt = STYLE_PROMPTS[currentStyle];
+  if (stylePrompt) {
+    pExtra = (pExtra ? pExtra + '\n\n' : '') + stylePrompt;
+  }
 
   // Inject web search results into system context
   const activeSources = activeChat.msgs[botIdx].searchSources || searchResults || [];
@@ -1516,11 +1597,13 @@ async function executeBotGeneration(targetBotIdx = null, searchResults = []) {
       headers: {
         'Content-Type': 'application/json',
         'x-custom-provider': selectedProvider,
-        'x-custom-model': selectedProvider
+        'x-custom-model': selectedProvider,
+        'x-custom-style': currentStyle
       },
       body: JSON.stringify({
         messages: msgs,
         customSystemPrompt: pExtra,
+        style: currentStyle,
         stream: true,
         provider: selectedProvider,
         model: selectedProvider,
@@ -1686,6 +1769,7 @@ function openAdmin() {
   updateStats();
   updateThemeButtons();
   initParams();
+  initStyle();
   const sel = document.getElementById('langSelect');
   if (sel) sel.value = currentLang;
 }

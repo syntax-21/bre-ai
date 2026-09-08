@@ -14,7 +14,9 @@ const {
   testGitHub,
   getCloudStorageInfo,
   fetchAvailableModels,
-  testSingleModel
+  testSingleModel,
+  STYLE_LABELS,
+  STYLE_PROMPTS
 } = require('../../api/_shared');
 
 const {
@@ -116,7 +118,7 @@ const LANGUAGE_LABELS = {
 
 // 1. Build Main Menu Markup
 function buildMainMenuMarkup(cfg) {
-  const currentMode = (cfg.telegramAccessMode || 'public') === 'whitelist' ? '🔒 Whitelist' : '🟢 Publik';
+  const currentMode = (cfg.telegramAccessMode || 'public') === 'public' ? '🟢 Publik' : '🔒 Diizinkan';
   const currentLang = cfg.telegramLanguage || 'id';
   const langLabel = LANGUAGE_LABELS[currentLang] || '🇮🇩 ID';
 
@@ -153,8 +155,9 @@ function buildMainMenuMarkup(cfg) {
 // 2. Main Menu Dashboard Text
 function getMainMenuText(senderName, conversationsCount = 0) {
   const cfg = getConfig();
-  const activeModel = cfg.telegramModel || cfg.model || 'mercury-2';
-  const accessMode = (cfg.telegramAccessMode || 'public') === 'whitelist' ? '🔒 Khusus Whitelist' : '🟢 Terbuka untuk Publik';
+  const isRestricted = (cfg.telegramAccessMode || 'public') !== 'public';
+  const accessMode = isRestricted ? '🔒 Khusus Pengguna Diizinkan' : '🟢 Terbuka untuk Publik';
+  const activeStyle = STYLE_LABELS[cfg.telegramStyle || cfg.defaultStyle || 'santai'] || '✨ Santai & Friendly';
   const userCount = Array.isArray(cfg.telegramUsers) ? cfg.telegramUsers.length : 0;
   const endpointCount = Array.isArray(cfg.endpoints) ? cfg.endpoints.length : 0;
   const activeEndpoints = Array.isArray(cfg.endpoints) ? cfg.endpoints.filter(e => e.status !== false).length : 0;
@@ -166,9 +169,9 @@ function getMainMenuText(senderName, conversationsCount = 0) {
 
   return `👑 *Bre AI Master Control Panel*\n` +
     `Halo *${senderName}*! Seluruh pengaturan proxy & bot Web Admin dapat Anda kendalikan penuh di sini:\n\n` +
-    `• *Model Aktif:* \`${activeModel}\`\n` +
-    `• *Bahasa Default:* ${activeLang}\n` +
     `• *Mode Akses Bot:* ${accessMode}\n` +
+    `• *Gaya Bahasa (Tone):* ${activeStyle}\n` +
+    `• *Bahasa Default:* ${activeLang}\n` +
     `• *Provider AI:* ${activeEndpoints}/${endpointCount} aktif (Failover: ${cfg.autoFailover !== false ? '🟢 ON' : '🔴 OFF'})\n` +
     `• *Pengguna Terdaftar:* ${userCount} akun\n` +
     `• *Client API Keys:* ${clientKeyCount} key\n` +
@@ -1133,15 +1136,16 @@ async function handleAdminCallback(cq, botService) {
   // ----------------------------------------------------
   if (data === 'adm_telegram') {
     await answerCallback(cq.id, null, false, token);
-    const accessMode = (cfg.telegramAccessMode || 'public') === 'whitelist' ? '🔒 Whitelist' : '🟢 Publik';
-    const activeModel = cfg.telegramModel || cfg.model || 'mercury-2';
+    const isRestricted = (cfg.telegramAccessMode || 'public') !== 'public';
+    const accessMode = isRestricted ? '🔒 Khusus Diizinkan' : '🟢 Publik';
+    const activeStyle = STYLE_LABELS[cfg.telegramStyle || cfg.defaultStyle || 'santai'] || '✨ Santai & Friendly';
     const activeLang = LANGUAGE_LABELS[cfg.telegramLanguage || 'id'] || '🇮🇩 Indonesia';
     const usersCount = Array.isArray(cfg.telegramUsers) ? cfg.telegramUsers.length : 0;
 
     const text = `🤖 *Pengaturan Bot Telegram & Akses Serverless*\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
       `• *Mode Akses:* ${accessMode}\n` +
-      `• *Model AI Default:* \`${activeModel}\`\n` +
+      `• *Gaya Bahasa (Tone):* ${activeStyle}\n` +
       `• *Bahasa Default:* ${activeLang}\n` +
       `• *Pengguna Terdaftar:* ${usersCount} akun\n` +
       `• *Admin Chat ID:* \`${cfg.telegramOwnerId || '-'}\`\n` +
@@ -1152,8 +1156,8 @@ async function handleAdminCallback(cq, botService) {
     const markup = {
       inline_keyboard: [
         [
-          { text: `🛡️ Mode: ${accessMode}`, callback_data: 'adm_mode' },
-          { text: '🔄 Ganti Model AI', callback_data: 'adm_models' }
+          { text: `🛡️ Akses: ${accessMode}`, callback_data: 'adm_mode' },
+          { text: `🎭 Gaya: ${activeStyle}`, callback_data: 'adm_style' }
         ],
         [
           { text: `🌐 Bahasa: ${activeLang}`, callback_data: 'adm_language' },
@@ -1444,23 +1448,26 @@ async function handleAdminCallback(cq, botService) {
   // ----------------------------------------------------
   // 11. NEW USER APPROVAL ACTIONS
   // ----------------------------------------------------
+  // ----------------------------------------------------
+  // 11. NEW USER APPROVAL ACTIONS
+  // ----------------------------------------------------
   if (data.startsWith('adm_appr_wl:')) {
     const targetId = data.split(':')[1];
     const recentObj = recentUsers.get(Number(targetId)) || recentUsers.get(targetId);
     const uName = recentObj?.username || '';
     const uFullName = recentObj?.name || `User ${targetId}`;
 
-    setUserRole(targetId, uName, uFullName, 'whitelist');
-    await answerCallback(cq.id, `✅ User ${uFullName} (@${uName || targetId}) berhasil diizinkan (Whitelist)!`, true, token);
+    setUserRole(targetId, uName, uFullName, 'diizinkan');
+    await answerCallback(cq.id, `✅ User ${uFullName} (@${uName || targetId}) berhasil diizinkan!`, true, token);
 
     // Notify the user that their access was approved
     try {
-      const greetText = `🎉 *Akses Bre AI Disetujui!*\n\nHalo ${uFullName}! Permintaan akses Anda telah disetujui oleh Owner. Sekarang Anda dapat menggunakan seluruh fitur kecerdasan Bre AI secara leluasa.\n\n_Kirim pesan atau pertanyaan apa pun untuk mulai berdiskusi!_ 🚀`;
+      const greetText = `🎉 *Akses Bre AI Diizinkan!*\n\nHalo ${uFullName}! Permintaan akses Anda telah disetujui oleh Owner. Sekarang Anda dapat menggunakan seluruh fitur kecerdasan Bre AI secara leluasa.\n\n_Kirim pesan atau pertanyaan apa pun untuk mulai berdiskusi!_ 🚀`;
       await sendTelegramMessage(targetId, greetText, null, null, token);
     } catch (e) {}
 
     // Update the notification message in Owner's chat
-    const updatedAlert = (cq.message?.text || '') + `\n\n✅ *STATUS: Disetujui (Whitelist) oleh Owner pada ${new Date().toLocaleTimeString('id-ID')}*`;
+    const updatedAlert = (cq.message?.text || '') + `\n\n✅ *STATUS: Disetujui (Diizinkan) oleh Owner pada ${new Date().toLocaleTimeString('id-ID')}*`;
     await editTelegramMessage(chatId, messageId, updatedAlert, null, token);
     return;
   }
@@ -1487,68 +1494,65 @@ async function handleAdminCallback(cq, botService) {
   }
 
   // ----------------------------------------------------
-  // 12. EXISTING HANDLERS (Models, Language, Mode, Benchmark, Users)
+  // 12. GAYA BAHASA (STYLE & TONE OF VOICE)
   // ----------------------------------------------------
-  if (data === 'adm_models') {
+  if (data === 'adm_style') {
     await answerCallback(cq.id, null, false, token);
-    const currentModel = cfg.telegramModel || cfg.model || 'mercury-2';
-    const allModels = new Set();
-    allModels.add(currentModel);
+    const currentStyle = cfg.telegramStyle || cfg.defaultStyle || 'santai';
+    const styleText = `🎭 *Pengaturan Gaya Bahasa Default Bot Telegram:*\n` +
+      `Gaya aktif saat ini: *${STYLE_LABELS[currentStyle] || '✨ Santai & Friendly'}*\n\n` +
+      `Pilih gaya bahasa yang diinginkan untuk respons default Bre AI:\n` +
+      `_(Pengguna juga dapat memilih gaya bahasa masing-masing dengan perintah /style)_\n\n` +
+      `• *Jakarta:* Gaul santai akrab (gue-lu, nih, dong, asik)\n` +
+      `• *Jawa Halus:* Kromo Inggil sangat santun & penuh rasa hormat\n` +
+      `• *Jawa Kasar:* Ngoko / Arekan medok akrab layaknya sahabat karib\n` +
+      `• *Sunda:* Dialek ramah, hangat, dan sopan khas urang Sunda\n` +
+      `• *Sopan & Formal:* Bahasa baku elegan dan profesional\n` +
+      `• *Santai & Friendly:* Ceria, hangat, dan menyenangkan\n` +
+      `• *Medan / Batak:* Enerjik, bersemangat, dan blak-blakan (Horas!)\n` +
+      `• *Makassar / Bugis:* Ramah khas Sulawesi (Tabe', mantapji tawwa)`;
 
-    if (Array.isArray(cfg.endpoints)) {
-      cfg.endpoints.forEach(ep => {
-        if (ep.name) allModels.add(ep.name.trim());
-        (ep.models || []).forEach(m => allModels.add(m));
-      });
-    }
-    allModels.delete('auto');
+    const styleRows = Object.entries(STYLE_LABELS).map(([code, label]) => ([
+      {
+        text: (code === currentStyle ? '✅ ' : '') + label,
+        callback_data: `adm_setstyle:${code}`
+      }
+    ]));
+    styleRows.push([{ text: '⬅️ Menu Pengaturan Bot', callback_data: 'adm_telegram' }]);
 
-    const rows = [];
-    Array.from(allModels).slice(0, 30).forEach(m => {
-      const isSelected = (m === currentModel);
-      rows.push([{
-        text: isSelected ? `✅ ${m}` : m,
-        callback_data: `adm_setmodel:${m}`
-      }]);
-    });
-
-    rows.push([
-      { text: currentModel === 'auto' ? '✅ 🌐 Auto Router' : '🌐 Ikuti Auto Router', callback_data: 'adm_setmodel:auto' }
-    ]);
-    rows.push([{ text: '⬅️ Menu Pengaturan Bot', callback_data: 'adm_telegram' }]);
-
-    const text = `🔄 *Pilih Model AI untuk Telegram:*\n` +
-      `Model aktif saat ini: \`${currentModel || 'Auto Router'}\`\n\n` +
-      `_Pilih model di bawah untuk mengganti model secara instan:_`;
-    await editTelegramMessage(chatId, messageId, text, { inline_keyboard: rows }, token);
+    await editTelegramMessage(chatId, messageId, styleText, { inline_keyboard: styleRows }, token);
     return;
   }
 
-  if (data.startsWith('adm_setmodel:')) {
-    const selected = data.split(':')[1];
-    const targetModel = selected === 'auto' ? 'auto' : selected;
-    saveConfig({ telegramModel: targetModel });
-    await answerCallback(cq.id, `✅ Model diubah ke: ${targetModel || 'Auto Router'}`, false, token);
+  if (data.startsWith('adm_setstyle:')) {
+    const newStyle = data.split(':')[1];
+    const styleLabel = STYLE_LABELS[newStyle] || newStyle;
+    saveConfig({ telegramStyle: newStyle });
+    await answerCallback(cq.id, `✅ Gaya bahasa default diubah ke: ${styleLabel}`, true, token);
 
-    cq.data = 'adm_models';
+    cq.data = 'adm_style';
     return handleAdminCallback(cq, botService);
   }
 
+  // ----------------------------------------------------
+  // 13. MODE AKSES BOT (PUBLIK VS KHUSUS DIIZINKAN)
+  // ----------------------------------------------------
   if (data === 'adm_mode') {
     await answerCallback(cq.id, null, false, token);
     const currentMode = cfg.telegramAccessMode || 'public';
+    const isRestricted = (currentMode === 'whitelist' || currentMode === 'diizinkan');
     const text = `🛡️ *Pengaturan Mode Akses Bot:*\n` +
-      `Mode saat ini: *${currentMode === 'whitelist' ? '🔒 Khusus Whitelist' : '🟢 Terbuka untuk Publik'}*\n\n` +
-      `• *Mode Publik:* Siapa saja di Telegram dapat mengobrol dengan bot (kecuali yang diblokir).\n` +
-      `• *Mode Whitelist:* Hanya akun Owner dan user yang telah terdaftar di Whitelist yang dapat mengobrol.\n\n` +
+      `Mode saat ini: *${isRestricted ? '🔒 Khusus Pengguna Diizinkan' : '🟢 Terbuka untuk Publik'}*\n\n` +
+      `• *🟢 Mode Publik:* Siapa saja di Telegram dapat mengobrol dengan bot (kecuali yang diblokir).\n` +
+      `• *🔒 Mode Khusus Diizinkan:* Hanya akun Owner dan user yang telah disetujui (Diizinkan) yang dapat mengobrol. Pengguna baru yang mencoba chat akan meminta izin ke Owner.\n\n` +
       `Klik tombol di bawah untuk mengganti mode:`;
     const markup = {
       inline_keyboard: [
         [
-          { text: currentMode === 'public' ? '✅ 🟢 Buka untuk Publik' : '🟢 Buka untuk Publik', callback_data: 'adm_setmode:public' }
+          { text: !isRestricted ? '✅ 🟢 Buka untuk Publik' : '🟢 Buka untuk Publik', callback_data: 'adm_setmode:public' }
         ],
         [
-          { text: currentMode === 'whitelist' ? '✅ 🔒 Khusus Whitelist' : '🔒 Khusus Whitelist', callback_data: 'adm_setmode:whitelist' }
+          { text: isRestricted ? '✅ 🔒 Khusus Diizinkan' : '🔒 Khusus Diizinkan', callback_data: 'adm_setmode:diizinkan' }
         ],
         [
           { text: '⬅️ Menu Pengaturan Bot', callback_data: 'adm_telegram' }
@@ -1563,12 +1567,16 @@ async function handleAdminCallback(cq, botService) {
     const newMode = data.split(':')[1];
     saveConfig({ telegramAccessMode: newMode });
     botService.activeAccessMode = newMode;
-    await answerCallback(cq.id, `✅ Mode bot diubah ke: ${newMode === 'whitelist' ? '🔒 Khusus Whitelist' : '🟢 Publik'}`, false, token);
+    const isRestricted = (newMode === 'whitelist' || newMode === 'diizinkan');
+    await answerCallback(cq.id, `✅ Mode bot diubah ke: ${isRestricted ? '🔒 Khusus Diizinkan' : '🟢 Publik'}`, false, token);
 
     cq.data = 'adm_mode';
     return handleAdminCallback(cq, botService);
   }
 
+  // ----------------------------------------------------
+  // 14. BAHASA BOT DEFAULT
+  // ----------------------------------------------------
   if (data === 'adm_language') {
     await answerCallback(cq.id, null, false, token);
     const currentLang = cfg.telegramLanguage || 'id';
@@ -1599,38 +1607,106 @@ async function handleAdminCallback(cq, botService) {
     return handleAdminCallback(cq, botService);
   }
 
-  if (data === 'adm_users') {
+  // ----------------------------------------------------
+  // 15. MANAJEMEN PENGGUNA LENGKAP (KELOLA PENGGUNA DIIZINKAN & BLOKIR)
+  // ----------------------------------------------------
+  if (data === 'adm_users' || data.startsWith('adm_users:')) {
     await answerCallback(cq.id, null, false, token);
-    const users = Array.isArray(cfg.telegramUsers) ? cfg.telegramUsers : [];
+    const parts = data.split(':');
+    let page = parseInt(parts[1]) || 1;
+    const filter = parts[2] || 'all'; // 'all' | 'allowed' | 'blocked'
+
+    const allUsers = Array.isArray(cfg.telegramUsers) ? [...cfg.telegramUsers] : [];
     const recent = getRecentUsersList();
 
-    let text = `👥 *Manajemen Pengguna Telegram*\n` +
-      `• Terdaftar di Database: ${users.length} user\n` +
-      `• Pengguna Terlihat Baru: ${recent.length} user\n\n`;
+    const allowedUsers = allUsers.filter(u => u.role === 'diizinkan' || u.role === 'whitelist' || u.role === 'owner');
+    const blockedUsers = allUsers.filter(u => u.role === 'blocked');
 
-    if (users.length > 0) {
-      text += `*Daftar User Terdaftar (10 Teratas):*\n`;
-      users.slice(0, 10).forEach((u, i) => {
-        const badge = u.role === 'owner' ? '👑 Owner' : (u.role === 'blocked' ? '🔴 Blocked' : '🟢 Whitelist');
-        text += `${i+1}. *${u.name || u.username || u.id}* [${badge}]\n   \`${u.username ? '@' + u.username : u.id}\`\n`;
-      });
+    let filteredUsers = allUsers;
+    if (filter === 'allowed') filteredUsers = allowedUsers;
+    else if (filter === 'blocked') filteredUsers = blockedUsers;
+
+    const pageSize = 6;
+    const totalPages = Math.max(1, Math.ceil(filteredUsers.length / pageSize));
+    if (page > totalPages) page = totalPages;
+    if (page < 1) page = 1;
+
+    const startIndex = (page - 1) * pageSize;
+    const pageUsers = filteredUsers.slice(startIndex, startIndex + pageSize);
+
+    const filterLabels = {
+      all: '👥 Semua Pengguna',
+      allowed: '🟢 Pengguna Diizinkan',
+      blocked: '🔴 Pengguna Diblokir'
+    };
+
+    let text = `👥 *Manajemen Pengguna Telegram*\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `• Total Terdaftar: *${allUsers.length} akun*\n` +
+      `• 🟢 Diizinkan: *${allowedUsers.length} akun*\n` +
+      `• 🔴 Diblokir: *${blockedUsers.length} akun*\n` +
+      `• ⚡ Pengunjung Baru: *${recent.length} user*\n` +
+      `• Filter Aktif: *${filterLabels[filter] || 'Semua'}* (Hal ${page}/${totalPages})\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+
+    if (pageUsers.length === 0) {
+      text += `_Tidak ada data pengguna pada filter ini._\n\n`;
     } else {
-      text += `_Belum ada user khusus terdaftar._\n`;
+      text += `_Pilih akun di bawah untuk kelola hak akses / hapus:_\n\n`;
     }
 
     const rows = [];
-    const unregisteredRecent = recent.filter(r => !users.some(u => String(u.id) === String(r.id))).slice(0, 3);
-    if (unregisteredRecent.length > 0) {
-      unregisteredRecent.forEach(r => {
+
+    // User buttons (1 per row)
+    pageUsers.forEach((u, i) => {
+      const isOwnerRole = u.role === 'owner';
+      const isBlocked = u.role === 'blocked';
+      const badge = isOwnerRole ? '👑' : (isBlocked ? '🔴' : '🟢');
+      const roleName = isOwnerRole ? 'Owner' : (isBlocked ? 'Blokir' : 'Diizinkan');
+      const displayName = u.name || (u.username ? `@${u.username}` : `User ${u.id}`);
+      const idTag = u.username ? `@${u.username}` : u.id;
+
+      rows.push([{
+        text: `${badge} [${roleName}] ${displayName.slice(0, 20)} (${idTag})`,
+        callback_data: `adm_user_view:${u.id}`
+      }]);
+    });
+
+    // Pagination row (if more than 1 page)
+    if (totalPages > 1) {
+      const prevPage = Math.max(1, page - 1);
+      const nextPage = Math.min(totalPages, page + 1);
+      rows.push([
+        { text: page > 1 ? '◀️ Prev' : '⏸️', callback_data: `adm_users:${prevPage}:${filter}` },
+        { text: `📄 ${page} / ${totalPages}`, callback_data: `adm_users:${page}:${filter}` },
+        { text: page < totalPages ? 'Next ▶️' : '⏸️', callback_data: `adm_users:${nextPage}:${filter}` }
+      ]);
+    }
+
+    // Filter Switch Tabs
+    rows.push([
+      { text: filter === 'all' ? '🔘 Semua' : '👥 Semua', callback_data: `adm_users:1:all` },
+      { text: filter === 'allowed' ? '🔘 Diizinkan' : '🟢 Diizinkan', callback_data: `adm_users:1:allowed` },
+      { text: filter === 'blocked' ? '🔘 Diblokir' : '🔴 Diblokir', callback_data: `adm_users:1:blocked` }
+    ]);
+
+    // Unregistered recent visitors one-click approve
+    const unregRecent = recent.filter(r => !allUsers.some(u => String(u.id) === String(r.id))).slice(0, 2);
+    if (unregRecent.length > 0) {
+      unregRecent.forEach(r => {
         rows.push([{
-          text: `🟢 Izinkan Baru: @${r.username || r.name} (${r.id})`,
+          text: `⚡ Izinkan Baru: @${r.username || r.name} (${r.id})`,
           callback_data: `adm_addrecent:${r.id}`
         }]);
       });
     }
 
     rows.push([
-      { text: '🔄 Refresh Pengguna', callback_data: 'adm_users' },
+      { text: '➕ Tambah Manual', callback_data: 'adm_user_help' },
+      { text: '🔄 Refresh', callback_data: `adm_users:${page}:${filter}` }
+    ]);
+
+    rows.push([
       { text: '⬅️ Menu Pengaturan Bot', callback_data: 'adm_telegram' }
     ]);
 
@@ -1638,16 +1714,116 @@ async function handleAdminCallback(cq, botService) {
     return;
   }
 
+  // 15a. View Individual User Detail & Actions
+  if (data.startsWith('adm_user_view:')) {
+    await answerCallback(cq.id, null, false, token);
+    const targetId = data.split(':')[1];
+    const users = Array.isArray(cfg.telegramUsers) ? cfg.telegramUsers : [];
+    const u = users.find(x => String(x.id) === String(targetId) || (x.username && x.username.toLowerCase() === targetId.toLowerCase()));
+
+    if (!u) {
+      await answerCallback(cq.id, 'Pengguna tidak ditemukan dalam database.', true, token);
+      cq.data = 'adm_users:1:all';
+      return handleAdminCallback(cq, botService);
+    }
+
+    const isOwnerRole = u.role === 'owner';
+    const isBlocked = u.role === 'blocked';
+    const badge = isOwnerRole ? '👑 Owner' : (isBlocked ? '🔴 Diblokir' : '🟢 Diizinkan');
+    const addedTime = u.addedAt ? new Date(u.addedAt).toLocaleString('id-ID') : '-';
+    const updatedTime = u.updatedAt ? new Date(u.updatedAt).toLocaleString('id-ID') : '-';
+
+    const text = `👤 *Detail Pengguna Telegram*\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `• *Nama / Label:* ${u.name || '-'}\n` +
+      `• *Username:* ${u.username ? '@' + u.username : '_(tidak ada)_'}\n` +
+      `• *ID Telegram:* \`${u.id || '-'}\`\n` +
+      `• *Status Hak Akses:* ${badge}\n` +
+      `• *Waktu Ditambahkan:* ${addedTime}\n` +
+      `• *Pembaruan Terakhir:* ${updatedTime}\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `_Pilih tindakan untuk pengguna ini:_`;
+
+    const actionRows = [];
+    if (!isOwnerRole) {
+      actionRows.push([
+        { text: u.role === 'diizinkan' || u.role === 'whitelist' ? '✅ 🟢 Status: Diizinkan' : '🟢 Izinkan Akun Ini', callback_data: `adm_user_role:${u.id}:diizinkan` },
+        { text: isBlocked ? '✅ 🔴 Status: Diblokir' : '🔴 Blokir Akun Ini', callback_data: `adm_user_role:${u.id}:blocked` }
+      ]);
+      actionRows.push([
+        { text: '🗑️ Hapus dari Database', callback_data: `adm_user_del:${u.id}` }
+      ]);
+    }
+    actionRows.push([
+      { text: '⬅️ Kembali ke Daftar Pengguna', callback_data: 'adm_users:1:all' }
+    ]);
+
+    await editTelegramMessage(chatId, messageId, text, { inline_keyboard: actionRows }, token);
+    return;
+  }
+
+  // 15b. Set Role for Individual User
+  if (data.startsWith('adm_user_role:')) {
+    const parts = data.split(':');
+    const targetId = parts[1];
+    const newRole = parts[2] || 'diizinkan';
+
+    const users = Array.isArray(cfg.telegramUsers) ? cfg.telegramUsers : [];
+    const u = users.find(x => String(x.id) === String(targetId) || (x.username && x.username.toLowerCase() === targetId.toLowerCase()));
+    const uName = u?.username || '';
+    const uFullName = u?.name || `User ${targetId}`;
+
+    setUserRole(targetId, uName, uFullName, newRole);
+    const label = newRole === 'blocked' ? '🔴 Diblokir' : '🟢 Diizinkan';
+    await answerCallback(cq.id, `✅ Status ${uFullName} diubah menjadi: ${label}`, true, token);
+
+    cq.data = `adm_user_view:${targetId}`;
+    return handleAdminCallback(cq, botService);
+  }
+
+  // 15c. Delete Individual User from Database
+  if (data.startsWith('adm_user_del:')) {
+    const targetId = data.split(':')[1];
+    removeUserRole(targetId);
+    await answerCallback(cq.id, `✅ Pengguna (${targetId}) berhasil dihapus dari database.`, true, token);
+
+    cq.data = 'adm_users:1:all';
+    return handleAdminCallback(cq, botService);
+  }
+
+  // 15d. Help on adding users manually
+  if (data === 'adm_user_help') {
+    await answerCallback(cq.id, null, false, token);
+    const text = `➕ *Panduan Menambahkan Pengguna Secara Manual*\n\n` +
+      `Untuk menambahkan pengguna yang diizinkan langsung lewat chat, ketikkan:\n` +
+      `\`/izinkan [ID atau @username] [Nama/Catatan]\`\n\n` +
+      `_Contoh:_\n` +
+      `• \`/izinkan 123456789 Rayan Sahabat\`\n` +
+      `• \`/izinkan @amirunrayan Developer\`\n\n` +
+      `Untuk memblokir pengguna:\n` +
+      `• \`/blokir 123456789\`\n\n` +
+      `Untuk menghapus pengguna dari daftar:\n` +
+      `• \`/batalizin 123456789\``;
+
+    const markup = {
+      inline_keyboard: [
+        [{ text: '⬅️ Kembali ke Daftar Pengguna', callback_data: 'adm_users:1:all' }]
+      ]
+    };
+    await editTelegramMessage(chatId, messageId, text, markup, token);
+    return;
+  }
+
   if (data.startsWith('adm_addrecent:')) {
     const targetId = data.split(':')[1];
     const recentObj = recentUsers.get(Number(targetId)) || recentUsers.get(targetId);
     if (recentObj) {
-      setUserRole(targetId, recentObj.username, recentObj.name, 'whitelist');
-      await answerCallback(cq.id, `✅ User @${recentObj.username || recentObj.name} ditambahkan ke Whitelist!`, true, token);
+      setUserRole(targetId, recentObj.username, recentObj.name, 'diizinkan');
+      await answerCallback(cq.id, `✅ User @${recentObj.username || recentObj.name} berhasil diizinkan!`, true, token);
     } else {
       await answerCallback(cq.id, 'User tidak ditemukan dalam sesi aktif', false, token);
     }
-    cq.data = 'adm_users';
+    cq.data = 'adm_users:1:all';
     return handleAdminCallback(cq, botService);
   }
 

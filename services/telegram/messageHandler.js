@@ -12,7 +12,9 @@ const {
   getLogs,
   clearResponseCache,
   testSingleModel,
-  logRequest
+  logRequest,
+  STYLE_LABELS,
+  STYLE_PROMPTS
 } = require('../../api/_shared');
 
 const {
@@ -41,8 +43,9 @@ const {
 
 const { sendAdminPanel } = require('./adminMenu');
 
-// Per-chat language selection (in-memory, resets on restart)
+// Per-chat language and style selections (in-memory, resets on restart)
 const chatLanguages = new Map(); // chatId -> languageCode
+const chatStyles = new Map(); // chatId -> styleCode
 
 // Language options matching the web app LANGUAGE_PROMPTS
 const LANGUAGE_OPTIONS = {
@@ -58,15 +61,14 @@ const LANGUAGE_OPTIONS = {
   ko: { label: '🇰🇷 한국어 (Korean)', prompt: '항상 자연스럽고 유창한 한국어로 답변해 주세요.' }
 };
 
-// Helper to classify all file format categories
-function getFileCategory(ext, mime = '') {
-  const e = (ext || '').toLowerCase();
-  const m = (mime || '').toLowerCase();
+// Map file extensions to file categories
+function getCategoryFromFilename(filename = '', mimeType = '') {
+  const ext = (filename || '').split('.').pop() || '';
+  const e = ext.toLowerCase();
+  const m = (mimeType || '').toLowerCase();
 
   const codeAndTextExts = [
-    'txt', 'text', 'py', 'pyw', 'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx',
-    'html', 'htm', 'xhtml', 'css', 'scss', 'sass', 'less', 'json', 'json5', 'jsonc',
-    'md', 'markdown', 'sql', 'sh', 'bash', 'zsh', 'fish', 'ps1', 'bat', 'cmd',
+    'js', 'jsx', 'ts', 'tsx', 'py', 'pyw', 'html', 'htm', 'css', 'scss', 'sass', 'less', 'json', 'jsonc',
     'c', 'cpp', 'cc', 'cxx', 'h', 'hpp', 'hh', 'java', 'kt', 'kts', 'rs', 'go',
     'php', 'phtml', 'rb', 'rbw', 'swift', 'dart', 'lua', 'r', 'pl', 'pm', 't',
     'scala', 'sc', 'groovy', 'gvy', 'asm', 's', 'v', 'sv', 'vhd', 'vhdl', 'jl',
@@ -94,7 +96,7 @@ function getFileCategory(ext, mime = '') {
 }
 
 // Query internal Bre AI router (works both on Localhost and Vercel Serverless)
-function queryBreAIRouter(userContent, history = [], senderInfo = '', langCode = null) {
+function queryBreAIRouter(userContent, history = [], senderInfo = '', langCode = null, styleCode = null) {
   return new Promise(async (resolve, reject) => {
     try {
       const chatHandler = require('../../api/chat');
@@ -109,6 +111,9 @@ function queryBreAIRouter(userContent, history = [], senderInfo = '', langCode =
       const effectiveLang = langCode || cfg.telegramLanguage || 'id';
       const langEntry = LANGUAGE_OPTIONS[effectiveLang];
       const langPrompt = langEntry ? langEntry.prompt : LANGUAGE_OPTIONS['id'].prompt;
+
+      const effectiveStyle = styleCode || cfg.telegramStyle || cfg.defaultStyle || 'santai';
+      const stylePrompt = STYLE_PROMPTS[effectiveStyle] || '';
 
       const EventEmitter = require('events');
       const mockReq = Object.assign(new EventEmitter(), {
@@ -130,6 +135,7 @@ Jika ada yang bertanya siapa Anda, siapa pembuat Anda, atau nama Anda, JAWAB DEN
 
 Anda sedang melayani pengguna Telegram ${senderInfo}.
 [BAHASA RESPONS]: ${langPrompt}
+${stylePrompt ? `\n${stylePrompt}\n` : ''}
 [PANDUAN FORMAT TAMPILAN TELEGRAM]:
 - DILARANG KERAS menggunakan tag HTML apa pun (JANGAN gunakan <br>, <p>, <div>, <script>, dll). Gunakan baris baru biasa (Enter/newline) untuk jeda antar-kalimat.
 - DILARANG membuat tabel markdown (| kolom | kolom |) karena Telegram ponsel tidak mendukung tabel dan tampilannya akan berantakan.
@@ -689,12 +695,12 @@ async function handleMessage(msg, botService, ctx = null) {
   }
 
   // ----------------------------------------------------
-  // CHECK ACCESS PERMISSION (Whitelist vs Public)
+  // CHECK ACCESS PERMISSION (Allowed vs Public)
   // ----------------------------------------------------
   if (!isUserAllowed(fromUser, botService.activeOwnerId, botService.activeAccessMode)) {
-    const isModeWhitelist = (botService.activeAccessMode || getConfig().telegramAccessMode) === 'whitelist';
-    const rejectText = isModeWhitelist
-      ? `🔒 *Akses Dibatasi (Mode Khusus Whitelist)*\n\nMaaf ${senderName}, bot ini saat ini berjalan dalam mode privat (Whitelist).\n\n🔔 Permintaan izin akses Anda telah otomatis diteruskan ke Pemilik Bot (Owner). Anda akan menerima pemberitahuan langsung begitu akses Anda disetujui!`
+    const isRestricted = (botService.activeAccessMode || getConfig().telegramAccessMode) !== 'public';
+    const rejectText = isRestricted
+      ? `🔒 *Akses Memerlukan Izin*\n\nMaaf ${senderName}, bot ini saat ini dibatasi untuk pengguna yang telah diizinkan.\n\n🔔 Permintaan izin akses Anda telah otomatis diteruskan ke Pemilik Bot (Owner). Anda akan menerima pemberitahuan langsung begitu akses Anda disetujui!`
       : `⚠️ *Akses Ditolak*\n\nMaaf ${senderName}, akun Anda (${senderTag}) saat ini diblokir dari akses Bre AI. Silakan hubungi pemilik bot jika ini merupakan kekeliruan.`;
 
     await sendTelegramMessage(chatId, rejectText, null, null, token);
@@ -723,10 +729,13 @@ async function handleMessage(msg, botService, ctx = null) {
   // /status
   if (text === '/status') {
     const cfg = getConfig();
+    const isRestricted = (cfg.telegramAccessMode || 'public') !== 'public';
+    const statusMode = isRestricted ? '🔒 Khusus Diizinkan' : '🟢 Publik';
+    const statusStyle = STYLE_LABELS[cfg.telegramStyle || cfg.defaultStyle || 'santai'] || '✨ Santai & Friendly';
     const statusMsg = `📊 *Status Sistem Bre AI Router*\n\n` +
       `• *Bot:* @${botService.botInfo?.username || 'BreAI_Bot'}\n` +
-      `• *Model Aktif:* \`${cfg.telegramModel || cfg.model || 'mercury-2'}\`\n` +
-      `• *Mode Akses:* *${(cfg.telegramAccessMode || 'public') === 'whitelist' ? '🔒 Whitelist' : '🟢 Publik'}*\n` +
+      `• *Mode Akses:* *${statusMode}*\n` +
+      `• *Gaya Bahasa Default:* *${statusStyle}*\n` +
       `• *Auto-Failover:* *${cfg.autoFailover !== false ? '🟢 Aktif' : '🔴 Nonaktif'}*\n` +
       `• *Response Cache:* *${cfg.cacheEnabled ? '⚡ Aktif' : '⚪ Nonaktif'}*\n` +
       `• *Sesi Chat Aktif:* ${botService.conversations.size} percakapan`;
@@ -885,31 +894,32 @@ async function handleMessage(msg, botService, ctx = null) {
       await sendTelegramMessage(chatId, '⛔ Perintah ini khusus untuk Owner.', null, null, token);
       return;
     }
-    const targetModel = text.slice(9).trim();
-    if (!targetModel) {
-      const current = getConfig().telegramModel || getConfig().model || 'mercury-2';
-      await sendTelegramMessage(chatId, `ℹ️ Model saat ini: \`${current}\`\n\nFormat ganti: \`/setmodel [nama_model]\`\nContoh: \`/setmodel gpt-4o\` atau \`/setmodel auto\``, null, null, token);
-      return;
-    }
-    saveConfig({ telegramModel: targetModel });
-    await sendTelegramMessage(chatId, `✅ Model AI Telegram berhasil diubah ke: \`${targetModel}\``, null, null, token);
+    await sendTelegramMessage(
+      chatId,
+      `ℹ️ Model AI dan failover Telegram dikelola secara cerdas & terpusat melalui menu *Provider & Routing*. Buka \`/providers\` atau \`/admin\` untuk mengatur router.`,
+      null, null, token
+    );
     return;
   }
 
-  // /setmode [public|whitelist]
+  // /setmode [public|diizinkan]
   if (lowerText.startsWith('/setmode')) {
     if (!isOwnerUser) {
       await sendTelegramMessage(chatId, '⛔ Perintah ini khusus untuk Owner.', null, null, token);
       return;
     }
-    const mode = text.slice(8).trim().toLowerCase();
-    if (mode !== 'public' && mode !== 'whitelist') {
-      await sendTelegramMessage(chatId, `ℹ️ Format: \`/setmode public\` atau \`/setmode whitelist\``, null, null, token);
+    const rawMode = text.slice(8).trim().toLowerCase();
+    let mode = '';
+    if (rawMode === 'public') mode = 'public';
+    else if (rawMode === 'diizinkan' || rawMode === 'whitelist') mode = 'diizinkan';
+
+    if (!mode) {
+      await sendTelegramMessage(chatId, `ℹ️ Format: \`/setmode public\` atau \`/setmode diizinkan\``, null, null, token);
       return;
     }
     saveConfig({ telegramAccessMode: mode });
     botService.activeAccessMode = mode;
-    await sendTelegramMessage(chatId, `✅ Mode akses bot diubah ke: *${mode === 'whitelist' ? '🔒 Khusus Whitelist' : '🟢 Publik'}*`, null, null, token);
+    await sendTelegramMessage(chatId, `✅ Mode akses bot diubah ke: *${mode === 'public' ? '🟢 Publik' : '🔒 Khusus Pengguna Diizinkan'}*`, null, null, token);
     return;
   }
 
@@ -961,36 +971,38 @@ async function handleMessage(msg, botService, ctx = null) {
     return;
   }
 
-  // /whitelist [id/@username] [optional name]
-  if (lowerText.startsWith('/whitelist')) {
+  // /izinkan [id/@username] [optional name] (alias: /whitelist)
+  if (lowerText.startsWith('/izinkan') || lowerText.startsWith('/whitelist')) {
     if (!isOwnerUser) {
       await sendTelegramMessage(chatId, '⛔ Perintah ini khusus untuk Owner.', null, null, token);
       return;
     }
-    const args = text.slice(10).trim().split(/\s+/);
+    const cmdLen = lowerText.startsWith('/izinkan') ? 8 : 10;
+    const args = text.slice(cmdLen).trim().split(/\s+/);
     const target = args[0];
     const customName = args.slice(1).join(' ') || '';
     if (!target) {
-      await sendTelegramMessage(chatId, `ℹ️ Format: \`/whitelist [ID atau @username] [Nama]\`\nContoh: \`/whitelist 123456789 Rayan\``, null, null, token);
+      await sendTelegramMessage(chatId, `ℹ️ Format: \`/izinkan [ID atau @username] [Nama/Catatan]\`\nContoh: \`/izinkan 123456789 Rayan Sahabat\``, null, null, token);
       return;
     }
     const isId = !isNaN(Number(target));
     const uId = isId ? target : target.replace(/^@/, '');
     const uName = isId ? '' : target.replace(/^@/, '');
-    const userEntry = setUserRole(uId, uName, customName, 'whitelist');
-    await sendTelegramMessage(chatId, `✅ Pengguna *${userEntry.name}* (\`${userEntry.id || '@' + userEntry.username}\`) berhasil ditambahkan ke Whitelist!`, null, null, token);
+    const userEntry = setUserRole(uId, uName, customName, 'diizinkan');
+    await sendTelegramMessage(chatId, `✅ Pengguna *${userEntry.name}* (\`${userEntry.id || '@' + userEntry.username}\`) berhasil ditambahkan ke daftar Pengguna Diizinkan!`, null, null, token);
     return;
   }
 
-  // /block [id/@username]
-  if (lowerText.startsWith('/block')) {
+  // /blokir [id/@username] (alias: /block)
+  if (lowerText.startsWith('/blokir') || lowerText.startsWith('/block')) {
     if (!isOwnerUser) {
       await sendTelegramMessage(chatId, '⛔ Perintah ini khusus untuk Owner.', null, null, token);
       return;
     }
-    const target = text.slice(6).trim();
+    const cmdLen = lowerText.startsWith('/blokir') ? 7 : 6;
+    const target = text.slice(cmdLen).trim();
     if (!target) {
-      await sendTelegramMessage(chatId, `ℹ️ Format: \`/block [ID atau @username]\``, null, null, token);
+      await sendTelegramMessage(chatId, `ℹ️ Format: \`/blokir [ID atau @username]\``, null, null, token);
       return;
     }
     const isId = !isNaN(Number(target));
@@ -1001,35 +1013,38 @@ async function handleMessage(msg, botService, ctx = null) {
     return;
   }
 
-  // /unblock [id/@username]
-  if (lowerText.startsWith('/unblock')) {
+  // /batalizin [id/@username] (alias: /hapususer, /unblock)
+  if (lowerText.startsWith('/batalizin') || lowerText.startsWith('/hapususer') || lowerText.startsWith('/unblock')) {
     if (!isOwnerUser) {
       await sendTelegramMessage(chatId, '⛔ Perintah ini khusus untuk Owner.', null, null, token);
       return;
     }
-    const target = text.slice(8).trim();
+    const parts = text.trim().split(/\s+/);
+    const target = parts[1];
     if (!target) {
-      await sendTelegramMessage(chatId, `ℹ️ Format: \`/unblock [ID atau @username]\``, null, null, token);
+      await sendTelegramMessage(chatId, `ℹ️ Format: \`/batalizin [ID atau @username]\``, null, null, token);
       return;
     }
     removeUserRole(target);
-    await sendTelegramMessage(chatId, `✅ Pengguna \`${target}\` telah dihapus dari daftar blokir / peran khusus.`, null, null, token);
+    await sendTelegramMessage(chatId, `✅ Pengguna \`${target}\` telah dihapus dari daftar perizinan / blokir.`, null, null, token);
     return;
   }
 
-  // /users
-  if (text === '/users') {
+  // /pengguna (alias: /users)
+  if (text === '/pengguna' || text === '/users') {
     if (!isOwnerUser) {
       await sendTelegramMessage(chatId, '⛔ Perintah ini khusus untuk Owner.', null, null, token);
       return;
     }
     const users = Array.isArray(getConfig().telegramUsers) ? getConfig().telegramUsers : [];
-    let uMsg = `👥 *Daftar Pengguna Terdaftar (${users.length} user):*\n\n`;
+    let uMsg = `👥 *Daftar Pengguna Terdaftar (${users.length} akun):*\n\n`;
     if (!users.length) {
       uMsg += `_Belum ada pengguna khusus terdaftar._`;
     } else {
       users.forEach((u, i) => {
-        const badge = u.role === 'owner' ? '👑 Owner' : (u.role === 'blocked' ? '🔴 Blocked' : '🟢 Whitelist');
+        const isOwnerRole = u.role === 'owner';
+        const isBlocked = u.role === 'blocked';
+        const badge = isOwnerRole ? '👑 Owner' : (isBlocked ? '🔴 Diblokir' : '🟢 Diizinkan');
         uMsg += `${i+1}. *${u.name || u.username || u.id}* [${badge}]\n   \`${u.username ? '@' + u.username : u.id}\`\n`;
       });
     }
@@ -1152,12 +1167,16 @@ async function handleMessage(msg, botService, ctx = null) {
   if (text === '/help') {
     const currentLang = chatLanguages.get(chatId);
     const langLabel = currentLang && LANGUAGE_OPTIONS[currentLang] ? LANGUAGE_OPTIONS[currentLang].label : '🇮🇩 Bahasa Indonesia (default)';
+    const currentStyle = chatStyles.get(chatId) || getConfig().telegramStyle || getConfig().defaultStyle || 'santai';
+    const styleLabel = STYLE_LABELS[currentStyle] || '✨ Santai & Friendly';
+
     let help = `📖 *Panduan Penggunaan Bre AI di Telegram*\n\n` +
       `• *Obrolan Alami:* Berdiskusi santai dalam bahasa Indonesia, Inggris, Jepang, dan 7 bahasa lainnya.\n` +
       `• *Semua Jenis Pesan Diterima:* Teks, foto, suara/audio, video, berkas kode, lokasi, kontak, stiker, dan GIF.\n` +
       `• *Pesan Non-Teks Interaktif:* Anda dapat menyuruh Bre AI membuat file kodingan unduhan, kuis/polling, lempar dadu/game, pin lokasi peta, dan kartu kontak secara alami!\n` +
       `• *Ingatan Konteks:* Bre AI mengingat konteks percakapan secara berkelanjutan.\n` +
       `• *Perintah /reset:* Membersihkan ingatan topik sebelumnya dan memulai sesi baru.\n` +
+      `• *Perintah /style:* Memilih gaya bahasa (Jakarta, Jawa Halus, Jawa Kasar, Sunda, Sopan, Santai, Medan, Makassar).\n` +
       `• *Perintah /language:* Memilih bahasa respons Bre AI.\n\n` +
       `🎮 *Perintah Pintas Media Interaktif:*\n` +
       `• \`/dice\` atau \`/dadu\` - Lempar dadu animasi 🎲\n` +
@@ -1167,6 +1186,7 @@ async function handleMessage(msg, botService, ctx = null) {
       `• \`/file [nama_file.ext] [isi kode]\` - Buat & kirim berkas file fisik\n` +
       `• \`/location [lat, lon] | [Tempat] | [Alamat]\` - Kirim pin lokasi peta\n` +
       `• \`/contact [nomor] [Nama Depan] [Nama Belakang]\` - Kirim kartu kontak\n\n` +
+      `🎭 *Gaya Bahasa Aktif:* ${styleLabel}\n` +
       `🌐 *Bahasa Aktif:* ${langLabel}\n` +
       `Pencipta & Pengembang: *Amirun Rayan Ariandi* 🚀`;
 
@@ -1179,15 +1199,14 @@ async function handleMessage(msg, botService, ctx = null) {
         `• \`/providers\` - Daftar endpoint AI & status routing\n` +
         `• \`/setrouting [auto|priority|weighted]\` - Atur rotasi provider (AUTO bergantian)\n` +
         `• \`/benchmark\` - Uji kecepatan paralel semua provider\n` +
-        `• \`/setmodel [nama]\` - Ganti model AI Telegram\n` +
-        `• \`/setmode [public|whitelist]\` - Ubah mode akses\n` +
+        `• \`/setmode [public|diizinkan]\` - Ubah mode akses bot\n` +
         `• \`/settemp [0.0-2.0]\` - Ubah suhu kreativitas\n` +
         `• \`/setprompt [teks]\` - Ganti Master System Prompt\n` +
         `• \`/setpassword [pass]\` - Ganti password Web Admin\n` +
-        `• \`/whitelist [id/@user]\` - Tambah user ke whitelist\n` +
-        `• \`/block [id/@user]\` - Blokir user\n` +
-        `• \`/unblock [id/@user]\` - Hapus dari daftar blokir\n` +
-        `• \`/users\` - Lihat daftar user terdaftar\n` +
+        `• \`/izinkan [id/@user] [nama]\` - Tambah user ke daftar diizinkan\n` +
+        `• \`/blokir [id/@user]\` - Blokir user\n` +
+        `• \`/batalizin [id/@user]\` - Hapus dari daftar perizinan\n` +
+        `• \`/pengguna\` - Lihat daftar user terdaftar\n` +
         `• \`/blacklist [add|list|clear]\` - Kelola kata terlarang\n` +
         `• \`/export\` - Unduh berkas backup config.json\n` +
         `• \`/clearcache\` - Bersihkan cache RAM & sesi\n` +
@@ -1202,6 +1221,25 @@ async function handleMessage(msg, botService, ctx = null) {
   if (text === '/reset' || text === '/clear' || text === '/restart') {
     botService.conversations.delete(chatId);
     await sendTelegramMessage(chatId, `✨ *Riwayat percakapan berhasil dibersihkan!* Anda sekarang berada di sesi obrolan baru.`, null, null, token);
+    return;
+  }
+
+  // /style, /gayabahasa, /gaya
+  if (lowerText === '/style' || lowerText.startsWith('/style ') || lowerText === '/gayabahasa' || lowerText.startsWith('/gayabahasa ') || lowerText === '/gaya' || lowerText.startsWith('/gaya ')) {
+    const currentStyle = chatStyles.get(chatId) || getConfig().telegramStyle || getConfig().defaultStyle || 'santai';
+    const styleRows = Object.entries(STYLE_LABELS).map(([code, label]) => ([
+      {
+        text: (code === currentStyle ? '✅ ' : '') + label,
+        callback_data: `set_style:${chatId}:${code}`
+      }
+    ]));
+    styleRows.push([{ text: '❌ Tutup', callback_data: `set_style:${chatId}:close` }]);
+
+    const styleText = `🎭 *Pilih Gaya Bahasa Respons Bre AI*\n\n` +
+      `Gaya aktif saat ini: *${STYLE_LABELS[currentStyle] || '✨ Santai & Friendly'}*\n\n` +
+      `Pilih gaya bahasa yang Anda sukai untuk percakapan:`;
+
+    await sendTelegramMessage(chatId, styleText, { inline_keyboard: styleRows }, null, token);
     return;
   }
 
@@ -1431,17 +1469,18 @@ async function handleMessage(msg, botService, ctx = null) {
     }
 
     const chatLang = chatLanguages.get(chatId) || null;
+    const chatStyle = chatStyles.get(chatId) || null;
     const contentToSend = visionPayload || userQueryPrompt;
 
     let answer = '';
     try {
-      answer = await queryBreAIRouter(contentToSend, history, senderTag, chatLang);
+      answer = await queryBreAIRouter(contentToSend, history, senderTag, chatLang, chatStyle);
     } catch (routeErr) {
       // If vision failed, fallback to text query
       if (visionPayload) {
         console.warn('[TelegramBot] Vision request failed, falling back to text prompt:', routeErr.message);
         const fallbackText = userQueryPrompt || `[Pengguna mengirimkan foto/gambar]: ${text || 'Deskripsikan dan berikan analisis terkait gambar ini.'}`;
-        answer = await queryBreAIRouter(fallbackText, history, senderTag, chatLang);
+        answer = await queryBreAIRouter(fallbackText, history, senderTag, chatLang, chatStyle);
       } else {
         throw routeErr;
       }
@@ -1470,5 +1509,7 @@ module.exports = {
   handleMessage,
   processAndSendOutboundMedia,
   chatLanguages,
-  LANGUAGE_OPTIONS
+  chatStyles,
+  LANGUAGE_OPTIONS,
+  STYLE_LABELS
 };

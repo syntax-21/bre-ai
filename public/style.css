@@ -843,6 +843,42 @@
     color: var(--text-primary);
   }
 
+  /* Topbar Style / Dialect Selector */
+  .style-select-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    background: var(--bg-sidebar);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 4px 10px 4px 8px;
+    gap: 6px;
+    transition: border-color 0.2s;
+  }
+  .style-select-wrapper:hover {
+    border-color: var(--text-secondary);
+  }
+  .style-icon {
+    color: #a855f7;
+    flex-shrink: 0;
+  }
+  #styleSelect {
+    appearance: none;
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 500;
+    padding-right: 18px;
+    cursor: pointer;
+    outline: none;
+    font-family: inherit;
+  }
+  #styleSelect option {
+    background: var(--bg-panel);
+    color: var(--text-primary);
+  }
+
   /* Export Dropdown Menu */
   .export-dropdown-wrapper {
     position: relative;

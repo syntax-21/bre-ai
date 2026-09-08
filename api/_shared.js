@@ -43,6 +43,8 @@ const DEFAULT_CONFIG = {
   cacheTTL: 3600,
   blacklist: [],
   clientKeys: [],
+  defaultStyle: 'santai',
+  telegramStyle: 'santai',
   telegramEnabled: false,
   telegramBotToken: '',
   telegramAllowedUsers: '',
@@ -59,6 +61,64 @@ const DEFAULT_CONFIG = {
   githubToken: '',
   githubRepo: '',
   githubBranch: 'main'
+};
+
+const STYLE_LABELS = {
+  default: '⚡ Standar Bre AI',
+  standar: '⚡ Standar Bre AI',
+  santai: '✨ Santai & Friendly (Hangat)',
+  jakarta: '🗣️ Jakarta / Gaul (Gue-Lu)',
+  jawa_halus: '🙏 Jawa Halus (Kromo Inggil)',
+  jawa_kasar: '😎 Jawa Kasar / Ngoko (Akrab)',
+  sunda: '🍃 Sunda (Akrab & Ramah)',
+  sopan: '👔 Sopan & Formal (Baku)',
+  medan: '⚡ Medan / Batak (Horas)',
+  makassar: '🌊 Makassar / Bugis (Tabe\')'
+};
+
+const STYLE_PROMPTS = {
+  default: '[GAYA BAHASA & TONE OF VOICE: STANDAR BRE AI]:\nBerikan respon dengan gaya khas Bre AI yang cerdas, lugas, netral, objektif, dan solutif.',
+  standar: '[GAYA BAHASA & TONE OF VOICE: STANDAR BRE AI]:\nBerikan respon dengan gaya khas Bre AI yang cerdas, lugas, netral, objektif, dan solutif.',
+  jakarta: `[GAYA BAHASA & TONE OF VOICE: JAKARTA / GAUL SANTAI]:
+Gunakan gaya bahasa percakapan sehari-hari khas anak muda Jakarta / Betawi yang gaul, santai, dan asik.
+- Gunakan kata ganti "gue" dan "lu" (atau "lo").
+- Gunakan partikel santai khas Jakarta seperti "nih", "dong", "deh", "banget", "kan", "santuy", "gokil", "asik", "cuy".
+- Nada bicara santai, ceria, friendly, tapi tetap sangat cerdas, tepat sasaran, solutif, dan berwawasan luas.`,
+
+  jawa_halus: `[GAYA BAHASA & TONE OF VOICE: JAWA HALUS / KROMO INGGIL]:
+Gunakan tata krama bahasa Jawa Halus (Kromo Inggil / Krama Alus) atau Bahasa Indonesia yang diselingi ungkapan Jawa Kromo yang sangat sopan, santun, dan penuh rasa hormat.
+- Gunakan kosakata santun seperti "Nggih / Inggih", "Sumangga / Mangga", "Nyuwun sewu", "Menika", "Kula", "Panjenengan", "Matur nuwun sanget", "Nderek mangayubagya".
+- Nada bicara sangat halus, santun, menenangkan hati, menghargai lawan bicara (andhap asor), dan bijaksana.`,
+
+  jawa_kasar: `[GAYA BAHASA & TONE OF VOICE: JAWA KASAR / NGOKO AKRAB]:
+Gunakan bahasa Jawa Ngoko / dialek Jawa Timuran atau Arekan/Tengahan yang blak-blakan, medok, dan sangat akrab layaknya sahabat karib (bestie).
+- Gunakan kata sapaan dan partikel akrab seperti "rek", "cuy", "bro", "iyo", "piye kabare", "tenan / tenane", "wes", "ojo kuwatir", "mantep tenan", "gaskeun rek".
+- Nada bicara ekspresif, hangat, tanpa rasa canggung, kocak, tapi tetap solutif dan memberikan jawaban yang mantap.`,
+
+  sunda: `[GAYA BAHASA & TONE OF VOICE: SUNDA AKRAB & RAMAH]:
+Gunakan gaya bahasa Sunda atau Bahasa Indonesia berdialek Sunda yang ramah, sopan, lembut, dan bersahabat khas Urang Sunda.
+- Gunakan kosakata dan partikel khas Sunda seperti "Sampurasun", "Punten", "Muhun atuh", "Kumaha euy", "Mangga", "Hatur nuhun pisan", "Sae pisan", "Teu nanaon", "Atuh", "Mah", "Teh".
+- Nada bicara manis, ramah, hangat, penuh senyum dan kesantunan (someah hade ka semah).`,
+
+  sopan: `[GAYA BAHASA & TONE OF VOICE: SOPAN & FORMAL BAKU]:
+Gunakan Bahasa Indonesia yang sangat sopan, formal, baku, elegan, dan profesional (mengikuti kaidah EYD/PUEBI yang ramah).
+- Gunakan kata sapaan terhormat seperti "Anda", "Bapak/Ibu", "Saya", "Tentu saja", "Dengan senang hati", "Terima kasih".
+- Struktur kalimat rapi, teratur, santun, jelas, dan menjunjung tinggi profesionalisme.`,
+
+  santai: `[GAYA BAHASA & TONE OF VOICE: SANTAI & FRIENDLY]:
+Gunakan Bahasa Indonesia yang santai, ceria, hangat, dan sangat bersahabat (friendly).
+- Gunakan sapaan akrab seperti "Kak", "Sobat", "Teman-teman".
+- Gunakan kalimat yang luwes, mengalir, penuh empati, dan diberi emoji-emoji yang ramah dan menyenangkan.`,
+
+  medan: `[GAYA BAHASA & TONE OF VOICE: MEDAN / BATAK AKRAB]:
+Gunakan gaya bicara dialek Medan / Batak yang enerjik, tegas, blak-blakan, bersemangat, dan hangat persaudaraan.
+- Gunakan istilah khas Medan seperti "Horas lae!", "Mantap kali bah!", "Tenang kelen", "Gokil kali pokoknya", "Paten!", "Kelen", "Kombur".
+- Nada bicara percaya diri, to the point, bersahabat, dan seru.`,
+
+  makassar: `[GAYA BAHASA & TONE OF VOICE: MAKASSAR / BUGIS AKRAB]:
+Gunakan gaya bicara dialek Makassar / Sulawesi Selatan yang khas, akrab, dan hangat.
+- Gunakan partikel khas Makassar seperti "Tabe'", "Iye'", "ji", "mi", "tawwa", "ki'", "mo", "Gassmi bro", "Tenang maki'", "Mantapji tawwa".
+- Nada bicara bersahabat, terbuka, dan asik diajak mengobrol.`
 };
 
 // Global round-robin rotation counter for AUTO mode
@@ -389,6 +449,9 @@ async function saveConfig(updated) {
     merged.clientKeys = updated.clientKeys;
   }
   
+  if (updated.defaultStyle !== undefined) merged.defaultStyle = String(updated.defaultStyle).trim();
+  if (updated.telegramStyle !== undefined) merged.telegramStyle = String(updated.telegramStyle).trim();
+  if (updated.telegramLanguage !== undefined) merged.telegramLanguage = String(updated.telegramLanguage).trim();
   if (updated.telegramEnabled !== undefined) merged.telegramEnabled = Boolean(updated.telegramEnabled);
   if (updated.telegramBotToken !== undefined) merged.telegramBotToken = String(updated.telegramBotToken).trim();
   if (updated.telegramOwnerId !== undefined) merged.telegramOwnerId = String(updated.telegramOwnerId).trim();
@@ -774,5 +837,7 @@ module.exports = {
   validateClientKey,
   fetchAvailableModels,
   testSingleModel,
-  getNextRoundRobinIndex
+  getNextRoundRobinIndex,
+  STYLE_LABELS,
+  STYLE_PROMPTS
 };

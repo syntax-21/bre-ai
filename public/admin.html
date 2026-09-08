@@ -855,6 +855,22 @@
           </div>
         </div>
 
+        <div class="form-group" style="margin-top: 14px;">
+          <label class="form-label">🎭 Gaya Bahasa / Dialek AI Default (Global Tone)</label>
+          <select id="cfgDefaultStyle" class="input-select">
+            <option value="santai">✨ Santai &amp; Friendly (Hangat, Ceria, Ramah)</option>
+            <option value="jakarta">🗣️ Jakarta / Gaul (Gue-Lu / Santai Betawi)</option>
+            <option value="jawa_halus">🙏 Jawa Halus (Kromo Inggil / Santun &amp; Halus)</option>
+            <option value="jawa_kasar">😎 Jawa Kasar / Ngoko (Akrab, Medok, Santai Poll)</option>
+            <option value="sunda">🍃 Sunda (Akrab, Ramah &amp; Lembut - Euy/Atuh/Punten)</option>
+            <option value="sopan">👔 Sopan &amp; Formal (Bahasa Indonesia Baku &amp; Elegan)</option>
+            <option value="medan">⚡ Medan / Batak (Horas, Enerjik, Bersemangat)</option>
+            <option value="makassar">🌊 Makassar / Bugis (Tabe', Akrab, Hangat - Ji/Mi/Mo)</option>
+            <option value="standar">🤖 Standar Bre AI (Netral &amp; Lugas)</option>
+          </select>
+          <div class="form-hint">Gaya bahasa default ini akan diterapkan pada semua query chat AI (Web Chat &amp; API).</div>
+        </div>
+
         <!-- In-Memory Response Caching Section -->
         <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid #1e2433;">
           <div class="card-title" style="font-size: 15px; margin-bottom: 4px;">⚡ In-Memory Response Caching</div>
@@ -1053,12 +1069,12 @@
 
       </div>
 
-      <!-- Advanced Telegram Settings Card (Mode Akses, Model AI & Bahasa) -->
+      <!-- Advanced Telegram Settings Card (Mode Akses, Gaya Bahasa & Bahasa) -->
       <div class="card" style="background: #0d111a; border: 1px solid #1e2433; border-radius: 12px; padding: 22px; margin-bottom: 24px;">
         <div class="card-header" style="margin-bottom: 16px;">
           <div>
-            <div class="card-title" style="font-size: 16px;">🛡️ Mode Akses, Model AI &amp; Bahasa Bot</div>
-            <div class="card-subtitle">Tentukan apakah bot bisa digunakan oleh publik atau khusus whitelist, pilih model AI, dan atur bahasa respons default.</div>
+            <div class="card-title" style="font-size: 16px;">🛡️ Mode Akses, Gaya Bahasa &amp; Bahasa Bot Telegram</div>
+            <div class="card-subtitle">Tentukan hak akses bot (Publik vs Khusus Pengguna Diizinkan), atur gaya bahasa/dialek respons, dan bahasa default.</div>
           </div>
         </div>
 
@@ -1066,15 +1082,25 @@
           <div class="form-group">
             <label class="form-label">Mode Akses Bot Telegram</label>
             <select id="cfgTelegramAccessMode" class="input-select">
-              <option value="public">🟢 Terbuka untuk Publik (Semua Bisa Chat)</option>
-              <option value="whitelist">🔒 Khusus Pengguna Terdaftar (Private Whitelist)</option>
+              <option value="public">🟢 Terbuka untuk Publik (Semua Pengguna Bisa Chat)</option>
+              <option value="diizinkan">🔒 Khusus Pengguna Diizinkan (Akses Terbatas)</option>
             </select>
-            <div class="form-hint">Di mode Whitelist, hanya Admin dan akun terdaftar di bawah yang diizinkan chat dengan Bre AI.</div>
+            <div class="form-hint">Di mode Khusus Diizinkan, hanya Admin dan akun dalam daftar diizinkan yang dapat chat dengan Bre AI.</div>
           </div>
           <div class="form-group">
-            <label class="form-label">Model AI Default untuk Telegram</label>
-            <select id="cfgTelegramModel" class="input-select"></select>
-            <div class="form-hint">Pilih model yang akan memproses pesan dari Telegram (atau otomatis ikuti router).</div>
+            <label class="form-label">🎭 Gaya Bahasa Respons Bot Telegram</label>
+            <select id="cfgTelegramStyle" class="input-select">
+              <option value="santai">✨ Santai &amp; Friendly (Hangat, Ceria, Ramah)</option>
+              <option value="jakarta">🗣️ Jakarta / Gaul (Gue-Lu / Santai Betawi)</option>
+              <option value="jawa_halus">🙏 Jawa Halus (Kromo Inggil / Santun)</option>
+              <option value="jawa_kasar">😎 Jawa Kasar / Ngoko (Akrab / Medok)</option>
+              <option value="sunda">🍃 Sunda (Akrab, Ramah &amp; Lembut)</option>
+              <option value="sopan">👔 Sopan &amp; Formal (Bahasa Indonesia Baku)</option>
+              <option value="medan">⚡ Medan / Batak (Horas, Enerjik)</option>
+              <option value="makassar">🌊 Makassar / Bugis (Tabe', Akrab)</option>
+              <option value="standar">🤖 Standar Bre AI (Netral)</option>
+            </select>
+            <div class="form-hint">Gaya bahasa bot default di Telegram (Pengguna dapat mengganti gaya masing-masing dengan perintah <code>/style</code>).</div>
           </div>
         </div>
 
@@ -1101,8 +1127,8 @@
       <div class="card" style="margin-top: 24px;">
         <div class="card-header">
           <div>
-            <div class="card-title">👥 Manajemen Pengguna Telegram (User Access List)</div>
-            <div class="card-subtitle">Daftarkan akun Telegram yang diizinkan (Whitelist) atau dicekal (Blocked) dengan kontrol status interaktif.</div>
+            <div class="card-title">👥 Kelola Pengguna Telegram (Daftar Pengguna Diizinkan &amp; Dicekal)</div>
+            <div class="card-subtitle">Daftarkan akun Telegram yang diizinkan atau dicekal dengan kontrol status instan, pencarian, dan filter.</div>
           </div>
         </div>
 
@@ -1118,13 +1144,23 @@
           <div class="form-group" style="margin-bottom: 0;">
             <label class="form-label">Hak Akses / Status</label>
             <select id="newTgUserRole" class="input-select">
-              <option value="whitelist">🟢 Whitelist (Diizinkan)</option>
-              <option value="blocked">🔴 Blocked (Diblokir)</option>
+              <option value="diizinkan">🟢 Diizinkan (Diberi Akses)</option>
+              <option value="blocked">🔴 Diblokir (Ditolak Akses)</option>
             </select>
           </div>
         </div>
         <div style="display: flex; justify-content: flex-end; margin-bottom: 18px;">
           <button class="btn btn-save" onclick="addTelegramUser()">➕ Tambah Pengguna ke Daftar</button>
+        </div>
+
+        <!-- Filter Buttons & Search Bar -->
+        <div style="display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; justify-content: space-between;">
+          <div style="display: flex; gap: 6px;" id="tgUserFilterBtns">
+            <button type="button" class="btn" id="btnTgUserAll" onclick="filterTelegramUsersUI('all')" style="background: #0284c7; color: #fff; font-size: 12px; padding: 5px 12px;">👥 Semua (<span id="tgCountAll">0</span>)</button>
+            <button type="button" class="btn btn-outline" id="btnTgUserAllowed" onclick="filterTelegramUsersUI('diizinkan')" style="font-size: 12px; padding: 5px 12px; color: #86efac; border-color: rgba(34, 197, 94, 0.4);">🟢 Diizinkan (<span id="tgCountAllowed">0</span>)</button>
+            <button type="button" class="btn btn-outline" id="btnTgUserBlocked" onclick="filterTelegramUsersUI('blocked')" style="font-size: 12px; padding: 5px 12px; color: #fca5a5; border-color: rgba(239, 68, 68, 0.4);">🔴 Diblokir (<span id="tgCountBlocked">0</span>)</button>
+          </div>
+          <input type="text" id="tgUserSearchInput" class="input-text" style="max-width: 280px; padding: 6px 12px; font-size: 13px;" placeholder="🔍 Cari ID / Nama / Catatan..." oninput="filterTelegramUsersUI()">
         </div>
 
         <div class="table-responsive">

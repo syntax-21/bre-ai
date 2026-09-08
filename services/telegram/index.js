@@ -42,7 +42,9 @@ const {
   handleBroadcastCommand,
   handleMessage,
   chatLanguages,
-  LANGUAGE_OPTIONS
+  chatStyles,
+  LANGUAGE_OPTIONS,
+  STYLE_LABELS
 } = require('./messageHandler');
 
 class TelegramBotService {
@@ -193,6 +195,51 @@ class TelegramBotService {
         await editTelegramMessage(cq.message?.chat?.id, cq.message?.message_id, langText, { inline_keyboard: langRows }, token);
       } else {
         await answerCallback(cq.id, 'Bahasa tidak dikenal', false, token);
+      }
+      return;
+    }
+
+    // Handle style selection callbacks (available to all users)
+    if (data.startsWith('set_style:')) {
+      const parts = data.split(':');
+      const targetChatId = parseInt(parts[1]);
+      const styleCode = parts[2];
+      const token = this.activeToken || null;
+
+      if (styleCode === 'close') {
+        try {
+          await apiCall('deleteMessage', {
+            chat_id: cq.message?.chat?.id,
+            message_id: cq.message?.message_id
+          }, token);
+        } catch (e) {
+          await editTelegramMessage(cq.message?.chat?.id, cq.message?.message_id, '🎭 Menu gaya bahasa ditutup. Kirim /style untuk membuka kembali.', null, token);
+        }
+        await answerCallback(cq.id, 'Menu ditutup', false, token);
+        return;
+      }
+
+      if (STYLE_LABELS[styleCode]) {
+        chatStyles.set(targetChatId, styleCode);
+        const selectedLabel = STYLE_LABELS[styleCode];
+        await answerCallback(cq.id, `✅ Gaya bahasa diubah ke: ${selectedLabel}`, true, token);
+
+        const currentStyle = styleCode;
+        const styleRows = Object.entries(STYLE_LABELS).map(([code, label]) => ([
+          {
+            text: (code === currentStyle ? '✅ ' : '') + label,
+            callback_data: `set_style:${targetChatId}:${code}`
+          }
+        ]));
+        styleRows.push([{ text: '❌ Tutup', callback_data: `set_style:${targetChatId}:close` }]);
+
+        const styleText = `🎭 *Pilih Gaya Bahasa Respons Bre AI*\n\n` +
+          `Gaya aktif saat ini: *${selectedLabel}*\n\n` +
+          `Pilih gaya bahasa yang Anda sukai untuk percakapan:`;
+
+        await editTelegramMessage(cq.message?.chat?.id, cq.message?.message_id, styleText, { inline_keyboard: styleRows }, token);
+      } else {
+        await answerCallback(cq.id, 'Gaya bahasa tidak dikenal', false, token);
       }
       return;
     }

@@ -96,6 +96,23 @@
           </select>
           <svg class="dropdown-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
         </div>
+
+        <!-- Gaya Bahasa (Dialek & Tone) Select -->
+        <div class="style-select-wrapper" title="Gaya Bahasa &amp; Tone AI">
+          <svg class="style-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+          <select id="styleSelect" onchange="setStyle(this.value)">
+            <option value="santai">✨ Santai &amp; Friendly</option>
+            <option value="jakarta">🗣️ Jakarta / Gaul</option>
+            <option value="jawa_halus">🙏 Jawa Halus (Kromo)</option>
+            <option value="jawa_kasar">😎 Jawa Kasar / Ngoko</option>
+            <option value="sunda">🍃 Sunda (Akrab)</option>
+            <option value="sopan">👔 Sopan &amp; Formal</option>
+            <option value="medan">⚡ Medan / Batak</option>
+            <option value="makassar">🌊 Makassar / Bugis</option>
+            <option value="standar">🤖 Standar Bre AI</option>
+          </select>
+          <svg class="dropdown-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
       </div>
       <div class="topbar-right">
         <!-- Incognito Mode Toggle Button -->
@@ -235,6 +252,22 @@
           <option value="fr">🇫🇷 Français (French)</option>
           <option value="ru">🇷🇺 Русский (Russian)</option>
           <option value="ko">🇰🇷 한국어 (Korean)</option>
+        </select>
+      </div>
+
+      <!-- Gaya Bahasa (Dialek & Tone) Selector in Settings -->
+      <div class="field" style="margin-bottom: 20px;">
+        <label style="font-weight: 600; margin-bottom: 8px;" id="lblStyle">🎭 Gaya Bahasa / Dialek AI</label>
+        <select id="modalStyleSelect" class="f-input" onchange="setStyle(this.value)" style="cursor: pointer; font-weight: 500;">
+          <option value="santai">✨ Santai &amp; Friendly (Hangat, Ceria, Ramah)</option>
+          <option value="jakarta">🗣️ Jakarta / Gaul (Gue-Lu / Santai Betawi)</option>
+          <option value="jawa_halus">🙏 Jawa Halus (Kromo Inggil / Santun)</option>
+          <option value="jawa_kasar">😎 Jawa Kasar / Ngoko (Akrab / Medok)</option>
+          <option value="sunda">🍃 Sunda (Akrab, Ramah &amp; Lembut)</option>
+          <option value="sopan">👔 Sopan &amp; Formal (Bahasa Indonesia Baku)</option>
+          <option value="medan">⚡ Medan / Batak (Horas, Enerjik)</option>
+          <option value="makassar">🌊 Makassar / Bugis (Tabe', Akrab)</option>
+          <option value="standar">🤖 Standar Bre AI (Netral &amp; Lugas)</option>
         </select>
       </div>
 
