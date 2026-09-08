@@ -10,6 +10,7 @@ const {
   setCachedResponse,
   validateClientKey,
   getNextRoundRobinIndex,
+  buildBreAISystemPrompt,
   STYLE_PROMPTS
 } = require('./_shared');
 
@@ -172,11 +173,15 @@ module.exports = async (req, res) => {
   }
 
   // 7. Execute Request across candidate providers (Auto-Failover)
-  const requestedStyle = (req.headers['x-custom-style'] || body.style || cfg.defaultStyle || '').trim();
-  const stylePrompt = (requestedStyle && STYLE_PROMPTS[requestedStyle]) ? `${STYLE_PROMPTS[requestedStyle]}\n\n` : '';
-  const basePrompt = cfg.systemPrompt || '';
-  const extraPrompt = body.customSystemPrompt ? `[INSTRUKSI WAJIB DIPATUHI]:\n${body.customSystemPrompt}\n\n` : '';
-  const formattedMessages = [{ role: 'system', content: stylePrompt + extraPrompt + basePrompt }, ...userMessages];
+  const requestedStyle = (req.headers['x-custom-style'] || body.style || cfg.defaultStyle || 'santai').trim();
+  const requestedLang = (req.headers['x-custom-language'] || body.language || '').trim();
+  const masterSystemContent = buildBreAISystemPrompt({
+    cfg,
+    style: requestedStyle,
+    customSystemPrompt: body.customSystemPrompt || '',
+    language: requestedLang
+  });
+  const formattedMessages = [{ role: 'system', content: masterSystemContent }, ...userMessages];
 
   const maxTokens = body.max_tokens || cfg.maxTokens || 16384;
   const temperature = body.temperature !== undefined ? body.temperature : (cfg.temperature || 0.7);

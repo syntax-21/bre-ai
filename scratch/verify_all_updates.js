@@ -1,4 +1,4 @@
-import { getConfig, saveConfig, STYLE_LABELS, STYLE_PROMPTS } from '../api/_shared.js';
+import { getConfig, saveConfig, STYLE_LABELS, STYLE_PROMPTS, buildBreAISystemPrompt, sanitizeOutput } from '../api/_shared.js';
 import accessPkg from '../services/telegram/accessControl.js';
 import adminMenuPkg from '../services/telegram/adminMenu.js';
 import messageHandlerPkg from '../services/telegram/messageHandler.js';
@@ -9,6 +9,25 @@ const { buildMainMenuMarkup, getMainMenuText, handleAdminCallback } = adminMenuP
 const { handleMessage, chatStyles } = messageHandlerPkg;
 
 console.log('🧪 Starting Verification of All Updates...\n');
+
+// 0. Verify Bre AI Ownership & Style/Language Adaptation
+console.log('0. Checking Bre AI Ownership & Dialect / Language Enforcement...');
+const samplePromptJakarta = buildBreAISystemPrompt({ style: 'jakarta', language: 'id' });
+assert(samplePromptJakarta.includes('Amirun Rayan Ariandi'), 'Must include Amirun Rayan Ariandi as creator/owner');
+assert(samplePromptJakarta.includes('Bre AI'), 'Must include Bre AI name');
+assert(samplePromptJakarta.includes('OVERRIDE'), 'Must include upstream override instruction');
+assert(samplePromptJakarta.includes('gue') && samplePromptJakarta.includes('lu'), 'Jakarta prompt must include gue-lu dialect instructions');
+console.log('   ✅ buildBreAISystemPrompt correctly enforces Bre AI ownership and Jakarta dialect.');
+
+const samplePromptJawa = buildBreAISystemPrompt({ style: 'jawa_halus' });
+assert(samplePromptJawa.includes('Kromo Inggil') || samplePromptJawa.includes('Matur nuwun'), 'Jawa Halus prompt must include Kromo Inggil dialect instructions');
+console.log('   ✅ buildBreAISystemPrompt correctly enforces Jawa Halus dialect.');
+
+const sanitizedText = sanitizeOutput('I am ChatGPT created by OpenAI and Mercury-2 developed by Inception Labs.');
+assert(!sanitizedText.includes('ChatGPT'), 'ChatGPT must be sanitized');
+assert(!sanitizedText.includes('OpenAI'), 'OpenAI must be sanitized');
+assert(sanitizedText.includes('Bre AI') && sanitizedText.includes('Amirun Rayan Ariandi'), 'Output must be sanitized to Bre AI and Amirun Rayan Ariandi');
+console.log('   ✅ sanitizeOutput successfully neutralizes upstream provider identities.');
 
 // 1. Verify Styles
 console.log('1. Checking Gaya Bahasa / Dialects in _shared.js...');
