@@ -362,7 +362,10 @@ async function handleAdminCallback(cq, botService) {
       { text: '🏆 Benchmark Leaderboard', callback_data: 'adm_benchmark' }
     ]);
     rows.push([
-      { text: '➕ Tambah dari Preset', callback_data: 'adm_prov_presets' },
+      { text: '➕ Tambah Preset', callback_data: 'adm_prov_presets' },
+      { text: '✍️ Tambah Manual', callback_data: 'adm_prov_manual' }
+    ]);
+    rows.push([
       { text: '⬅️ Menu Utama', callback_data: 'adm_main' }
     ]);
 
@@ -433,11 +436,15 @@ async function handleAdminCallback(cq, botService) {
     const markup = {
       inline_keyboard: [
         [
-          { text: isActive ? '🔴 Nonaktifkan Provider' : '🟢 Aktifkan Provider', callback_data: `adm_prov_toggle:${idx}` },
+          { text: isActive ? '🔴 Nonaktifkan' : '🟢 Aktifkan', callback_data: `adm_prov_toggle:${idx}` },
           { text: '⚡ Test Ping Latensi', callback_data: `adm_prov_ping:${idx}` }
         ],
         [
-          { text: '🔍 Detect Model (/v1/models)', callback_data: `adm_prov_detect:${idx}` },
+          { text: '✏️ Edit URL / Model / Nama', callback_data: `adm_prov_edit:${idx}` },
+          { text: '🔑 Kelola API Key', callback_data: `adm_prov_keys:${idx}` }
+        ],
+        [
+          { text: '🔍 Detect Model', callback_data: `adm_prov_detect:${idx}` },
           { text: '🧪 Test Model Live', callback_data: `adm_prov_test:${idx}` }
         ],
         [
@@ -448,6 +455,260 @@ async function handleAdminCallback(cq, botService) {
     };
     await editTelegramMessage(chatId, messageId, text, markup, token);
     return;
+  }
+
+  // 4c-edit. Edit Provider Main Hub
+  if (data.startsWith('adm_prov_edit:')) {
+    await answerCallback(cq.id, null, false, token);
+    const idx = parseInt(data.split(':')[1]);
+    const endpoints = Array.isArray(cfg.endpoints) ? cfg.endpoints : [];
+    const ep = endpoints[idx];
+    if (!ep) {
+      cq.data = 'adm_providers';
+      return handleAdminCallback(cq, botService);
+    }
+
+    const keyCount = Array.isArray(ep.keys) ? ep.keys.length : (ep.keys ? 1 : 0);
+    const text = `✏️ *Edit Provider #${idx+1}: ${ep.name || 'Unnamed'}*\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `• *Nama:* \`${ep.name || '-'}\`\n` +
+      `• *Base URL:* \`${ep.url || '-'}\`\n` +
+      `• *Model Aktif:* \`${(ep.models || []).join(', ') || '-'}\`\n` +
+      `• *Bobot (Weight):* \`${ep.weight || 1}\`\n` +
+      `• *API Keys:* ${keyCount} key terpasang\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `_Pilih bagian yang ingin diubah atau ketik perintah langsung via chat:_`;
+
+    const markup = {
+      inline_keyboard: [
+        [
+          { text: '🌐 Ganti Base URL', callback_data: `adm_prov_edit_url:${idx}` },
+          { text: '🤖 Ganti Model', callback_data: `adm_prov_edit_model:${idx}` }
+        ],
+        [
+          { text: '🏷️ Ganti Nama', callback_data: `adm_prov_edit_name:${idx}` },
+          { text: '⚖️ Ubah Bobot (Weight)', callback_data: `adm_prov_edit_weight:${idx}` }
+        ],
+        [
+          { text: '🔑 Kelola / Ganti API Key', callback_data: `adm_prov_keys:${idx}` }
+        ],
+        [
+          { text: `⬅️ Kembali ke Detail [${ep.name || 'Provider'}]`, callback_data: `adm_prov_det:${idx}` }
+        ]
+      ]
+    };
+    await editTelegramMessage(chatId, messageId, text, markup, token);
+    return;
+  }
+
+  // 4c-edit-url. Edit Provider Base URL Guide
+  if (data.startsWith('adm_prov_edit_url:')) {
+    await answerCallback(cq.id, null, false, token);
+    const idx = parseInt(data.split(':')[1]);
+    const endpoints = Array.isArray(cfg.endpoints) ? cfg.endpoints : [];
+    const ep = endpoints[idx];
+    if (!ep) {
+      cq.data = 'adm_providers';
+      return handleAdminCallback(cq, botService);
+    }
+
+    const text = `🌐 *Ganti Base URL Provider: ${ep.name}*\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `• *URL Saat Ini:* \`${ep.url || '-'}\`\n\n` +
+      `Ketik perintah berikut di chat untuk mengganti URL:\n` +
+      `\`\`\`\n/seturl ${idx+1} [URL_BARU]\n\`\`\`\n` +
+      `📌 *Contoh:*\n` +
+      `\`/seturl ${idx+1} https://api.openai.com/v1/chat/completions\`\n` +
+      `\`/seturl ${idx+1} https://api.deepseek.com/chat/completions\``;
+
+    const markup = {
+      inline_keyboard: [
+        [
+          { text: '⬅️ Kembali ke Menu Edit', callback_data: `adm_prov_edit:${idx}` }
+        ]
+      ]
+    };
+    await editTelegramMessage(chatId, messageId, text, markup, token);
+    return;
+  }
+
+  // 4c-edit-model. Edit Provider Model Guide
+  if (data.startsWith('adm_prov_edit_model:')) {
+    await answerCallback(cq.id, null, false, token);
+    const idx = parseInt(data.split(':')[1]);
+    const endpoints = Array.isArray(cfg.endpoints) ? cfg.endpoints : [];
+    const ep = endpoints[idx];
+    if (!ep) {
+      cq.data = 'adm_providers';
+      return handleAdminCallback(cq, botService);
+    }
+
+    const currentModel = (ep.models || []).join(', ') || 'default';
+    const text = `🤖 *Ganti Model Provider: ${ep.name}*\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `• *Model Saat Ini:* \`${currentModel}\`\n\n` +
+      `Ketik perintah berikut di chat untuk mengganti model:\n` +
+      `\`\`\`\n/setmodel ${idx+1} [NAMA_MODEL_BARU]\n\`\`\`\n` +
+      `📌 *Contoh:*\n` +
+      `\`/setmodel ${idx+1} mercury-2\`\n` +
+      `\`/setmodel ${idx+1} deepseek-chat\`\n` +
+      `\`/setmodel ${idx+1} gpt-4o\`\n` +
+      `\`/setmodel ${idx+1} llama-3.3-70b-versatile\``;
+
+    const markup = {
+      inline_keyboard: [
+        [
+          { text: '🔍 Auto-Detect dari /v1/models', callback_data: `adm_prov_detect:${idx}` }
+        ],
+        [
+          { text: '⬅️ Kembali ke Menu Edit', callback_data: `adm_prov_edit:${idx}` }
+        ]
+      ]
+    };
+    await editTelegramMessage(chatId, messageId, text, markup, token);
+    return;
+  }
+
+  // 4c-edit-name. Edit Provider Name Guide
+  if (data.startsWith('adm_prov_edit_name:')) {
+    await answerCallback(cq.id, null, false, token);
+    const idx = parseInt(data.split(':')[1]);
+    const endpoints = Array.isArray(cfg.endpoints) ? cfg.endpoints : [];
+    const ep = endpoints[idx];
+    if (!ep) {
+      cq.data = 'adm_providers';
+      return handleAdminCallback(cq, botService);
+    }
+
+    const text = `🏷️ *Ganti Nama Label Provider*\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `• *Nama Saat Ini:* \`${ep.name || '-'}\`\n\n` +
+      `Ketik perintah berikut di chat untuk mengganti nama:\n` +
+      `\`\`\`\n/setname ${idx+1} [NAMA_BARU]\n\`\`\`\n` +
+      `📌 *Contoh:*\n` +
+      `\`/setname ${idx+1} Inception Primary\`\n` +
+      `\`/setname ${idx+1} DeepSeek Backup\``;
+
+    const markup = {
+      inline_keyboard: [
+        [
+          { text: '⬅️ Kembali ke Menu Edit', callback_data: `adm_prov_edit:${idx}` }
+        ]
+      ]
+    };
+    await editTelegramMessage(chatId, messageId, text, markup, token);
+    return;
+  }
+
+  // 4c-edit-weight. Edit Provider Weight Hub
+  if (data.startsWith('adm_prov_edit_weight:')) {
+    await answerCallback(cq.id, null, false, token);
+    const idx = parseInt(data.split(':')[1]);
+    const endpoints = Array.isArray(cfg.endpoints) ? cfg.endpoints : [];
+    const ep = endpoints[idx];
+    if (!ep) {
+      cq.data = 'adm_providers';
+      return handleAdminCallback(cq, botService);
+    }
+
+    const curWeight = ep.weight || 1;
+    const text = `⚖️ *Atur Bobot (Weight) Provider: ${ep.name}*\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `• *Bobot Saat Ini:* *${curWeight}*\n` +
+      `_Bobot menentukan proporsi distribusi beban trafik pada mode routing Weighted._\n\n` +
+      `Pilih nilai bobot cepat di bawah atau ketik \`/setweight ${idx+1} [1-10]\`:`;
+
+    const weights = [1, 2, 3, 5, 10];
+    const weightButtons = weights.map(w => ({
+      text: (w === curWeight ? '✅ ' : '') + `Bobot ${w}`,
+      callback_data: `adm_prov_setweight:${idx}:${w}`
+    }));
+
+    const markup = {
+      inline_keyboard: [
+        weightButtons.slice(0, 3),
+        weightButtons.slice(3),
+        [
+          { text: '⬅️ Kembali ke Menu Edit', callback_data: `adm_prov_edit:${idx}` }
+        ]
+      ]
+    };
+    await editTelegramMessage(chatId, messageId, text, markup, token);
+    return;
+  }
+
+  // 4c-setweight. Set Provider Weight Action
+  if (data.startsWith('adm_prov_setweight:')) {
+    const parts = data.split(':');
+    const idx = parseInt(parts[1]);
+    const val = parseInt(parts[2]) || 1;
+    const endpoints = Array.isArray(cfg.endpoints) ? [...cfg.endpoints] : [];
+    if (endpoints[idx]) {
+      endpoints[idx].weight = val;
+      saveConfig({ endpoints });
+      await answerCallback(cq.id, `✅ Bobot [${endpoints[idx].name}] diubah ke: ${val}`, false, token);
+    }
+    cq.data = `adm_prov_edit:${idx}`;
+    return handleAdminCallback(cq, botService);
+  }
+
+  // 4c-keys. Provider API Key Management Menu
+  if (data.startsWith('adm_prov_keys:')) {
+    await answerCallback(cq.id, null, false, token);
+    const idx = parseInt(data.split(':')[1]);
+    const endpoints = Array.isArray(cfg.endpoints) ? cfg.endpoints : [];
+    const ep = endpoints[idx];
+    if (!ep) {
+      cq.data = 'adm_providers';
+      return handleAdminCallback(cq, botService);
+    }
+
+    const keys = Array.isArray(ep.keys) ? ep.keys : (ep.keys ? [ep.keys] : []);
+    let keyListText = '';
+    const rows = [];
+
+    if (keys.length === 0) {
+      keyListText = `_Belum ada API Key yang terpasang untuk provider ini._\n`;
+    } else {
+      keys.forEach((k, kIdx) => {
+        const masked = k.length > 10 ? `${k.slice(0, 7)}...${k.slice(-4)}` : '••••••••';
+        keyListText += `${kIdx+1}. \`${masked}\`\n`;
+        rows.push([
+          { text: `🗑️ Hapus Key #${kIdx+1}`, callback_data: `adm_prov_delkey:${idx}:${kIdx}` }
+        ]);
+      });
+    }
+
+    const text = `🔑 *Kelola API Key: ${ep.name || 'Provider'}*\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `Daftar API Key (${keys.length} key terpasang):\n\n` +
+      keyListText +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `➕ *Cara Tambah Key Baru via Chat:*\n` +
+      `Ketik perintah:\n\`/addkey ${idx+1} [API_KEY_ANDA]\`\n` +
+      `Contoh:\n\`/addkey ${idx+1} sk_live_abcdef123456\``;
+
+    rows.push([
+      { text: `⬅️ Kembali ke Detail [${ep.name || 'Provider'}]`, callback_data: `adm_prov_det:${idx}` }
+    ]);
+
+    await editTelegramMessage(chatId, messageId, text, { inline_keyboard: rows }, token);
+    return;
+  }
+
+  // 4c-delkey. Delete specific API Key from Provider
+  if (data.startsWith('adm_prov_delkey:')) {
+    const parts = data.split(':');
+    const idx = parseInt(parts[1]);
+    const kIdx = parseInt(parts[2]);
+    const endpoints = Array.isArray(cfg.endpoints) ? [...cfg.endpoints] : [];
+    if (endpoints[idx] && Array.isArray(endpoints[idx].keys) && endpoints[idx].keys[kIdx] !== undefined) {
+      endpoints[idx].keys.splice(kIdx, 1);
+      saveConfig({ endpoints });
+      await answerCallback(cq.id, `🗑️ Key #${kIdx+1} berhasil dihapus!`, true, token);
+    }
+    cq.data = `adm_prov_keys:${idx}`;
+    return handleAdminCallback(cq, botService);
   }
 
   // 4d. Toggle Provider Status
@@ -540,10 +801,42 @@ async function handleAdminCallback(cq, botService) {
         { text: '💻 Ollama (Localhost)', callback_data: 'adm_add_preset:ollama' }
       ],
       [
+        { text: '✍️ Tambah Manual (Isi Sendiri)', callback_data: 'adm_prov_manual' },
         { text: '⬅️ Kembali ke Provider', callback_data: 'adm_providers' }
       ]
     ];
     await editTelegramMessage(chatId, messageId, text, { inline_keyboard: rows }, token);
+    return;
+  }
+
+  // 4h-manual. Manual Provider Instructions (Isi Sendiri)
+  if (data === 'adm_prov_manual') {
+    await answerCallback(cq.id, null, false, token);
+    const text = `✍️ *Tambah Provider AI Manual (Isi Sendiri)*\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `Anda dapat menambahkan upstream provider AI OpenAI-compatible secara mandiri dan fleksibel dengan perintah chat:\n\n` +
+      `\`\`\`\n/addprovider [Nama] [URL] [API_Key] [Model]\n\`\`\`\n\n` +
+      `📌 *Contoh Perintah Siap Pakai (Tinggal Ganti Key):*\n` +
+      `• *Inception Labs:*\n\`/addprovider Inception https://api.inceptionlabs.ai/v1/chat/completions sk_xxxx mercury-2\`\n\n` +
+      `• *DeepSeek API:*\n\`/addprovider DeepSeek https://api.deepseek.com/chat/completions sk-xxxx deepseek-chat\`\n\n` +
+      `• *OpenAI:*\n\`/addprovider OpenAI https://api.openai.com/v1/chat/completions sk-xxxx gpt-4o\`\n\n` +
+      `• *Groq Cloud:*\n\`/addprovider Groq https://api.groq.com/openai/v1/chat/completions gsk_xxxx llama-3.3-70b-versatile\`\n\n` +
+      `• *OpenRouter:*\n\`/addprovider OpenRouter https://openrouter.ai/api/v1/chat/completions sk-or-v1-xxxx auto\`\n\n` +
+      `• *Ollama Lokal:*\n\`/addprovider Ollama http://localhost:11434/v1/chat/completions none llama3.2\`\n\n` +
+      `💡 _Provider baru akan otomatis aktif & langsung diikutsertakan dalam sistem routing multi-provider._`;
+
+    const markup = {
+      inline_keyboard: [
+        [
+          { text: '➕ Tambah dari Preset', callback_data: 'adm_prov_presets' },
+          { text: '🔌 Daftar Provider', callback_data: 'adm_providers' }
+        ],
+        [
+          { text: '⬅️ Menu Utama', callback_data: 'adm_main' }
+        ]
+      ]
+    };
+    await editTelegramMessage(chatId, messageId, text, markup, token);
     return;
   }
 

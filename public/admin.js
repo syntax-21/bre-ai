@@ -171,18 +171,26 @@ function restoreFullConfigFromLocalStorage(c) {
     if (s.githubRepo) c.githubRepo = s.githubRepo;
     if (s.githubBranch) c.githubBranch = s.githubBranch;
 
-    if (s.endpoints && Array.isArray(s.endpoints) && s.endpoints.length) c.endpoints = s.endpoints;
-    if (s.clientKeys && Array.isArray(s.clientKeys) && s.clientKeys.length) c.clientKeys = s.clientKeys;
-    if (s.blacklist && Array.isArray(s.blacklist) && s.blacklist.length) c.blacklist = s.blacklist;
+    if ((!c.endpoints || !c.endpoints.length) && s.endpoints && Array.isArray(s.endpoints) && s.endpoints.length) {
+      c.endpoints = s.endpoints;
+    }
+    if ((!c.clientKeys || !c.clientKeys.length) && s.clientKeys && Array.isArray(s.clientKeys) && s.clientKeys.length) {
+      c.clientKeys = s.clientKeys;
+    }
+    if ((!c.blacklist || !c.blacklist.length) && s.blacklist && Array.isArray(s.blacklist) && s.blacklist.length) {
+      c.blacklist = s.blacklist;
+    }
 
-    if (s.telegramBotToken) c.telegramBotToken = s.telegramBotToken;
-    if (s.telegramOwnerId) c.telegramOwnerId = s.telegramOwnerId;
-    if (s.telegramDomain) c.telegramDomain = s.telegramDomain;
-    if (s.telegramAccessMode) c.telegramAccessMode = s.telegramAccessMode;
-    if (s.telegramModel) c.telegramModel = s.telegramModel;
-    if (s.telegramStyle) c.telegramStyle = s.telegramStyle;
-    if (s.defaultStyle) c.defaultStyle = s.defaultStyle;
-    if (s.telegramUsers && Array.isArray(s.telegramUsers) && s.telegramUsers.length) c.telegramUsers = s.telegramUsers;
+    if (s.telegramBotToken && !c.telegramBotToken) c.telegramBotToken = s.telegramBotToken;
+    if (s.telegramOwnerId && !c.telegramOwnerId) c.telegramOwnerId = s.telegramOwnerId;
+    if (s.telegramDomain && !c.telegramDomain) c.telegramDomain = s.telegramDomain;
+    if (s.telegramAccessMode && !c.telegramAccessMode) c.telegramAccessMode = s.telegramAccessMode;
+    if (s.telegramModel && !c.telegramModel) c.telegramModel = s.telegramModel;
+    if (s.telegramStyle && !c.telegramStyle) c.telegramStyle = s.telegramStyle;
+    if (s.defaultStyle && !c.defaultStyle) c.defaultStyle = s.defaultStyle;
+    if ((!c.telegramUsers || !c.telegramUsers.length) && s.telegramUsers && Array.isArray(s.telegramUsers) && s.telegramUsers.length) {
+      c.telegramUsers = s.telegramUsers;
+    }
   } catch(e) {}
   return c;
 }
@@ -217,6 +225,10 @@ async function loadConfig() {
     // Multi-Client Keys
     clientKeys = Array.isArray(c.clientKeys) ? c.clientKeys : [];
     renderClientKeys();
+
+    // Endpoints & Providers
+    endpoints = Array.isArray(c.endpoints) ? c.endpoints : [];
+    renderProviders();
 
     // Engine
     document.getElementById('cfgPrompt').value = c.systemPrompt || '';

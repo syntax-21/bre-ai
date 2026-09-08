@@ -81,4 +81,134 @@ const hasGantiModel = flatButtons.some(t => t.toLowerCase().includes('ganti mode
 assert.strictEqual(hasGantiModel, false, 'Ganti Model AI button MUST be removed');
 console.log('   ✅ "Ganti Model AI" is not present in Admin Menu.');
 
-console.log('\n🎉 ALL VERIFICATION TESTS PASSED SUCCESSFULLY!\n');
+// 4. Verify Manual Provider, Editing, & Key Commands
+console.log('\n4. Testing /addprovider, editing (/seturl, /setmodel, /setname, /setweight, /setkey, /editprovider), /delkey, /delprovider...');
+const mockBotService = {
+  activeOwnerId: ownerId,
+  activeAccessMode: 'public',
+  activeToken: 'test_token',
+  conversations: new Map()
+};
+
+// Add custom provider
+await handleMessage({
+  chat: { id: 999000111 },
+  from: { id: ownerId, first_name: 'Owner', username: 'boss' },
+  text: '/addprovider CustomTestAI https://api.customai.io/v1/chat/completions sk_test_key_111 custom-model-v1'
+}, mockBotService);
+
+let afterAddCfg = getConfig();
+let customEp = afterAddCfg.endpoints.find(e => e.name === 'CustomTestAI');
+assert(customEp, 'CustomTestAI should exist in endpoints');
+assert.strictEqual(customEp.url, 'https://api.customai.io/v1/chat/completions');
+assert.strictEqual(customEp.models[0], 'custom-model-v1');
+assert.strictEqual(customEp.keys[0], 'sk_test_key_111');
+console.log('   ✅ /addprovider successfully registered CustomTestAI.');
+
+// Test /seturl
+await handleMessage({
+  chat: { id: 999000111 },
+  from: { id: ownerId, first_name: 'Owner', username: 'boss' },
+  text: '/seturl CustomTestAI https://api.customai.io/v2/chat/completions'
+}, mockBotService);
+let epUrl = getConfig().endpoints.find(e => e.name === 'CustomTestAI');
+assert.strictEqual(epUrl.url, 'https://api.customai.io/v2/chat/completions');
+console.log('   ✅ /seturl successfully updated base URL.');
+
+// Test /setmodel
+await handleMessage({
+  chat: { id: 999000111 },
+  from: { id: ownerId, first_name: 'Owner', username: 'boss' },
+  text: '/setmodel CustomTestAI custom-model-v2'
+}, mockBotService);
+let epModel = getConfig().endpoints.find(e => e.name === 'CustomTestAI');
+assert.strictEqual(epModel.models[0], 'custom-model-v2');
+console.log('   ✅ /setmodel successfully updated model name.');
+
+// Test /setkey
+await handleMessage({
+  chat: { id: 999000111 },
+  from: { id: ownerId, first_name: 'Owner', username: 'boss' },
+  text: '/setkey CustomTestAI sk_new_primary_key_333'
+}, mockBotService);
+let epKey = getConfig().endpoints.find(e => e.name === 'CustomTestAI');
+assert.strictEqual(epKey.keys[0], 'sk_new_primary_key_333');
+console.log('   ✅ /setkey successfully updated primary API key.');
+
+// Test /setweight
+await handleMessage({
+  chat: { id: 999000111 },
+  from: { id: ownerId, first_name: 'Owner', username: 'boss' },
+  text: '/setweight CustomTestAI 5'
+}, mockBotService);
+let epWeight = getConfig().endpoints.find(e => e.name === 'CustomTestAI');
+assert.strictEqual(epWeight.weight, 5);
+console.log('   ✅ /setweight successfully updated provider weight.');
+
+// Test /setname
+await handleMessage({
+  chat: { id: 999000111 },
+  from: { id: ownerId, first_name: 'Owner', username: 'boss' },
+  text: '/setname CustomTestAI CustomRenamedAI'
+}, mockBotService);
+let epRenamed = getConfig().endpoints.find(e => e.name === 'CustomRenamedAI');
+assert(epRenamed, 'Provider should now be named CustomRenamedAI');
+console.log('   ✅ /setname successfully updated provider name.');
+
+// Test /editprovider general command
+await handleMessage({
+  chat: { id: 999000111 },
+  from: { id: ownerId, first_name: 'Owner', username: 'boss' },
+  text: '/editprovider CustomRenamedAI url https://api.customai.io/v3/chat/completions'
+}, mockBotService);
+let epEditedUrl = getConfig().endpoints.find(e => e.name === 'CustomRenamedAI');
+assert.strictEqual(epEditedUrl.url, 'https://api.customai.io/v3/chat/completions');
+console.log('   ✅ /editprovider url successfully updated endpoint.');
+
+await handleMessage({
+  chat: { id: 999000111 },
+  from: { id: ownerId, first_name: 'Owner', username: 'boss' },
+  text: '/editprovider CustomRenamedAI key sk_edit_key_444'
+}, mockBotService);
+let epEditedKey = getConfig().endpoints.find(e => e.name === 'CustomRenamedAI');
+assert.strictEqual(epEditedKey.keys[0], 'sk_edit_key_444');
+console.log('   ✅ /editprovider key successfully updated API key.');
+
+// Add second key to test /delkey
+await handleMessage({
+  chat: { id: 999000111 },
+  from: { id: ownerId, first_name: 'Owner', username: 'boss' },
+  text: '/addkey CustomRenamedAI sk_extra_key_555'
+}, mockBotService);
+let epTwoKeys = getConfig().endpoints.find(e => e.name === 'CustomRenamedAI');
+assert.strictEqual(epTwoKeys.keys.length, 2);
+
+await handleMessage({
+  chat: { id: 999000111 },
+  from: { id: ownerId, first_name: 'Owner', username: 'boss' },
+  text: '/delkey CustomRenamedAI 1'
+}, mockBotService);
+let epOneKey = getConfig().endpoints.find(e => e.name === 'CustomRenamedAI');
+assert.strictEqual(epOneKey.keys.length, 1);
+assert.strictEqual(epOneKey.keys[0], 'sk_extra_key_555');
+console.log('   ✅ /delkey successfully deleted first key.');
+
+// Delete test provider to clean up
+await handleMessage({
+  chat: { id: 999000111 },
+  from: { id: ownerId, first_name: 'Owner', username: 'boss' },
+  text: '/delprovider CustomRenamedAI'
+}, mockBotService);
+
+let finalCfg = getConfig();
+let customDeleted = finalCfg.endpoints.find(e => e.name === 'CustomRenamedAI');
+assert.strictEqual(customDeleted, undefined, 'CustomRenamedAI should be deleted');
+console.log('   ✅ /delprovider successfully removed provider.');
+
+// Verify Inception Labs is preserved
+const inceptionEp = finalCfg.endpoints.find(e => e.name === 'Inception Labs');
+assert(inceptionEp, 'Inception Labs provider must be preserved');
+assert(inceptionEp.keys && inceptionEp.keys.length > 0, 'Inception Labs keys must be preserved');
+console.log(`   ✅ Inception Labs provider intact with key: ${inceptionEp.keys[0].slice(0, 8)}...`);
+
+console.log('\n🎉 ALL EDITING & PROVIDER VERIFICATION TESTS PASSED 100% SUCCESSFULLY!\n');

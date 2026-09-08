@@ -810,7 +810,7 @@ async function handleMessage(msg, botService, ctx = null) {
       provMsg += `${i+1}. *${e.name || 'Provider'}* [${st}]\n   • Models: \`${(e.models || []).join(', ') || '-'}\`\n   • Keys: ${kCount} key\n   • Weight: ${e.weight || 1}\n\n`;
     });
 
-    provMsg += `_Ketik \`/setrouting auto\` untuk mengaktifkan rotasi bergantian semua provider._`;
+    provMsg += `💡 _Ketik \`/addprovider [Nama] [URL] [Key] [Model]\` untuk menambah provider baru, atau \`/addkey [No] [Key]\` untuk menambah key._`;
     await sendTelegramMessage(chatId, provMsg, null, null, token);
     return;
   }
@@ -842,6 +842,552 @@ async function handleMessage(msg, botService, ctx = null) {
       weighted: '⚖️ Berdasarkan Bobot (Weight Distribution)'
     };
     await sendTelegramMessage(chatId, `✅ Strategi routing AI berhasil diubah ke: *${labels[rawMode]}*`, null, null, token);
+    return;
+  }
+
+  // /addprovider [name] [url] [key] [model] (alias: /tambahprovider, /addendpoint)
+  if (lowerText.startsWith('/addprovider') || lowerText.startsWith('/tambahprovider') || lowerText.startsWith('/addendpoint')) {
+    if (!isOwnerUser) {
+      await sendTelegramMessage(chatId, '⛔ Perintah ini khusus untuk Owner.', null, null, token);
+      return;
+    }
+    const rawArgs = text.replace(/^\/(addprovider|tambahprovider|addendpoint)/i, '').trim();
+    const parts = rawArgs.split(/\s+/);
+    if (parts.length < 2 || !parts[0] || !parts[1]) {
+      const guide = `✍️ *Format Menambah Provider Manual (Isi Sendiri):*\n\n` +
+        `Gunakan format:\n\`/addprovider [Nama] [Base_URL] [API_Key] [Model]\`\n\n` +
+        `📌 *Contoh Penggunaan Langsung:*\n` +
+        `• \`/addprovider Inception https://api.inceptionlabs.ai/v1/chat/completions sk_xxxx mercury-2\`\n` +
+        `• \`/addprovider DeepSeek https://api.deepseek.com/chat/completions sk-xxxx deepseek-chat\`\n` +
+        `• \`/addprovider OpenAI https://api.openai.com/v1/chat/completions sk-xxxx gpt-4o\`\n` +
+        `• \`/addprovider Groq https://api.groq.com/openai/v1/chat/completions gsk_xxxx llama-3.3-70b-versatile\`\n` +
+        `• \`/addprovider Ollama http://localhost:11434/v1/chat/completions none llama3.2\``;
+      await sendTelegramMessage(chatId, guide, null, null, token);
+      return;
+    }
+
+    const provName = parts[0];
+    let provUrl = parts[1];
+    if (!provUrl.startsWith('http://') && !provUrl.startsWith('https://')) {
+      provUrl = 'https://' + provUrl;
+    }
+    const provKey = parts[2] && parts[2] !== 'none' && parts[2] !== '-' ? parts[2] : '';
+    const provModel = parts[3] || 'default';
+
+    const cfg = getConfig();
+    const eps = Array.isArray(cfg.endpoints) ? [...cfg.endpoints] : [];
+    
+    // Check if endpoint with same name already exists
+    const existingIdx = eps.findIndex(e => (e.name || '').toLowerCase() === provName.toLowerCase());
+    const newEndpoint = {
+      name: provName,
+      url: provUrl,
+      status: true,
+      weight: 1,
+      models: [provModel],
+      mapping: [],
+      keys: provKey ? [provKey] : []
+    };
+
+    if (existingIdx >= 0) {
+      eps[existingIdx] = { ...eps[existingIdx], ...newEndpoint };
+    } else {
+      eps.push(newEndpoint);
+    }
+
+    saveConfig({ endpoints: eps });
+
+    const keyMasked = provKey ? (provKey.length > 10 ? `${provKey.slice(0, 6)}...${provKey.slice(-4)}` : '••••••') : '(tanpa API Key)';
+    const epIndex = existingIdx >= 0 ? existingIdx : eps.length - 1;
+    const successMsg = `✅ *Provider AI Berhasil Ditambahkan & Aktif!*\n\n` +
+      `• *Nama Provider:* *${provName}*\n` +
+      `• *Base URL:* \`${provUrl}\`\n` +
+      `• *Model:* \`${provModel}\`\n` +
+      `• *API Key:* \`${keyMasked}\`\n` +
+      `• *Status:* 🟢 Aktif (Melayani Trafik Multi-Provider)\n\n` +
+      `_Gunakan tombol di bawah untuk uji ping latensi atau lihat daftar provider._`;
+
+    const markup = {
+      inline_keyboard: [
+        [
+          { text: '⚡ Test Ping Latensi', callback_data: `adm_prov_ping:${epIndex}` },
+          { text: '🔌 Daftar Provider', callback_data: 'adm_providers' }
+        ]
+      ]
+    };
+
+    await sendTelegramMessage(chatId, successMsg, markup, null, token);
+    return;
+  }
+
+  // Helper to resolve provider index by 1-based index or name
+  const resolveTargetProvider = (target, eps) => {
+    if (!target) return -1;
+    if (!isNaN(parseInt(target))) {
+      const idx = parseInt(target) - 1;
+      return (idx >= 0 && idx < eps.length) ? idx : -1;
+    }
+    return eps.findIndex(e => (e.name || '').toLowerCase() === target.toLowerCase());
+  };
+
+  // /setkey [idx/name] [key] (alias: /setproviderkey)
+  if (lowerText.startsWith('/setkey') || lowerText.startsWith('/setproviderkey')) {
+    if (!isOwnerUser) {
+      await sendTelegramMessage(chatId, '⛔ Perintah ini khusus untuk Owner.', null, null, token);
+      return;
+    }
+    const rawArgs = text.replace(/^\/(setkey|setproviderkey)/i, '').trim();
+    const parts = rawArgs.split(/\s+/);
+    if (parts.length < 2 || !parts[0] || !parts[1]) {
+      await sendTelegramMessage(
+        chatId,
+        `🔑 *Format Ganti/Set Utama API Key:*\n\n` +
+        `Gunakan format:\n\`/setkey [Nomor/Nama Provider] [API_Key_Baru]\`\n\n` +
+        `📌 *Contoh:*\n` +
+        `• \`/setkey 1 sk_live_kunci_utama_baru_12345\`\n` +
+        `• \`/setkey Inception sk_live_kunci_baru_67890\`\n\n` +
+        `💡 _Catatan: Gunakan \`/addkey\` jika ingin menambah key baru untuk rotasi multi-key round robin._`,
+        null, null, token
+      );
+      return;
+    }
+
+    const target = parts[0];
+    const newKey = parts[1];
+    const cfg = getConfig();
+    const eps = Array.isArray(cfg.endpoints) ? [...cfg.endpoints] : [];
+    const targetIdx = resolveTargetProvider(target, eps);
+
+    if (targetIdx < 0 || !eps[targetIdx]) {
+      await sendTelegramMessage(chatId, `⚠️ Provider \`${target}\` tidak ditemukan. Buka \`/providers\` untuk melihat nomor/nama provider.`, null, null, token);
+      return;
+    }
+
+    eps[targetIdx].keys = [newKey];
+    saveConfig({ endpoints: eps });
+
+    const masked = newKey.length > 10 ? `${newKey.slice(0, 6)}...${newKey.slice(-4)}` : '••••••';
+    await sendTelegramMessage(
+      chatId,
+      `✅ *API Key [${eps[targetIdx].name}] berhasil diperbarui!*\n\n• *Kunci Utama Baru:* \`${masked}\``,
+      null, null, token
+    );
+    return;
+  }
+
+  // /addkey [idx/name] [key] (alias: /tambahkey)
+  if (lowerText.startsWith('/addkey') || lowerText.startsWith('/tambahkey')) {
+    if (!isOwnerUser) {
+      await sendTelegramMessage(chatId, '⛔ Perintah ini khusus untuk Owner.', null, null, token);
+      return;
+    }
+    const rawArgs = text.replace(/^\/(addkey|tambahkey)/i, '').trim();
+    const parts = rawArgs.split(/\s+/);
+    if (parts.length < 2 || !parts[0] || !parts[1]) {
+      await sendTelegramMessage(
+        chatId,
+        `🔑 *Format Tambah API Key Tambahan (Rotasi Round-Robin):*\n\n` +
+        `Gunakan format:\n\`/addkey [Nomor/Nama Provider] [API_Key_Baru]\`\n\n` +
+        `📌 *Contoh:*\n` +
+        `• \`/addkey 1 sk_live_kunci_tambahan_12345\`\n` +
+        `• \`/addkey Inception sk_live_kunci_kedua_67890\``,
+        null, null, token
+      );
+      return;
+    }
+
+    const target = parts[0];
+    const newKey = parts[1];
+    const cfg = getConfig();
+    const eps = Array.isArray(cfg.endpoints) ? [...cfg.endpoints] : [];
+    const targetIdx = resolveTargetProvider(target, eps);
+
+    if (targetIdx < 0 || !eps[targetIdx]) {
+      await sendTelegramMessage(chatId, `⚠️ Provider \`${target}\` tidak ditemukan. Buka \`/providers\` untuk melihat nomor/nama provider.`, null, null, token);
+      return;
+    }
+
+    const ep = eps[targetIdx];
+    if (!Array.isArray(ep.keys)) {
+      ep.keys = ep.keys ? [ep.keys] : [];
+    }
+
+    if (!ep.keys.includes(newKey)) {
+      ep.keys.push(newKey);
+      saveConfig({ endpoints: eps });
+    }
+
+    const masked = newKey.length > 10 ? `${newKey.slice(0, 6)}...${newKey.slice(-4)}` : '••••••';
+    await sendTelegramMessage(
+      chatId,
+      `✅ *API Key Berhasil Ditambahkan!*\n\n` +
+      `• *Provider:* *${ep.name}* (#${targetIdx+1})\n` +
+      `• *Key Baru:* \`${masked}\`\n` +
+      `• *Total Key Terpasang:* ${ep.keys.length} key (Rotasi Otomatis Aktif)`,
+      null, null, token
+    );
+    return;
+  }
+
+  // /seturl [idx/name] [newUrl] (alias: /setproviderurl)
+  if (lowerText.startsWith('/seturl') || lowerText.startsWith('/setproviderurl')) {
+    if (!isOwnerUser) {
+      await sendTelegramMessage(chatId, '⛔ Perintah ini khusus untuk Owner.', null, null, token);
+      return;
+    }
+    const rawArgs = text.replace(/^\/(seturl|setproviderurl)/i, '').trim();
+    const parts = rawArgs.split(/\s+/);
+    if (parts.length < 2 || !parts[0] || !parts[1]) {
+      await sendTelegramMessage(
+        chatId,
+        `🌐 *Format Ganti Base URL Provider:*\n\n` +
+        `Gunakan format:\n\`/seturl [Nomor/Nama Provider] [URL_Baru]\`\n\n` +
+        `📌 *Contoh:*\n` +
+        `• \`/seturl 1 https://api.openai.com/v1/chat/completions\`\n` +
+        `• \`/seturl Inception https://api.inceptionlabs.ai/v1/chat/completions\`\n` +
+        `• \`/seturl DeepSeek https://api.deepseek.com/chat/completions\``,
+        null, null, token
+      );
+      return;
+    }
+
+    const target = parts[0];
+    let newUrl = parts[1];
+    if (!newUrl.startsWith('http://') && !newUrl.startsWith('https://')) {
+      newUrl = 'https://' + newUrl;
+    }
+
+    const cfg = getConfig();
+    const eps = Array.isArray(cfg.endpoints) ? [...cfg.endpoints] : [];
+    const targetIdx = resolveTargetProvider(target, eps);
+
+    if (targetIdx < 0 || !eps[targetIdx]) {
+      await sendTelegramMessage(chatId, `⚠️ Provider \`${target}\` tidak ditemukan. Buka \`/providers\` untuk melihat nomor/nama provider.`, null, null, token);
+      return;
+    }
+
+    eps[targetIdx].url = newUrl;
+    saveConfig({ endpoints: eps });
+
+    const markup = {
+      inline_keyboard: [
+        [
+          { text: '⚡ Test Ping Latensi', callback_data: `adm_prov_ping:${targetIdx}` },
+          { text: '🔌 Detail Provider', callback_data: `adm_prov_det:${targetIdx}` }
+        ]
+      ]
+    };
+    await sendTelegramMessage(
+      chatId,
+      `✅ *Base URL Provider [${eps[targetIdx].name}] Berhasil Diperbarui!*\n\n` +
+      `• *URL Baru:* \`${newUrl}\``,
+      markup, null, token
+    );
+    return;
+  }
+
+  // /setmodel [idx/name] [model] (alias: /setprovidermodel)
+  if (lowerText.startsWith('/setmodel') || lowerText.startsWith('/setprovidermodel')) {
+    if (!isOwnerUser) {
+      await sendTelegramMessage(chatId, '⛔ Perintah ini khusus untuk Owner.', null, null, token);
+      return;
+    }
+    const rawArgs = text.replace(/^\/(setmodel|setprovidermodel)/i, '').trim();
+    const parts = rawArgs.split(/\s+/);
+    if (parts.length < 2 || !parts[0] || !parts[1]) {
+      await sendTelegramMessage(
+        chatId,
+        `🤖 *Format Ganti Model AI Provider:*\n\n` +
+        `Gunakan format:\n\`/setmodel [Nomor/Nama Provider] [Nama_Model_Baru]\`\n\n` +
+        `📌 *Contoh:*\n` +
+        `• \`/setmodel 1 mercury-2\`\n` +
+        `• \`/setmodel Inception mercury-2\`\n` +
+        `• \`/setmodel DeepSeek deepseek-chat\`\n` +
+        `• \`/setmodel OpenAI gpt-4o\`\n` +
+        `• \`/setmodel Groq llama-3.3-70b-versatile\``,
+        null, null, token
+      );
+      return;
+    }
+
+    const target = parts[0];
+    const newModel = parts[1];
+    const cfg = getConfig();
+    const eps = Array.isArray(cfg.endpoints) ? [...cfg.endpoints] : [];
+    const targetIdx = resolveTargetProvider(target, eps);
+
+    if (targetIdx < 0 || !eps[targetIdx]) {
+      await sendTelegramMessage(chatId, `⚠️ Provider \`${target}\` tidak ditemukan. Buka \`/providers\` untuk melihat nomor/nama provider.`, null, null, token);
+      return;
+    }
+
+    eps[targetIdx].models = [newModel];
+    saveConfig({ endpoints: eps });
+
+    const markup = {
+      inline_keyboard: [
+        [
+          { text: '🧪 Test Model Live', callback_data: `adm_prov_test:${targetIdx}` },
+          { text: '🔌 Detail Provider', callback_data: `adm_prov_det:${targetIdx}` }
+        ]
+      ]
+    };
+    await sendTelegramMessage(
+      chatId,
+      `✅ *Model AI untuk Provider [${eps[targetIdx].name}] Berhasil Diubah!*\n\n` +
+      `• *Model Baru:* \`${newModel}\``,
+      markup, null, token
+    );
+    return;
+  }
+
+  // /setname [idx/name] [newName] (alias: /setprovidername)
+  if (lowerText.startsWith('/setname') || lowerText.startsWith('/setprovidername')) {
+    if (!isOwnerUser) {
+      await sendTelegramMessage(chatId, '⛔ Perintah ini khusus untuk Owner.', null, null, token);
+      return;
+    }
+    const rawArgs = text.replace(/^\/(setname|setprovidername)/i, '').trim();
+    const parts = rawArgs.split(/\s+/);
+    if (parts.length < 2 || !parts[0] || !parts[1]) {
+      await sendTelegramMessage(
+        chatId,
+        `🏷️ *Format Ganti Nama Label Provider:*\n\n` +
+        `Gunakan format:\n\`/setname [Nomor/Nama Provider] [Nama_Baru]\`\n\n` +
+        `📌 *Contoh:*\n` +
+        `• \`/setname 1 Inception Labs Utama\`\n` +
+        `• \`/setname DeepSeek DeepSeek V3 Fast\``,
+        null, null, token
+      );
+      return;
+    }
+
+    const target = parts[0];
+    const newName = parts.slice(1).join(' ').trim();
+    const cfg = getConfig();
+    const eps = Array.isArray(cfg.endpoints) ? [...cfg.endpoints] : [];
+    const targetIdx = resolveTargetProvider(target, eps);
+
+    if (targetIdx < 0 || !eps[targetIdx]) {
+      await sendTelegramMessage(chatId, `⚠️ Provider \`${target}\` tidak ditemukan.`, null, null, token);
+      return;
+    }
+
+    const oldName = eps[targetIdx].name;
+    eps[targetIdx].name = newName;
+    saveConfig({ endpoints: eps });
+
+    await sendTelegramMessage(
+      chatId,
+      `✅ *Nama Provider Berhasil Diubah!*\n\n` +
+      `• *Nama Lama:* \`${oldName}\`\n` +
+      `• *Nama Baru:* *${newName}*`,
+      null, null, token
+    );
+    return;
+  }
+
+  // /setweight [idx/name] [1-10] (alias: /setproviderweight)
+  if (lowerText.startsWith('/setweight') || lowerText.startsWith('/setproviderweight')) {
+    if (!isOwnerUser) {
+      await sendTelegramMessage(chatId, '⛔ Perintah ini khusus untuk Owner.', null, null, token);
+      return;
+    }
+    const rawArgs = text.replace(/^\/(setweight|setproviderweight)/i, '').trim();
+    const parts = rawArgs.split(/\s+/);
+    if (parts.length < 2 || !parts[0] || !parts[1] || isNaN(parseInt(parts[1]))) {
+      await sendTelegramMessage(
+        chatId,
+        `⚖️ *Format Atur Bobot (Weight) Provider:*\n\n` +
+        `Gunakan format:\n\`/setweight [Nomor/Nama Provider] [Angka 1-100]\`\n\n` +
+        `📌 *Contoh:*\n` +
+        `• \`/setweight 1 5\`\n` +
+        `• \`/setweight Inception 10\``,
+        null, null, token
+      );
+      return;
+    }
+
+    const target = parts[0];
+    const weightVal = Math.max(1, Math.min(100, parseInt(parts[1]) || 1));
+    const cfg = getConfig();
+    const eps = Array.isArray(cfg.endpoints) ? [...cfg.endpoints] : [];
+    const targetIdx = resolveTargetProvider(target, eps);
+
+    if (targetIdx < 0 || !eps[targetIdx]) {
+      await sendTelegramMessage(chatId, `⚠️ Provider \`${target}\` tidak ditemukan.`, null, null, token);
+      return;
+    }
+
+    eps[targetIdx].weight = weightVal;
+    saveConfig({ endpoints: eps });
+
+    await sendTelegramMessage(
+      chatId,
+      `✅ *Bobot (Weight) [${eps[targetIdx].name}] diubah ke:* *${weightVal}*`,
+      null, null, token
+    );
+    return;
+  }
+
+  // /editprovider [idx/name] [field] [value] (alias: /ubahprovider)
+  if (lowerText.startsWith('/editprovider') || lowerText.startsWith('/ubahprovider')) {
+    if (!isOwnerUser) {
+      await sendTelegramMessage(chatId, '⛔ Perintah ini khusus untuk Owner.', null, null, token);
+      return;
+    }
+    const rawArgs = text.replace(/^\/(editprovider|ubahprovider)/i, '').trim();
+    const parts = rawArgs.split(/\s+/);
+    if (parts.length < 3) {
+      await sendTelegramMessage(
+        chatId,
+        `✏️ *Panduan Lengkap Edit Provider AI:*\n\n` +
+        `Gunakan format:\n\`/editprovider [No/Nama] [Field] [Nilai_Baru]\`\n\n` +
+        `Pilihan Field:\n` +
+        `• \`url\` -> Ganti Base URL (\`/seturl\`)\n` +
+        `• \`key\` -> Ganti API Key Utama (\`/setkey\`)\n` +
+        `• \`model\` -> Ganti Model AI (\`/setmodel\`)\n` +
+        `• \`name\` -> Ganti Nama Label (\`/setname\`)\n` +
+        `• \`weight\` -> Ubah Bobot (\`/setweight\`)\n\n` +
+        `📌 *Contoh Penggunaan:*\n` +
+        `• \`/editprovider 1 url https://api.openai.com/v1/chat/completions\`\n` +
+        `• \`/editprovider 1 key sk_live_kuncibaru12345\`\n` +
+        `• \`/editprovider 1 model gpt-4o\`\n` +
+        `• \`/editprovider 1 name Inception Prime\`\n` +
+        `• \`/editprovider 1 weight 5\``,
+        null, null, token
+      );
+      return;
+    }
+
+    const target = parts[0];
+    const field = parts[1].toLowerCase();
+    const value = parts.slice(2).join(' ').trim();
+    const cfg = getConfig();
+    const eps = Array.isArray(cfg.endpoints) ? [...cfg.endpoints] : [];
+    const targetIdx = resolveTargetProvider(target, eps);
+
+    if (targetIdx < 0 || !eps[targetIdx]) {
+      await sendTelegramMessage(chatId, `⚠️ Provider \`${target}\` tidak ditemukan.`, null, null, token);
+      return;
+    }
+
+    const ep = eps[targetIdx];
+    if (['url', 'endpoint', 'baseurl'].includes(field)) {
+      ep.url = value.startsWith('http') ? value : 'https://' + value;
+    } else if (['key', 'apikey'].includes(field)) {
+      ep.keys = [value];
+    } else if (['model', 'models'].includes(field)) {
+      ep.models = [value];
+    } else if (['name', 'nama'].includes(field)) {
+      ep.name = value;
+    } else if (['weight', 'bobot'].includes(field)) {
+      ep.weight = Math.max(1, Math.min(100, parseInt(value) || 1));
+    } else {
+      await sendTelegramMessage(chatId, `⚠️ Field \`${field}\` tidak dikenal. Gunakan: url, key, model, name, weight.`, null, null, token);
+      return;
+    }
+
+    saveConfig({ endpoints: eps });
+    const maskedVal = field === 'key' ? (value.length > 10 ? value.slice(0, 6) + '...' + value.slice(-4) : '••••••') : value;
+    await sendTelegramMessage(
+      chatId,
+      `✅ *Provider [${ep.name}] berhasil diperbarui!*\n\n• *Field Diubah:* \`${field}\`\n• *Nilai Baru:* \`${maskedVal}\``,
+      null, null, token
+    );
+    return;
+  }
+
+  // /delkey [idx/name] [key_index/key_string] (alias: /hapuskey)
+  if (lowerText.startsWith('/delkey') || lowerText.startsWith('/hapuskey')) {
+    if (!isOwnerUser) {
+      await sendTelegramMessage(chatId, '⛔ Perintah ini khusus untuk Owner.', null, null, token);
+      return;
+    }
+    const rawArgs = text.replace(/^\/(delkey|hapuskey)/i, '').trim();
+    const parts = rawArgs.split(/\s+/);
+    if (parts.length < 2 || !parts[0] || !parts[1]) {
+      await sendTelegramMessage(
+        chatId,
+        `🗑️ *Format Hapus API Key:*\n\n` +
+        `Gunakan format:\n\`/delkey [Nomor/Nama Provider] [Nomor Key / Isi Key]\`\n\n` +
+        `Contoh: \`/delkey 1 2\` (menghapus key ke-2 pada provider #1)`,
+        null, null, token
+      );
+      return;
+    }
+
+    const target = parts[0];
+    const keyTarget = parts[1];
+    const cfg = getConfig();
+    const eps = Array.isArray(cfg.endpoints) ? [...cfg.endpoints] : [];
+    const targetIdx = resolveTargetProvider(target, eps);
+
+    if (targetIdx < 0 || !eps[targetIdx]) {
+      await sendTelegramMessage(chatId, `⚠️ Provider \`${target}\` tidak ditemukan.`, null, null, token);
+      return;
+    }
+
+    const ep = eps[targetIdx];
+    if (!Array.isArray(ep.keys) || ep.keys.length === 0) {
+      await sendTelegramMessage(chatId, `⚠️ Provider *${ep.name}* tidak memiliki API Key terpasang.`, null, null, token);
+      return;
+    }
+
+    let removed = false;
+    if (!isNaN(parseInt(keyTarget))) {
+      const kIdx = parseInt(keyTarget) - 1;
+      if (ep.keys[kIdx] !== undefined) {
+        ep.keys.splice(kIdx, 1);
+        removed = true;
+      }
+    } else {
+      const kIdx = ep.keys.indexOf(keyTarget);
+      if (kIdx >= 0) {
+        ep.keys.splice(kIdx, 1);
+        removed = true;
+      }
+    }
+
+    if (!removed) {
+      await sendTelegramMessage(chatId, `⚠️ Key \`${keyTarget}\` tidak ditemukan pada provider *${ep.name}*.`, null, null, token);
+      return;
+    }
+
+    saveConfig({ endpoints: eps });
+    await sendTelegramMessage(
+      chatId,
+      `🗑️ *API Key berhasil dihapus dari ${ep.name}!* Sisa: ${ep.keys.length} key.`,
+      null, null, token
+    );
+    return;
+  }
+
+  // /delprovider [idx/name] (alias: /hapusprovider)
+  if (lowerText.startsWith('/delprovider') || lowerText.startsWith('/hapusprovider')) {
+    if (!isOwnerUser) {
+      await sendTelegramMessage(chatId, '⛔ Perintah ini khusus untuk Owner.', null, null, token);
+      return;
+    }
+    const target = text.replace(/^\/(delprovider|hapusprovider)/i, '').trim();
+    if (!target) {
+      await sendTelegramMessage(chatId, `ℹ️ Format: \`/delprovider [Nomor Provider atau Nama]\`\nContoh: \`/delprovider 2\` atau \`/delprovider DeepSeek\``, null, null, token);
+      return;
+    }
+
+    const cfg = getConfig();
+    const eps = Array.isArray(cfg.endpoints) ? [...cfg.endpoints] : [];
+    const targetIdx = resolveTargetProvider(target, eps);
+
+    if (targetIdx < 0 || !eps[targetIdx]) {
+      await sendTelegramMessage(chatId, `⚠️ Provider \`${target}\` tidak ditemukan.`, null, null, token);
+      return;
+    }
+
+    const removedName = eps[targetIdx].name;
+    eps.splice(targetIdx, 1);
+    saveConfig({ endpoints: eps });
+    await sendTelegramMessage(chatId, `🗑️ Provider *[${removedName}]* berhasil dihapus dari daftar router!`, null, null, token);
     return;
   }
 
@@ -885,20 +1431,6 @@ async function handleMessage(msg, botService, ctx = null) {
       benchText += `${medal} *${r.name}* (\`${r.model}\`): ${st}\n`;
     });
     await sendTelegramMessage(chatId, benchText, null, null, token);
-    return;
-  }
-
-  // /setmodel [nama]
-  if (lowerText.startsWith('/setmodel')) {
-    if (!isOwnerUser) {
-      await sendTelegramMessage(chatId, '⛔ Perintah ini khusus untuk Owner.', null, null, token);
-      return;
-    }
-    await sendTelegramMessage(
-      chatId,
-      `ℹ️ Model AI dan failover Telegram dikelola secara cerdas & terpusat melalui menu *Provider & Routing*. Buka \`/providers\` atau \`/admin\` untuk mengatur router.`,
-      null, null, token
-    );
     return;
   }
 
@@ -1197,6 +1729,16 @@ async function handleMessage(msg, botService, ctx = null) {
         `• \`/metrics\` - Laporan metrik real-time & token\n` +
         `• \`/logs\` - Lihat 5 log server terakhir\n` +
         `• \`/providers\` - Daftar endpoint AI & status routing\n` +
+        `• \`/addprovider [nama] [url] [key] [model]\` - Tambah provider manual\n` +
+        `• \`/editprovider [idx/nama] [field] [nilai]\` - Edit provider (url/key/model/name/weight)\n` +
+        `• \`/seturl [idx/nama] [url]\` - Ganti endpoint Base URL provider\n` +
+        `• \`/setmodel [idx/nama] [model]\` - Ganti model AI provider\n` +
+        `• \`/setkey [idx/nama] [key]\` - Ganti API Key utama provider\n` +
+        `• \`/setname [idx/nama] [nama]\` - Ganti nama label provider\n` +
+        `• \`/setweight [idx/nama] [bobot]\` - Atur bobot prioritas provider\n` +
+        `• \`/addkey [idx/nama] [key]\` - Tambah API key tambahan (rotasi)\n` +
+        `• \`/delkey [idx/nama] [key_idx]\` - Hapus API key dari provider\n` +
+        `• \`/delprovider [idx/nama]\` - Hapus provider dari router\n` +
         `• \`/setrouting [auto|priority|weighted]\` - Atur rotasi provider (AUTO bergantian)\n` +
         `• \`/benchmark\` - Uji kecepatan paralel semua provider\n` +
         `• \`/setmode [public|diizinkan]\` - Ubah mode akses bot\n` +
