@@ -263,7 +263,7 @@ class TelegramBotService {
         const updates = await this.apiCall('getUpdates', {
           offset: this.currentOffset,
           timeout: 25,
-          allowed_updates: ['message', 'callback_query']
+          allowed_updates: ['message', 'edited_message', 'channel_post', 'edited_channel_post', 'callback_query']
         });
 
         this.lastError = null;
@@ -273,8 +273,9 @@ class TelegramBotService {
             if (!this.isRunning) break;
             this.currentOffset = u.update_id + 1;
 
-            if (u.message) {
-              this.handleMessage(u.message).catch(err => {
+            const incomingMsg = u.message || u.channel_post;
+            if (incomingMsg) {
+              this.handleMessage(incomingMsg).catch(err => {
                 console.error('[TelegramBot] Error message:', err);
               });
             } else if (u.callback_query) {

@@ -63,8 +63,9 @@ module.exports = async (req, res) => {
       // Sinkronisasi cloud opsional jika tersedia (tidak wajib)
       try { await syncCloudConfig(); } catch (e) {}
 
-      if (body.message) {
-        await telegramBot.handleMessage(body.message, webhookCtx);
+      const incomingMsg = body.message || body.channel_post;
+      if (incomingMsg) {
+        await telegramBot.handleMessage(incomingMsg, webhookCtx);
       } else if (body.callback_query) {
         await telegramBot.handleCallbackQuery(body.callback_query, webhookCtx);
       }

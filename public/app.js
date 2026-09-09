@@ -1218,6 +1218,45 @@ function renderContent(raw, isUser) {
     thHtml = `<details class="think-box" ${done?'':'open'}><summary>Bre AI Reasoning ${done?'':'...'}</summary><div class="think-content">${esc(tm[1].trim())}</div></details>`;
     text = text.replace(/<think>[\s\S]*?(?:<\/think>|$)/i, '').trim();
   }
+
+  // Handle rich outbound tags for interactive web rendering
+  text = text.replace(/\[TELEGRAM_FILE:\s*([\s\S]*?)\]/gi, (match, body) => {
+    let fn = 'berkas.txt';
+    let content = '';
+    try {
+      const p = JSON.parse(body.trim());
+      if (p.filename) fn = p.filename;
+      if (p.content !== undefined) content = p.content;
+    } catch(e) {
+      const fnM = body.match(/"filename"\s*:\s*"([^"\r\n]+)"/i);
+      if (fnM) fn = fnM[1];
+      const cM = body.match(/"content"\s*:\s*"([\s\S]*?)"\s*(?:,\s*"caption"|\})/i);
+      if (cM) content = cM[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+    }
+    const ext = fn.split('.').pop() || 'text';
+    return `\n\n📁 **Unduh Berkas: \`${fn}\`**\n\`\`\`${ext}\n# ${fn}\n${content}\n\`\`\`\n`;
+  });
+  text = text.replace(/\[TELEGRAM_POLL:\s*([\s\S]*?)\]/gi, (m, b) => {
+    try {
+      const p = JSON.parse(b.trim());
+      const opts = (p.options || []).map(o => `• ${o}`).join('\n');
+      return `\n\n📊 **Polling: ${p.question || 'Kuis'}**\n${opts}\n`;
+    } catch(e) { return ''; }
+  });
+  text = text.replace(/\[TELEGRAM_DICE:\s*([^\]]+)\]/gi, '\n\n🎲 *$1*\n\n');
+  text = text.replace(/\[TELEGRAM_LOCATION:\s*([\s\S]*?)\]/gi, (m, b) => {
+    try {
+      const p = JSON.parse(b.trim());
+      return `\n\n📍 **Lokasi: ${p.title || 'Peta'}** (${p.latitude}, ${p.longitude})\n${p.address || ''}\n`;
+    } catch(e) { return ''; }
+  });
+  text = text.replace(/\[TELEGRAM_CONTACT:\s*([\s\S]*?)\]/gi, (m, b) => {
+    try {
+      const p = JSON.parse(b.trim());
+      return `\n\n👤 **Kontak: ${p.first_name || ''} ${p.last_name || ''}** (${p.phone_number || ''})\n`;
+    } catch(e) { return ''; }
+  });
+
   let html = text;
   if (window.marked && text) { try { html = marked.parse(text); } catch(e){ html = esc(text).replace(/\n/g,'<br>'); } }
   return thHtml + html;
@@ -1271,29 +1310,49 @@ function afterRender(container) {
   });
 }
 
+// Comprehensive extension dictionary for web downloads matching Telegram bot
+const WEB_EXT_MAP = {
+  javascript: 'script.js', js: 'script.js', node: 'script.js',
+  typescript: 'script.ts', ts: 'script.ts',
+  html: 'index.html', htm: 'index.html',
+  css: 'style.css', scss: 'style.scss', sass: 'style.sass', less: 'style.less',
+  python: 'script.py', py: 'script.py', pyw: 'script.py',
+  json: 'data.json', jsonc: 'data.json',
+  csv: 'data.csv', tsv: 'data.tsv',
+  sql: 'query.sql',
+  yaml: 'config.yml', yml: 'config.yml',
+  xml: 'data.xml', svg: 'image.svg',
+  env: '.env', ini: 'config.ini', cfg: 'config.cfg', conf: 'config.conf', toml: 'config.toml',
+  bash: 'script.sh', sh: 'script.sh', shell: 'script.sh', zsh: 'script.sh',
+  batch: 'script.bat', bat: 'script.bat', cmd: 'script.bat',
+  powershell: 'script.ps1', ps1: 'script.ps1',
+  php: 'index.php',
+  cpp: 'main.cpp', 'c++': 'main.cpp', c: 'main.c', h: 'header.h', hpp: 'header.hpp',
+  java: 'Main.java', kotlin: 'Main.kt', kt: 'Main.kt',
+  go: 'main.go', golang: 'main.go',
+  rust: 'main.rs', rs: 'main.rs',
+  ruby: 'script.rb', rb: 'script.rb',
+  dart: 'main.dart', swift: 'main.swift',
+  lua: 'script.lua', r: 'script.r',
+  perl: 'script.pl', pl: 'script.pl',
+  markdown: 'document.md', md: 'document.md',
+  text: 'catatan.txt', txt: 'catatan.txt', plain: 'catatan.txt',
+  dockerfile: 'Dockerfile', docker: 'Dockerfile',
+  prd: 'product_requirements.prd'
+};
+
 function downloadCode(btn, lang) {
   const wrap = btn.closest('.code-wrap');
   const code = wrap.querySelector('code');
   const text = code.textContent;
+  const l = (lang || '').toLowerCase();
   
-  let filename = `file_${Date.now()}.${lang === 'document' ? 'txt' : lang}`;
+  let filename = WEB_EXT_MAP[l] || `file_${Date.now()}.${l === 'document' || !l ? 'txt' : l}`;
   
   const firstLine = text.split('\n')[0].trim();
   const match = firstLine.match(/(?:filename|file|name)[:=]\s*([a-zA-Z0-9_\-\.]+)/i) || firstLine.match(/^[#\/\*\-\s]*([a-zA-Z0-9_\-]+\.[a-zA-Z0-9]+)/);
   if (match && match[1]) {
-    filename = match[1].replace(/^[#\/\*\-\s]+/, '');
-  } else if (lang.toLowerCase() === 'prd') {
-    filename = 'product_requirements.prd';
-  } else if (lang.toLowerCase() === 'markdown' || lang.toLowerCase() === 'md') {
-    filename = 'document.md';
-  } else if (lang.toLowerCase() === 'javascript' || lang.toLowerCase() === 'js') {
-    filename = 'script.js';
-  } else if (lang.toLowerCase() === 'python' || lang.toLowerCase() === 'py') {
-    filename = 'script.py';
-  } else if (lang.toLowerCase() === 'html') {
-    filename = 'index.html';
-  } else if (lang.toLowerCase() === 'json') {
-    filename = 'data.json';
+    filename = match[1].replace(/^[#\/\*\-\s]+/, '').trim();
   }
   
   const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });

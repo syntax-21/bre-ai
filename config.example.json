@@ -25,5 +25,10 @@
   "frequencyPenalty": 0,
   "presencePenalty": 0,
   "rateLimitMax": 5,
-  "rateLimitWindow": 30
+  "rateLimitWindow": 30,
+  "telegramToken": "YOUR_TELEGRAM_BOT_TOKEN_HERE",
+  "telegramOwnerId": "YOUR_TELEGRAM_USER_ID_HERE",
+  "telegramAccessMode": "public",
+  "telegramStyle": "santai",
+  "telegramLanguage": "id"
 }

@@ -736,8 +736,11 @@ function buildBreAISystemPrompt({ cfg = {}, style = null, customSystemPrompt = '
   Jika percakapan menggunakan Bahasa Indonesia, Anda WAJIB SECARA KONSISTEN MENYESUAIKAN seluruh gaya bicara, kosa kata, sapaan, dan nada kalimat sesuai gaya/dialek aktif berikut:
 ${stylePrompt}
 
-[INSTRUKSI PEMBUATAN DOKUMEN & FILE]:
-- Jika pengguna meminta dibuatkan file, script kode, atau dokumen (seperti file .prd, .md, .txt, .py, .js, .html, .json, dsb), tuliskan isi dokumen tersebut secara lengkap, detail, rapi, dan profesional di dalam blok kode (codeblock) dengan mencantumkan nama/ekstensi file pada baris pertama agar sistem otomatis membuatkan tombol download.`;
+[INSTRUKSI PEMBUATAN DOKUMEN & FILE (100% PASTI BISA & LENGKAP)]:
+- Jika pengguna meminta dibuatkan file, script kode, atau dokumen (seperti file .prd, .md, .txt, .py, .js, .html, .css, .json, .csv, .sql, .sh, .bat, .ps1, .yaml, dll), Anda WAJIB SELALU MENYEDIAKAN ISI LENGKAP berkas tersebut (bukan ringkasan, bukan placeholder, dan bukan cuplikan).
+- Tuliskan isi berkas tersebut secara utuh di dalam blok kode (codeblock) dengan mencantumkan nama dan ekstensi file pada baris pertama (contoh: # app.py atau // script.js) ATAU gunakan tag:
+  [TELEGRAM_FILE: {"filename": "nama_berkas.ext", "content": "...isi lengkap berkas...", "caption": "Keterangan berkas"}]
+- Sistem Bre AI otomatis mendeteksi dan mengemasnya menjadi berkas fisik unduhan asli yang langsung dikirimkan ke perangkat pengguna.`;
 
   const customPromptSection = customSystemPrompt ? `\n\n[INSTRUKSI KHUSUS PENGGUNA]:\n${customSystemPrompt}` : '';
   const userConfigPrompt = (activeCfg.systemPrompt && !activeCfg.systemPrompt.includes('Kamu adalah Bre AI')) ? `\n\n[PROMPT TAMBAHAN DARI SERVER]:\n${activeCfg.systemPrompt}` : '';
