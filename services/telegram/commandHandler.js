@@ -164,7 +164,7 @@ async function handleSlashCommand({
     }
 
     const botLatency = Date.now() - t0;
-    const activeStyle = STYLE_LABELS[chatStyles.get(chatId) || cfg.telegramStyle || cfg.defaultStyle || 'santai'] || '✨ Santai & Friendly';
+    const activeStyle = STYLE_LABELS[cfg.telegramStyle || cfg.defaultStyle || 'jakarta'] || '🗣️ Jakarta / Gaul (Gue-Lu)';
 
     await api.sendTelegramMessage(
       chatId,
@@ -299,11 +299,12 @@ async function handleSlashCommand({
     const cfg = getConfig();
     const isRestricted = (cfg.telegramAccessMode || 'public') !== 'public';
     const statusMode = isRestricted ? '🔒 Khusus Diizinkan' : '🟢 Publik';
-    const statusStyle = STYLE_LABELS[cfg.telegramStyle || cfg.defaultStyle || 'santai'] || '✨ Santai & Friendly';
+    const statusStyle = STYLE_LABELS[cfg.telegramStyle || cfg.defaultStyle || 'jakarta'] || '🗣️ Jakarta / Gaul (Gue-Lu)';
     const statusMsg = `📊 *Status Sistem Bre AI Router*\n\n` +
       `• *Bot:* @${botService.botInfo?.username || 'BreAI_Bot'}\n` +
       `• *Mode Akses:* *${statusMode}*\n` +
-      `• *Gaya Bahasa Default:* *${statusStyle}*\n` +
+      `• *Gaya Bahasa Indonesia Global:* *${statusStyle}*\n` +
+      `• *Bahasa Respons:* *🌐 Otomatis (deteksi dari pesan)*\n` +
       `• *Auto-Failover:* *${cfg.autoFailover !== false ? '🟢 Aktif' : '🔴 Nonaktif'}*\n` +
       `• *Response Cache:* *${cfg.cacheEnabled ? '⚡ Aktif' : '⚪ Nonaktif'}*\n` +
       `• *Sesi Chat Aktif:* ${botService.conversations.size} percakapan`;
@@ -1171,22 +1172,25 @@ async function handleSlashCommand({
   // /start
   if (text === '/start' || text.startsWith('/start ')) {
     botService.conversations.delete(chatId);
-    const currentLang = getUserLanguage(chatId);
-    const langLabel = currentLang && LANGUAGE_OPTIONS[currentLang] ? LANGUAGE_OPTIONS[currentLang].label : '🇮🇩 Bahasa Indonesia';
-    
-    let welcome = `⚡️ *Halo ${senderName}!* Selamat datang di *Bre AI*.\n\n` +
-      `Saya adalah asisten kecerdasan buatan serba bisa dan cerdas tanpa batas ciptaan *Amirun Rayan Ariandi*, siap membantu Anda menjawab pertanyaan, menulis kode program, menghasilkan pesan interaktif, menganalisis dokumen/gambar, hingga menyelesaikan tugas kompleks langsung dari Telegram.\n\n` +
-      `• Kirim /reset untuk membersihkan riwayat obrolan.\n` +
-      `• Kirim /language atau /bahasa untuk memilih bahasa respons.\n` +
-      `• Kirim /help untuk daftar perintah & panduan lengkap.\n` +
-      `🌐 *Bahasa Aktif:* ${langLabel}`;
+
+    let welcome = `⚡️ *Halo ${senderName}!* Selamat datang di *Bre AI*.
+
+Saya adalah asisten kecerdasan buatan serba bisa dan cerdas tanpa batas ciptaan *Amirun Rayan Ariandi*, siap membantu Anda menjawab pertanyaan, menulis kode program, menghasilkan pesan interaktif, menganalisis dokumen/gambar, hingga menyelesaikan tugas kompleks langsung dari Telegram.
+
+• Tulis pesan dalam *bahasa apa pun* — Bre AI otomatis menjawab dalam bahasa yang sama! 🌐
+• Kirim /reset untuk membersihkan riwayat obrolan.
+• Kirim /help untuk daftar perintah & panduan lengkap.`;
 
     let replyMarkup = null;
 
     if (isOwnerUser) {
+      const cfg2 = getConfig();
+      const ownerStyle = STYLE_LABELS[cfg2.telegramStyle || cfg2.defaultStyle || 'jakarta'] || '🗣️ Jakarta / Gaul (Gue-Lu)';
       welcome += `\n\n👑 *Panel Pemilik (Owner):*\n` +
-        `Kirim */admin* untuk membuka Master Control Panel atau pantau sistem dengan perintah cepat: \`/status\`, \`/metrics\`, \`/logs\`, \`/providers\`, \`/benchmark\`.`;
-      
+        `Kirim */admin* untuk membuka Master Control Panel atau pantau sistem dengan perintah cepat: \`/status\`, \`/metrics\`, \`/logs\`, \`/providers\`, \`/benchmark\`.\n` +
+        `🎭 *Gaya Bahasa Indonesia Aktif:* ${ownerStyle}\n` +
+        `_Gunakan \`/style\` untuk mengubah gaya bahasa Indonesia Bre AI (global)._`;
+
       replyMarkup = {
         inline_keyboard: [
           [
@@ -1203,34 +1207,40 @@ async function handleSlashCommand({
 
   // /help
   if (text === '/help') {
-    const currentLang = getUserLanguage(chatId);
-    const langLabel = currentLang && LANGUAGE_OPTIONS[currentLang] ? LANGUAGE_OPTIONS[currentLang].label : '🇮🇩 Bahasa Indonesia (default)';
-    const currentStyle = getUserStyle(chatId);
-    const styleLabel = STYLE_LABELS[currentStyle] || '✨ Santai & Friendly';
+    const cfg2 = getConfig();
+    const globalStyle = cfg2.telegramStyle || cfg2.defaultStyle || 'jakarta';
+    const styleLabel = STYLE_LABELS[globalStyle] || '🗣️ Jakarta / Gaul (Gue-Lu)';
 
-    let help = `📖 *Panduan Penggunaan Bre AI di Telegram*\n\n` +
-      `• *Obrolan Alami:* Berdiskusi santai dalam bahasa Indonesia, Inggris, Jepang, dan 7 bahasa lainnya.\n` +
-      `• *Semua Jenis Pesan Diterima:* Teks, foto, suara/audio, video, berkas kode, lokasi, kontak, stiker, dan GIF.\n` +
-      `• *Pesan Non-Teks Interaktif:* Anda dapat menyuruh Bre AI membuat file kodingan unduhan, kuis/polling, lempar dadu/game, pin lokasi peta, dan kartu kontak secara alami!\n` +
-      `• *Ingatan Konteks:* Bre AI mengingat konteks percakapan secara berkelanjutan.\n` +
-      `• *Perintah /reset:* Membersihkan ingatan topik sebelumnya dan memulai sesi baru.\n` +
-      `• *Perintah /style:* Memilih gaya bahasa (Jakarta, Jawa Halus, Jawa Kasar, Sunda, Sopan, Santai, Medan, Makassar).\n` +
-      `• *Perintah /language atau /bahasa:* Memilih bahasa respons Bre AI (tersedia 10 bahasa dunia).\n\n` +
-      `🎮 *Perintah Pintas Media Interaktif:*\n` +
-      `• \`/dice\` atau \`/dadu\` - Lempar dadu animasi 🎲\n` +
-      `• \`/dart\`, \`/basket\`, \`/bola\`, \`/bowling\`, \`/slot\` - Game animasi seru\n` +
-      `• \`/poll [Pertanyaan] | [Opsi 1] | [Opsi 2] ...\` - Buat Polling Telegram\n` +
-      `• \`/quiz [Pertanyaan] | [Opsi A] | [Opsi B*] ...\` - Buat Kuis Interaktif\n` +
-      `• \`/file [nama_file.ext] [isi kode]\` - Buat & kirim berkas file fisik\n` +
-      `• \`/location [lat, lon] | [Tempat] | [Alamat]\` - Kirim pin lokasi peta\n` +
-      `• \`/contact [nomor] [Nama Depan] [Nama Belakang]\` - Kirim kartu kontak\n\n` +
-      `🎭 *Gaya Bahasa Aktif:* ${styleLabel}\n` +
-      `🌐 *Bahasa Aktif:* ${langLabel}\n` +
-      `Pencipta & Pengembang: *Amirun Rayan Ariandi* 🚀`;
+    let help = `📖 *Panduan Penggunaan Bre AI di Telegram*
+
+• *Bahasa Otomatis:* Tulis dalam bahasa apa pun — Indonesia, Inggris, Jepang, Arab, Mandarin, dll — Bre AI otomatis menjawab dalam bahasa yang sama! 🌐
+• *Semua Jenis Pesan Diterima:* Teks, foto, suara/audio, video, berkas kode, lokasi, kontak, stiker, dan GIF.
+• *Pesan Non-Teks Interaktif:* Anda dapat menyuruh Bre AI membuat file kodingan unduhan, kuis/polling, lempar dadu/game, pin lokasi peta, dan kartu kontak secara alami!
+• *Ingatan Konteks:* Bre AI mengingat konteks percakapan secara berkelanjutan.
+• *Perintah /reset:* Membersihkan ingatan topik sebelumnya dan memulai sesi baru.
+
+🌍 *Contoh Bahasa Otomatis:*
+_• Tulis "halo bre" → Bre AI jawab GAUL Bahasa Indonesia 🇮🇩_
+_• Write "hello bre" → Bre AI replies in English 🇺🇸_
+_• 「Bre、こんにちは」 → Bre AI returns in Japanese 🇯🇵_
+
+🎮 *Perintah Pintas Media Interaktif:*
+• \`/dice\` atau \`/dadu\` - Lempar dadu animasi 🎲
+• \`/dart\`, \`/basket\`, \`/bola\`, \`/bowling\`, \`/slot\` - Game animasi seru
+• \`/poll [Pertanyaan] | [Opsi 1] | [Opsi 2] ...\` - Buat Polling Telegram
+• \`/quiz [Pertanyaan] | [Opsi A] | [Opsi B*] ...\` - Buat Kuis Interaktif
+• \`/file [nama_file.ext] [isi kode]\` - Buat & kirim berkas file fisik
+• \`/location [lat, lon] | [Tempat] | [Alamat]\` - Kirim pin lokasi peta
+• \`/contact [nomor] [Nama Depan] [Nama Belakang]\` - Kirim kartu kontak
+
+🎭 *Gaya Bahasa Indonesia Aktif:* ${styleLabel}
+_Gaya ini berlaku untuk semua respons Bahasa Indonesia Bre AI._
+Pencipta & Pengembang: *Amirun Rayan Ariandi* 🚀`;
 
     if (isOwnerUser) {
       help += `\n\n👑 *Daftar Perintah Admin (Owner):*\n` +
         `• \`/admin\` - Buka Master Control Panel Interaktif\n` +
+        `• \`/style [gaya]\` - *Ganti gaya bahasa Indonesia global* (jakarta, jawa_halus, jawa_kasar, sunda, sopan, santai, medan, makassar)\n` +
         `• \`/status\` - Ringkasan status bot & engine\n` +
         `• \`/metrics\` - Laporan metrik real-time & token\n` +
         `• \`/logs\` - Lihat 5 log server terakhir\n` +
