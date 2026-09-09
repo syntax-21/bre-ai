@@ -1272,25 +1272,40 @@ async function handleSlashCommand({
     return true;
   }
 
-  // /style, /gayabahasa, /gaya
+  // /style, /gayabahasa, /gaya — OWNER ONLY — sets global Indonesian dialect style
   if (lowerText === '/style' || lowerText.startsWith('/style ') || lowerText === '/gayabahasa' || lowerText.startsWith('/gayabahasa ') || lowerText === '/gaya' || lowerText.startsWith('/gaya ')) {
+    if (!isOwnerUser) {
+      await api.sendTelegramMessage(
+        chatId,
+        `🔒 *Perintah ini hanya untuk Owner Bot.*\n\nGaya bahasa diatur secara global oleh owner. Bre AI otomatis mendeteksi bahasa yang kamu pakai dan menyesuaikan responnya. 😊`,
+        null, null, token
+      );
+      return true;
+    }
+
     const rawArg = text.replace(/^\/(style|gayabahasa|gaya)/i, '').trim().toLowerCase();
     const styleEntries = Object.entries(STYLE_LABELS);
 
     if (rawArg) {
       const matchKey = Object.keys(STYLE_LABELS).find(k => k === rawArg || k.replace('_', '') === rawArg.replace(/[\s_-]/g, ''));
       if (matchKey) {
-        saveUserStyle(chatId, matchKey);
+        // Save globally to config.telegramStyle (applies to ALL Indonesian responses bot-wide)
+        await saveConfig({ telegramStyle: matchKey, defaultStyle: matchKey });
         await api.sendTelegramMessage(
           chatId,
-          `✅ *Gaya Bahasa Berhasil Diubah!*\n\n• *Gaya Aktif:* ${STYLE_LABELS[matchKey]}\n\n_Seluruh respons Bahasa Indonesia selanjutnya akan menyesuaikan gaya ini._`,
+          `✅ *Gaya Bahasa Global Berhasil Diubah!*\n\n• *Gaya Aktif:* ${STYLE_LABELS[matchKey]}\n\n_Gaya ini berlaku global untuk seluruh respons Bahasa Indonesia Bre AI di bot ini._`,
           null, null, token
         );
+        return true;
+      } else {
+        const styleList = Object.entries(STYLE_LABELS).map(([k, v]) => `• \`/style ${k}\` — ${v}`).join('\n');
+        await api.sendTelegramMessage(chatId, `⚠️ *Gaya "${rawArg}" tidak dikenal.*\n\nPilihan gaya yang tersedia:\n${styleList}`, null, null, token);
         return true;
       }
     }
 
-    const currentStyle = getUserStyle(chatId);
+    const cfg2 = getConfig();
+    const currentStyle = cfg2.telegramStyle || cfg2.defaultStyle || 'jakarta';
     const styleRows = styleEntries.map(([code, label]) => ([
       {
         text: (code === currentStyle ? '✅ ' : '') + label,
@@ -1299,15 +1314,17 @@ async function handleSlashCommand({
     ]));
     styleRows.push([{ text: '❌ Tutup', callback_data: `set_style:${chatId}:close` }]);
 
-    const styleText = `🎭 *Pilih Gaya Bahasa Respons Bre AI*\n\n` +
+    const styleText = `🎭 *Pilih Gaya Bahasa Global Bre AI*\n\n` +
       `Gaya aktif saat ini: *${STYLE_LABELS[currentStyle] || '✨ Santai & Friendly'}*\n\n` +
-      `Pilih gaya bahasa yang Anda sukai untuk percakapan (atau gunakan \`/style [nama_gaya]\`):`;
+      `Gaya ini berlaku global untuk SEMUA respons Bahasa Indonesia di bot ini.\n` +
+      `_Gunakan \`/style [nama_gaya]\` untuk langsung mengubah, atau pilih tombol:_`;
 
     await api.sendTelegramMessage(chatId, styleText, { inline_keyboard: styleRows }, null, token);
     return true;
   }
 
-  // /language, /bahasa, /lang, /setlang, /setbahasa
+  // /language, /bahasa, /lang, /setlang, /setbahasa — DIHAPUS
+  // Bahasa sekarang otomatis mengikuti bahasa pesan masing-masing pengguna.
   if (
     lowerText === '/language' || lowerText.startsWith('/language ') ||
     lowerText === '/bahasa' || lowerText.startsWith('/bahasa ') ||
@@ -1315,79 +1332,20 @@ async function handleSlashCommand({
     lowerText === '/setlang' || lowerText.startsWith('/setlang ') ||
     lowerText === '/setbahasa' || lowerText.startsWith('/setbahasa ')
   ) {
-    const rawArg = text.replace(/^\/(language|bahasa|lang|setlang|setbahasa)/i, '').trim();
-
-    // 1. Direct argument switching (e.g. /bahasa en, /bahasa inggris, /lang ja, /language jepang)
-    if (rawArg) {
-      const resolvedCode = resolveLanguageCode(rawArg);
-      if (resolvedCode && LANGUAGE_OPTIONS[resolvedCode]) {
-        const userAccountId = fromUser?.id || chatId;
-        saveUserLanguage(userAccountId, resolvedCode);
-        if (chatId && String(chatId) !== String(userAccountId)) {
-          saveUserLanguage(chatId, resolvedCode);
-        }
-        const opt = LANGUAGE_OPTIONS[resolvedCode];
-        await api.sendTelegramMessage(
-          chatId,
-          `✅ *Bahasa Berhasil Diubah!*\n\n` +
-          `• *Bahasa Aktif:* ${opt.label} (${opt.name})\n` +
-          `• *Status:* Tersimpan permanen. Bre AI kini akan merespons pertanyaan Anda dalam bahasa ini secara mutlak.\n\n` +
-          `_Ketik \`/language\` atau \`/bahasa\` kapan saja untuk mengganti bahasa kembali._`,
-          null, null, token
-        );
-        return true;
-      } else {
-        const supportedList = Object.entries(LANGUAGE_OPTIONS)
-          .map(([c, o]) => `• \`/bahasa ${c}\` -> ${o.label}`)
-          .join('\n');
-
-        await api.sendTelegramMessage(
-          chatId,
-          `⚠️ *Bahasa "${rawArg}" Tidak Dikenal*\n\n` +
-          `Pilihan bahasa yang tersedia:\n${supportedList}\n\n` +
-          `Atau kirim \`/language\` tanpa argumen untuk memilih via menu tombol.`,
-          null, null, token
-        );
-        return true;
-      }
-    }
-
-    // 2. Interactive inline keyboard menu
-    // PENTING: Selalu gunakan fromUser.id sebagai kunci akun, bukan chatId.
-    // Ini memastikan isolasi bahasa per-akun Telegram yang benar.
-    const userAccountId = fromUser?.id || chatId;
-    const currentLang = getUserLanguage(userAccountId);
-    const entries = Object.entries(LANGUAGE_OPTIONS);
-    const langRows = [];
-
-    // Compact 2-column layout for clean Telegram presentation
-    // callback_data menyertakan userId (fromUser.id) bukan chatId
-    for (let i = 0; i < entries.length; i += 2) {
-      const row = [];
-      const [code1, info1] = entries[i];
-      row.push({
-        text: (code1 === currentLang ? '✅ ' : '') + info1.label,
-        callback_data: `set_lang:${userAccountId}:${code1}`
-      });
-      if (entries[i + 1]) {
-        const [code2, info2] = entries[i + 1];
-        row.push({
-          text: (code2 === currentLang ? '✅ ' : '') + info2.label,
-          callback_data: `set_lang:${userAccountId}:${code2}`
-        });
-      }
-      langRows.push(row);
-    }
-    langRows.push([{ text: '❌ Tutup Menu', callback_data: `set_lang:${userAccountId}:close` }]);
-
-    const langText = `🌐 *Pilih Bahasa Respons Bre AI*\n\n` +
-      `Bahasa aktif saat ini: *${LANGUAGE_OPTIONS[currentLang]?.label || '🇮🇩 Bahasa Indonesia'}*\n\n` +
-      `Pilih bahasa respons yang Anda inginkan (tersimpan permanen):\n` +
-      `_Tips: Anda juga bisa mengetik cepat seperti \`/bahasa inggris\` atau \`/bahasa jepang\`._`;
-
-    await api.sendTelegramMessage(chatId, langText, { inline_keyboard: langRows }, null, token);
+    await api.sendTelegramMessage(
+      chatId,
+      `🌐 *Pengaturan Bahasa Otomatis*\n\nBre AI sekarang otomatis mendeteksi bahasa yang kamu pakai dan menjawab dalam bahasa yang sama!\n\n` +
+      `• Tulis dalam Bahasa Indonesia → Bre AI balas dalam Bahasa Indonesia 🇮🇩\n` +
+      `• Write in English → Bre AI replies in English 🇺🇸\n` +
+      `• 日本語で書く → 日本語で返信します 🇯🇵\n` +
+      `• ...dan seterusnya untuk semua bahasa.\n\n` +
+      `_Tidak perlu setting apa pun. Cukup tulis pakai bahasa yang kamu mau!_ ✨`,
+      null, null, token
+    );
     return true;
   }
+
+
 
   // /dice, /dadu, /dart, /panah, /basket, /bola, /football, /bowling, /slot, /kasino
   if (['/dice', '/dadu', '/dart', '/panah', '/basket', '/bola', '/football', '/bowling', '/slot', '/kasino'].some(c => lowerText === c || lowerText.startsWith(c + ' '))) {

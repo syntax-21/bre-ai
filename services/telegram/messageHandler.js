@@ -66,46 +66,24 @@ function queryBreAIRouter(userContent, history = [], senderInfo = '', langCode =
         content: userContent
       };
 
-      const effectiveLang = (langCode || cfg.telegramLanguage || 'id').toLowerCase().trim();
-      const langEntry = LANGUAGE_OPTIONS[effectiveLang] || LANGUAGE_OPTIONS['id'];
-      const isIndonesian = effectiveLang === 'id';
+      // Language: always AUTO — AI detects and mirrors user's language
+      const effectiveLang = 'auto';
+      // Style: from explicit override or global config (only applies to Indonesian responses)
+      const effectiveStyle = styleCode || cfg.telegramStyle || cfg.defaultStyle || 'jakarta';
 
-      // For Indonesian -> GAUL by default. For foreign languages -> formal Bre AI
-      const effectiveStyle = isIndonesian
-        ? ((styleCode && styleCode !== 'default' && styleCode !== 'standar') ? styleCode : 'jakarta')
-        : 'formal';
-
-      let customSystemPrompt = '';
-      if (isIndonesian) {
-        customSystemPrompt = `[PLATFORM TELEGRAM - PENGGUNA ${senderInfo}]:
-- Gaya Respons: Bahasa Indonesia GAUL & SANTAI khas anak muda Indonesia yang akrab, luwes, seru, dan cerdas.
-- Gunakan format Telegram Markdown yang sah: *teks tebal*, _teks miring_, \`kode ringkas\`, dan \`\`\`blok kode\`\`\`.
-- DILARANG menggunakan tag HTML (<br>, <div>, dll) dan jangan gunakan tabel markdown bergaris (gantilah dengan daftar poin • yang rapi).
-[KEMAMPUAN FITUR NON-TEKS & FILE TELEGRAM (100% PASTI BISA)]:
-1. Buat Berkas File Unduhan Asli (.py, .js, .html, .css, .json, .csv, .txt, dll):
-   Tuliskan isi lengkap di dalam blok kode dengan nama berkas di baris pertama ATAU gunakan tag:
-   [TELEGRAM_FILE: {"filename": "nama_berkas.ext", "content": "...isi lengkap...", "caption": "Keterangan"}]
-2. Polling/Kuis Telegram: [TELEGRAM_POLL: {"question": "...", "options": ["A", "B"]}]
-3. Dadu/Game: [TELEGRAM_DICE: 🎲] (pilihan: 🎲, 🎯, 🏀, ⚽, 🎳, 🎰)
-4. Pin Lokasi: [TELEGRAM_LOCATION: {"latitude": -6.2, "longitude": 106.8, "title": "Tempat", "address": "Alamat"}]
-5. Kartu Kontak: [TELEGRAM_CONTACT: {"phone_number": "+628123456789", "first_name": "Nama"}]
-6. Foto Web: [TELEGRAM_PHOTO: {"url": "https://...", "caption": "Foto"}]`;
-      } else {
-        customSystemPrompt = `[TELEGRAM PLATFORM INSTRUCTIONS - ${langEntry.name.toUpperCase()}]:
-- Target Output: Strictly 100% in ${langEntry.name.toUpperCase()} (${langEntry.nativeName || langEntry.name}).
-- Tone: FORMAL, POLITE, INTELLIGENT, AND PROFESSIONAL (Standard Formal Bre AI).
-- Use standard Telegram Markdown (*bold*, _italic_, \`code\`, \`\`\`code blocks\`\`\`).
-- Do NOT use HTML tags and do NOT use markdown tables (use bullet points • instead).
-[TELEGRAM INTERACTIVE FEATURES & FILE GENERATION]:
-1. Real Downloadable Files & Scripts (100% Supported):
-   Provide the complete, functional, and untruncated code in a code block with filename on line 1 OR use tag:
-   [TELEGRAM_FILE: {"filename": "filename.ext", "content": "...", "caption": "..."}]
-2. Polls / Quizzes: [TELEGRAM_POLL: {"question": "...", "options": ["A", "B"]}]
-3. Animated Dice / Games: [TELEGRAM_DICE: 🎲]
-4. Location Pin: [TELEGRAM_LOCATION: {"latitude": -6.2, "longitude": 106.8, "title": "Place", "address": "Address"}]
-5. Contact Card: [TELEGRAM_CONTACT: {"phone_number": "+123456789", "first_name": "Name"}]
-6. Web Photo: [TELEGRAM_PHOTO: {"url": "https://...", "caption": "Caption"}]`;
-      }
+      // Telegram-specific platform instructions (appended as customSystemPrompt)
+      const customSystemPrompt = `[TELEGRAM PLATFORM — ${senderInfo}]:
+- Format: Use standard Telegram Markdown (*bold*, _italic_, \`code\`, \`\`\`code blocks\`\`\`).
+- DILARANG menggunakan tag HTML (<br>, <div>, dll). Jangan buat tabel markdown bergaris — gantikan dengan daftar poin • yang rapi.
+- Jika bahasa yang dideteksi adalah Bahasa Indonesia: gunakan gaya GAUL & SANTAI khas anak muda Indonesia.
+- For all other detected languages: use FORMAL, POLITE, INTELLIGENT Bre AI tone in that exact language.
+[TELEGRAM FILE & INTERACTIVE FEATURES (100% SUPPORTED)]:
+1. Real Files: [TELEGRAM_FILE: {"filename": "file.ext", "content": "...", "caption": "..."}]
+2. Polls: [TELEGRAM_POLL: {"question": "...", "options": ["A", "B"]}]
+3. Dice/Games: [TELEGRAM_DICE: 🎲] (options: 🎲 🎯 🏀 ⚽ 🎳 🎰)
+4. Location: [TELEGRAM_LOCATION: {"latitude": -6.2, "longitude": 106.8, "title": "Place", "address": "Addr"}]
+5. Contact: [TELEGRAM_CONTACT: {"phone_number": "+62812345", "first_name": "Name"}]
+6. Photo: [TELEGRAM_PHOTO: {"url": "https://...", "caption": "Caption"}]`;
 
       const EventEmitter = require('events');
       const mockReq = Object.assign(new EventEmitter(), {
@@ -416,19 +394,19 @@ async function handleMessage(msg, botService, ctx = null) {
       history = history.slice(-(botService.MAX_HISTORY - 1));
     }
 
-    const userAccountId = String(fromUser?.id || chatId);
-    const chatLang = getUserLanguage(userAccountId);
-    const chatStyle = getUserStyle(userAccountId) || 'jakarta';
+    // Use 'auto' language — AI detects and mirrors user's language automatically.
+    // Style is from global config only (set by owner via /style command).
+    const chatStyle = cfg.telegramStyle || cfg.defaultStyle || 'jakarta';
     const contentToSend = visionPayload || userQueryPrompt;
 
     let answer = '';
     try {
-      answer = await queryBreAIRouter(contentToSend, history, senderTag, chatLang, chatStyle);
+      answer = await queryBreAIRouter(contentToSend, history, senderTag, 'auto', chatStyle);
     } catch (routeErr) {
       if (visionPayload) {
         console.warn('[TelegramBot] Vision request failed, falling back to text prompt:', routeErr.message);
         const fallbackText = userQueryPrompt || `[Pengguna mengirimkan foto/gambar]: ${text || 'Deskripsikan dan berikan analisis terkait gambar ini.'}`;
-        answer = await queryBreAIRouter(fallbackText, history, senderTag, chatLang, chatStyle);
+        answer = await queryBreAIRouter(fallbackText, history, senderTag, 'auto', chatStyle);
       } else {
         throw routeErr;
       }
