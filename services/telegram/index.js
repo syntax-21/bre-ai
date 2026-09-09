@@ -47,6 +47,13 @@ const {
   STYLE_LABELS
 } = require('./messageHandler');
 
+const {
+  saveUserLanguage,
+  saveUserStyle,
+  getUserLanguage,
+  getUserStyle
+} = require('./constants');
+
 class TelegramBotService {
   constructor() {
     this.isRunning = false;
@@ -179,23 +186,35 @@ class TelegramBotService {
       }
 
       if (LANGUAGE_OPTIONS[langCode]) {
-        chatLanguages.set(targetChatId, langCode);
+        saveUserLanguage(targetChatId, langCode);
         const selectedLabel = LANGUAGE_OPTIONS[langCode].label;
         await answerCallback(cq.id, `✅ Bahasa diubah ke: ${selectedLabel}`, true, token);
 
-        // Update the language menu with new selection
+        // Update the language menu with 2-column layout
         const currentLang = langCode;
-        const langRows = Object.entries(LANGUAGE_OPTIONS).map(([code, info]) => ([
-          {
-            text: (code === currentLang ? '✅ ' : '') + info.label,
-            callback_data: `set_lang:${targetChatId}:${code}`
+        const entries = Object.entries(LANGUAGE_OPTIONS);
+        const langRows = [];
+        for (let i = 0; i < entries.length; i += 2) {
+          const row = [];
+          const [code1, info1] = entries[i];
+          row.push({
+            text: (code1 === currentLang ? '✅ ' : '') + info1.label,
+            callback_data: `set_lang:${targetChatId}:${code1}`
+          });
+          if (entries[i + 1]) {
+            const [code2, info2] = entries[i + 1];
+            row.push({
+              text: (code2 === currentLang ? '✅ ' : '') + info2.label,
+              callback_data: `set_lang:${targetChatId}:${code2}`
+            });
           }
-        ]));
-        langRows.push([{ text: '❌ Tutup', callback_data: `set_lang:${targetChatId}:close` }]);
+          langRows.push(row);
+        }
+        langRows.push([{ text: '❌ Tutup Menu', callback_data: `set_lang:${targetChatId}:close` }]);
 
         const langText = `🌐 *Pilih Bahasa Respons Bre AI*\n\n` +
           `Bahasa aktif: *${selectedLabel}*\n\n` +
-          `Pilih bahasa lain atau tutup menu:`;
+          `Pilihan bahasa telah tersimpan permanen. Bre AI kini akan merespons dalam bahasa ini secara mutlak.\nPilih bahasa lain atau tutup menu:`;
 
         await editTelegramMessage(cq.message?.chat?.id, cq.message?.message_id, langText, { inline_keyboard: langRows }, token);
       } else {
@@ -225,7 +244,7 @@ class TelegramBotService {
       }
 
       if (STYLE_LABELS[styleCode]) {
-        chatStyles.set(targetChatId, styleCode);
+        saveUserStyle(targetChatId, styleCode);
         const selectedLabel = STYLE_LABELS[styleCode];
         await answerCallback(cq.id, `✅ Gaya bahasa diubah ke: ${selectedLabel}`, true, token);
 
@@ -236,11 +255,11 @@ class TelegramBotService {
             callback_data: `set_style:${targetChatId}:${code}`
           }
         ]));
-        styleRows.push([{ text: '❌ Tutup', callback_data: `set_style:${targetChatId}:close` }]);
+        styleRows.push([{ text: '❌ Tutup Menu', callback_data: `set_style:${targetChatId}:close` }]);
 
         const styleText = `🎭 *Pilih Gaya Bahasa Respons Bre AI*\n\n` +
           `Gaya aktif saat ini: *${selectedLabel}*\n\n` +
-          `Pilih gaya bahasa yang Anda sukai untuk percakapan:`;
+          `Pilihan gaya telah tersimpan permanen. Pilih gaya bahasa yang Anda sukai untuk percakapan:`;
 
         await editTelegramMessage(cq.message?.chat?.id, cq.message?.message_id, styleText, { inline_keyboard: styleRows }, token);
       } else {

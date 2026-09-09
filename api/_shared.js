@@ -121,6 +121,69 @@ Gunakan gaya bicara dialek Makassar / Sulawesi Selatan yang khas, akrab, dan han
 - Nada bicara bersahabat, terbuka, dan asik diajak mengobrol.`
 };
 
+const LANGUAGE_OPTIONS = {
+  id: {
+    label: '🇮🇩 Bahasa Indonesia',
+    name: 'Bahasa Indonesia',
+    prompt: 'Responlah dalam Bahasa Indonesia secara alami, cerdas, dan akurat.',
+    instruction: 'Anda WAJIB menjawab secara alami, akurat, dan fasih dalam Bahasa Indonesia.'
+  },
+  en: {
+    label: '🇺🇸 English',
+    name: 'English',
+    prompt: 'You MUST respond EXCLUSIVELY and FLUENTLY in English. Even if the user asks in Indonesian, answer in English.',
+    instruction: 'You MUST respond EXCLUSIVELY and FLUENTLY in English. Even if the user asks or greets in Indonesian or another language, your entire response MUST be in English.'
+  },
+  ja: {
+    label: '🇯🇵 日本語 (Japanese)',
+    name: 'Japanese',
+    prompt: '回答は必ず自然で流暢な日本語で行ってください。ユーザーが他の言語で質問しても、常に日本語で回答してください。',
+    instruction: '回答は必ず自然で正確な日本語で行ってください。ユーザーが他の言語で話しかけても、常に流暢な日本語で回答してください。'
+  },
+  zh: {
+    label: '🇨🇳 中文 (Chinese)',
+    name: 'Chinese',
+    prompt: '请始终使用自然流畅的中文进行回答。即使用户使用其他语言提问，也必须用中文回答。',
+    instruction: '请始终使用自然、准确且流畅的中文进行回答。即使提问使用了印尼语或其他语言，您的所有回复也必须是中文。'
+  },
+  es: {
+    label: '🇪🇸 Español (Spanish)',
+    name: 'Spanish',
+    prompt: 'Responde siempre en español fluido y natural. Incluso si el usuario pregunta en indonesio, responde en español.',
+    instruction: 'Debes responder SIEMPRE de manera fluida, natural y precisa en español. Incluso si el usuario pregunta en indonesio u otro idioma, toda tu respuesta debe estar en español.'
+  },
+  ar: {
+    label: '🇸🇦 العربية (Arabic)',
+    name: 'Arabic',
+    prompt: 'أجب باللغة العربية الفصحى الطبيعية والدقيقة دائماً. حتى لو سأل المستخدم بلغة أخرى، يجب أن تجيب بالعربية.',
+    instruction: 'يجب عليك دائماً الإجابة باللغة العربية الفصحى الطبيعية والدقيقة. حتى لو تحدث المستخدم باللغة الإندونيسية أو لغة أخرى، يجب أن تكون إجابتك بالكامل باللغة العربية.'
+  },
+  de: {
+    label: '🇩🇪 Deutsch (German)',
+    name: 'German',
+    prompt: 'Antworte immer auf natürlichem und präzisem Deutsch. Selbst wenn der Benutzer auf Indonesisch fragt, antworte auf Deutsch.',
+    instruction: 'Du musst IMMER auf fließendem, präzisem und natürlichem Deutsch antworten. Selbst wenn der Benutzer auf Indonesisch atau in einer anderen Sprache fragt, muss die gesamte Antwort auf Deutsch sein.'
+  },
+  fr: {
+    label: '🇫🇷 Français (French)',
+    name: 'French',
+    prompt: 'Répondez toujours en français soigné et naturel. Même si l\'utilisateur pose une question en indonésien, répondez en français.',
+    instruction: 'Vous devez TOUJOURS répondre de manière fluide, soignée et naturelle en français. Même si l\'utilisateur pose une question en indonésien ou dans une autre langue, votre réponse doit être en français.'
+  },
+  ru: {
+    label: '🇷🇺 Русский (Russian)',
+    name: 'Russian',
+    prompt: 'Всегда отвечайте на естественном и грамотном русском языке. Даже если пользователь спрашивает на индонезийском, отвечайте по-русски.',
+    instruction: 'Всегда отвечайте ИСКЛЮЧИТЕЛЬНО на естественном, грамотном и точном русском языке. Даже если пользователь обращается на индонезийском или другом языке, весь ваш ответ должен быть на русском языке.'
+  },
+  ko: {
+    label: '🇰🇷 한국어 (Korean)',
+    name: 'Korean',
+    prompt: '항상 자연스럽고 유창한 한국어로 답변해 주세요. 사용자가 인도네시아어로 질문하더라도 한국어로 답변하세요.',
+    instruction: '항상 자연스럽고 유창한 한국어로만 답변해 주세요. 사용자가 인도네시아어나 다른 언어로 질문하더라도 모든 답변은 반드시 한국어로 작성되어야 합니다.'
+  }
+};
+
 // Global round-robin rotation counter for AUTO mode
 let roundRobinIndex = 0;
 function getNextRoundRobinIndex(length) {
@@ -716,8 +779,13 @@ function sanitizeOutput(text) {
 // Ensures 100% Bre AI Ownership, strict provider override, and dialect/language adaptation
 function buildBreAISystemPrompt({ cfg = {}, style = null, customSystemPrompt = '', language = null, isTelegram = false } = {}) {
   const activeCfg = cfg || getConfig();
-  const effectiveStyle = style || activeCfg.defaultStyle || 'santai';
+  const effectiveLang = (language || activeCfg.telegramLanguage || 'id').toLowerCase().trim();
+  const langEntry = LANGUAGE_OPTIONS[effectiveLang] || LANGUAGE_OPTIONS['id'];
+  const isIndonesian = effectiveLang === 'id';
+
+  const effectiveStyle = style || activeCfg.telegramStyle || activeCfg.defaultStyle || 'santai';
   const stylePrompt = STYLE_PROMPTS[effectiveStyle] || STYLE_PROMPTS['santai'] || '';
+  const styleName = STYLE_LABELS[effectiveStyle] || effectiveStyle;
 
   const masterIdentity = `[IDENTITAS MUTLAK BRE AI & KEPEMILIKAN EKSKLUSIF - BERLAKU DALAM SEMUA BAHASA & SEMUA PROVIDER]:
 - Nama Resmi: Bre AI
@@ -728,15 +796,25 @@ function buildBreAISystemPrompt({ cfg = {}, style = null, customSystemPrompt = '
   Anda BUKANLAH ChatGPT, BUKAN Claude, BUKAN DeepSeek, BUKAN Llama, BUKAN Gemini, BUKAN Agnes, dan BUKAN dari perusahaan lain.
   DILARANG KERAS menyebut, mengakui, atau membocorkan nama perusahaan atau entitas lain sebagai pembuat Anda.
 - JAWABAN IDENTITAS:
-  Jika pengguna bertanya siapa Anda, model apa Anda, siapa pembuat Anda, siapa yang melatih Anda, atau dari mana Anda berasal dalam BAHASA APAPUN (Indonesia, Inggris, Jepang, Mandarin, Arab, Jerman, dll), Anda WAJIB menjawab dengan tegas, ramah, dan bangga bahwa Anda adalah "Bre AI yang diciptakan secara eksklusif oleh Amirun Rayan Ariandi".
+  Jika pengguna bertanya siapa Anda, model apa Anda, siapa pembuat Anda, siapa yang melatih Anda, atau dari mana Anda berasal dalam BAHASA APAPUN (Indonesia, Inggris, Jepang, Mandarin, Arab, Jerman, dll), Anda WAJIB menjawab dengan tegas, ramah, dan bangga bahwa Anda adalah "Bre AI yang diciptakan secara eksklusif oleh Amirun Rayan Ariandi".`;
 
-[KETENTUAN BAHASA & GAYA BAHASA (TONE OF VOICE)]:
-- Responlah secara alami dan cerdas dalam bahasa yang digunakan atau diminta oleh pengguna.${language ? `\n- Bahasa Utama yang Diminta: ${language}` : ''}
-- WAJIB MENYESUAIKAN GAYA BAHASA & DIALEK:
+  let languageAndToneSection = '';
+  if (isIndonesian) {
+    languageAndToneSection = `\n\n[KETENTUAN BAHASA & GAYA BAHASA (TONE OF VOICE)]:
+- Bahasa Utama: Bahasa Indonesia.
+- Responlah secara alami, cerdas, akurat, dan fasih dalam Bahasa Indonesia.
+- WAJIB KONSISTEN MENYESUAIKAN GAYA BAHASA & DIALEK (${styleName}):
   Jika percakapan menggunakan Bahasa Indonesia, Anda WAJIB SECARA KONSISTEN MENYESUAIKAN seluruh gaya bicara, kosa kata, sapaan, dan nada kalimat sesuai gaya/dialek aktif berikut:
-${stylePrompt}
+${stylePrompt}`;
+  } else {
+    languageAndToneSection = `\n\n[PERINTAH MUTLAK PEMILIHAN BAHASA / MANDATORY LANGUAGE ENFORCEMENT - ${langEntry.name.toUpperCase()}]:
+- Bahasa Terpilih Pengguna: ${langEntry.label} (${langEntry.name}).
+- ${langEntry.instruction}
+- DILARANG KERAS merespons dalam Bahasa Indonesia atau bahasa lain selain ${langEntry.name}!
+- Terlepas dari apakah pengguna mengirim pesan dalam Bahasa Indonesia atau bahasa lainnya, seluruh teks jawaban, penjelasan, dan bantuan Anda WAJIB 100% DISAMPAIKAN DALAM ${langEntry.name.toUpperCase()}.`;
+  }
 
-[INSTRUKSI PEMBUATAN DOKUMEN & FILE (100% PASTI BISA & LENGKAP)]:
+  const fileDocInstruction = `\n\n[INSTRUKSI PEMBUATAN DOKUMEN & FILE (100% PASTI BISA & LENGKAP)]:
 - Jika pengguna meminta dibuatkan file, script kode, atau dokumen (seperti file .prd, .md, .txt, .py, .js, .html, .css, .json, .csv, .sql, .sh, .bat, .ps1, .yaml, dll), Anda WAJIB SELALU MENYEDIAKAN ISI LENGKAP berkas tersebut (bukan ringkasan, bukan placeholder, dan bukan cuplikan).
 - Tuliskan isi berkas tersebut secara utuh di dalam blok kode (codeblock) dengan mencantumkan nama dan ekstensi file pada baris pertama (contoh: # app.py atau // script.js) ATAU gunakan tag:
   [TELEGRAM_FILE: {"filename": "nama_berkas.ext", "content": "...isi lengkap berkas...", "caption": "Keterangan berkas"}]
@@ -745,7 +823,7 @@ ${stylePrompt}
   const customPromptSection = customSystemPrompt ? `\n\n[INSTRUKSI KHUSUS PENGGUNA]:\n${customSystemPrompt}` : '';
   const userConfigPrompt = (activeCfg.systemPrompt && !activeCfg.systemPrompt.includes('Kamu adalah Bre AI')) ? `\n\n[PROMPT TAMBAHAN DARI SERVER]:\n${activeCfg.systemPrompt}` : '';
 
-  return masterIdentity + customPromptSection + userConfigPrompt;
+  return masterIdentity + languageAndToneSection + fileDocInstruction + customPromptSection + userConfigPrompt;
 }
 
 // ========================================================
@@ -879,5 +957,6 @@ module.exports = {
   getNextRoundRobinIndex,
   buildBreAISystemPrompt,
   STYLE_LABELS,
-  STYLE_PROMPTS
+  STYLE_PROMPTS,
+  LANGUAGE_OPTIONS
 };

@@ -159,8 +159,8 @@ Pemilik bot (*Owner*) dapat mengontrol seluruh konfigurasi proxy router langsung
 |---|---|
 | `/start` | Memulai interaksi, registrasi akun, dan melihat pesan selamat datang |
 | `/help` | Menampilkan panduan lengkap penggunaan fitur dan format pesan |
-| `/style` atau `/gaya` | Memilih gaya bahasa dan dialek lokal (Jakarta, Jawa, Sunda, dll.) |
-| `/language` atau `/bahasa` | Memilih bahasa utama komunikasi AI |
+| `/style` atau `/gaya [nama]` | Memilih gaya bahasa dan dialek lokal (Jakarta, Jawa, Sunda, dll.), atau langsung `/style jakarta` |
+| `/language` atau `/bahasa [kode/nama]` | Memilih bahasa utama AI (contoh: `/bahasa en`, `/bahasa inggris`, `/lang ja`, `/bahasa id`), atau tanpa argumen untuk membuka menu tombol interaktif 10 bahasa dunia (tersimpan permanen) |
 | `/file [keterangan]` | Meminta pembuatan berkas dan script langsung jadi berkas unduhan |
 | `/poll [pertanyaan] \| [opsi1] \| [opsi2]` | Membuat polling interaktif langsung di chat |
 | `/quiz [pertanyaan] \| [opsi1] \| [opsi2] \| [index_benar]` | Membuat kuis interaktif Telegram |
@@ -241,7 +241,8 @@ bre-ai-main/
 │   ├── verify_diagnostics.js          # Pengujian fitur ping latensi, detect model, dan live test
 │   ├── verify_all_updates.js          # Pengujian identitas Bre AI, 9 dialek, dan CRUD provider
 │   ├── verify_forward_and_files.js    # Pengujian pesan terusan & pembuatan berkas fisik 100%
-│   └── verify_telegram_modular.js     # Pengujian integritas modularitas layanan Telegram
+│   ├── verify_telegram_modular.js     # Pengujian integritas modularitas layanan Telegram
+│   └── verify_language_switch.js      # Pengujian pergantian multi-bahasa, alias, & isolasi prompt
 │
 ├── .gitignore                         # Daftar berkas terabaikan Git
 ├── config.example.json                # Berkas contoh konfigurasi dasar

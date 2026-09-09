@@ -22,7 +22,16 @@ const {
 } = require('./accessControl');
 
 const { sendAdminPanel } = require('./adminMenu');
-const { chatLanguages, chatStyles, LANGUAGE_OPTIONS } = require('./constants');
+const {
+  chatLanguages,
+  chatStyles,
+  LANGUAGE_OPTIONS,
+  resolveLanguageCode,
+  getUserLanguage,
+  saveUserLanguage,
+  getUserStyle,
+  saveUserStyle
+} = require('./constants');
 const { processAndSendOutboundMedia } = require('./mediaProcessor');
 
 // Helper to resolve provider index by 1-based index or name
@@ -1162,13 +1171,13 @@ async function handleSlashCommand({
   // /start
   if (text === '/start' || text.startsWith('/start ')) {
     botService.conversations.delete(chatId);
-    const currentLang = chatLanguages.get(chatId);
+    const currentLang = getUserLanguage(chatId);
     const langLabel = currentLang && LANGUAGE_OPTIONS[currentLang] ? LANGUAGE_OPTIONS[currentLang].label : '🇮🇩 Bahasa Indonesia';
     
     let welcome = `⚡️ *Halo ${senderName}!* Selamat datang di *Bre AI*.\n\n` +
       `Saya adalah asisten kecerdasan buatan serba bisa dan cerdas tanpa batas ciptaan *Amirun Rayan Ariandi*, siap membantu Anda menjawab pertanyaan, menulis kode program, menghasilkan pesan interaktif, menganalisis dokumen/gambar, hingga menyelesaikan tugas kompleks langsung dari Telegram.\n\n` +
       `• Kirim /reset untuk membersihkan riwayat obrolan.\n` +
-      `• Kirim /language untuk memilih bahasa respons.\n` +
+      `• Kirim /language atau /bahasa untuk memilih bahasa respons.\n` +
       `• Kirim /help untuk daftar perintah & panduan lengkap.\n` +
       `🌐 *Bahasa Aktif:* ${langLabel}`;
 
@@ -1194,9 +1203,9 @@ async function handleSlashCommand({
 
   // /help
   if (text === '/help') {
-    const currentLang = chatLanguages.get(chatId);
+    const currentLang = getUserLanguage(chatId);
     const langLabel = currentLang && LANGUAGE_OPTIONS[currentLang] ? LANGUAGE_OPTIONS[currentLang].label : '🇮🇩 Bahasa Indonesia (default)';
-    const currentStyle = chatStyles.get(chatId) || getConfig().telegramStyle || getConfig().defaultStyle || 'santai';
+    const currentStyle = getUserStyle(chatId);
     const styleLabel = STYLE_LABELS[currentStyle] || '✨ Santai & Friendly';
 
     let help = `📖 *Panduan Penggunaan Bre AI di Telegram*\n\n` +
@@ -1206,7 +1215,7 @@ async function handleSlashCommand({
       `• *Ingatan Konteks:* Bre AI mengingat konteks percakapan secara berkelanjutan.\n` +
       `• *Perintah /reset:* Membersihkan ingatan topik sebelumnya dan memulai sesi baru.\n` +
       `• *Perintah /style:* Memilih gaya bahasa (Jakarta, Jawa Halus, Jawa Kasar, Sunda, Sopan, Santai, Medan, Makassar).\n` +
-      `• *Perintah /language:* Memilih bahasa respons Bre AI.\n\n` +
+      `• *Perintah /language atau /bahasa:* Memilih bahasa respons Bre AI (tersedia 10 bahasa dunia).\n\n` +
       `🎮 *Perintah Pintas Media Interaktif:*\n` +
       `• \`/dice\` atau \`/dadu\` - Lempar dadu animasi 🎲\n` +
       `• \`/dart\`, \`/basket\`, \`/bola\`, \`/bowling\`, \`/slot\` - Game animasi seru\n` +
@@ -1265,8 +1274,24 @@ async function handleSlashCommand({
 
   // /style, /gayabahasa, /gaya
   if (lowerText === '/style' || lowerText.startsWith('/style ') || lowerText === '/gayabahasa' || lowerText.startsWith('/gayabahasa ') || lowerText === '/gaya' || lowerText.startsWith('/gaya ')) {
-    const currentStyle = chatStyles.get(chatId) || getConfig().telegramStyle || getConfig().defaultStyle || 'santai';
-    const styleRows = Object.entries(STYLE_LABELS).map(([code, label]) => ([
+    const rawArg = text.replace(/^\/(style|gayabahasa|gaya)/i, '').trim().toLowerCase();
+    const styleEntries = Object.entries(STYLE_LABELS);
+
+    if (rawArg) {
+      const matchKey = Object.keys(STYLE_LABELS).find(k => k === rawArg || k.replace('_', '') === rawArg.replace(/[\s_-]/g, ''));
+      if (matchKey) {
+        saveUserStyle(chatId, matchKey);
+        await api.sendTelegramMessage(
+          chatId,
+          `✅ *Gaya Bahasa Berhasil Diubah!*\n\n• *Gaya Aktif:* ${STYLE_LABELS[matchKey]}\n\n_Seluruh respons Bahasa Indonesia selanjutnya akan menyesuaikan gaya ini._`,
+          null, null, token
+        );
+        return true;
+      }
+    }
+
+    const currentStyle = getUserStyle(chatId);
+    const styleRows = styleEntries.map(([code, label]) => ([
       {
         text: (code === currentStyle ? '✅ ' : '') + label,
         callback_data: `set_style:${chatId}:${code}`
@@ -1276,26 +1301,81 @@ async function handleSlashCommand({
 
     const styleText = `🎭 *Pilih Gaya Bahasa Respons Bre AI*\n\n` +
       `Gaya aktif saat ini: *${STYLE_LABELS[currentStyle] || '✨ Santai & Friendly'}*\n\n` +
-      `Pilih gaya bahasa yang Anda sukai untuk percakapan:`;
+      `Pilih gaya bahasa yang Anda sukai untuk percakapan (atau gunakan \`/style [nama_gaya]\`):`;
 
     await api.sendTelegramMessage(chatId, styleText, { inline_keyboard: styleRows }, null, token);
     return true;
   }
 
-  // /language
-  if (text === '/language' || text.startsWith('/language ')) {
-    const currentLang = chatLanguages.get(chatId) || 'id';
-    const langRows = Object.entries(LANGUAGE_OPTIONS).map(([code, info]) => ([
-      {
-        text: (code === currentLang ? '✅ ' : '') + info.label,
-        callback_data: `set_lang:${chatId}:${code}`
+  // /language, /bahasa, /lang, /setlang, /setbahasa
+  if (
+    lowerText === '/language' || lowerText.startsWith('/language ') ||
+    lowerText === '/bahasa' || lowerText.startsWith('/bahasa ') ||
+    lowerText === '/lang' || lowerText.startsWith('/lang ') ||
+    lowerText === '/setlang' || lowerText.startsWith('/setlang ') ||
+    lowerText === '/setbahasa' || lowerText.startsWith('/setbahasa ')
+  ) {
+    const rawArg = text.replace(/^\/(language|bahasa|lang|setlang|setbahasa)/i, '').trim();
+
+    // 1. Direct argument switching (e.g. /bahasa en, /bahasa inggris, /lang ja, /language jepang)
+    if (rawArg) {
+      const resolvedCode = resolveLanguageCode(rawArg);
+      if (resolvedCode && LANGUAGE_OPTIONS[resolvedCode]) {
+        saveUserLanguage(chatId, resolvedCode);
+        const opt = LANGUAGE_OPTIONS[resolvedCode];
+        await api.sendTelegramMessage(
+          chatId,
+          `✅ *Bahasa Berhasil Diubah!*\n\n` +
+          `• *Bahasa Aktif:* ${opt.label} (${opt.name})\n` +
+          `• *Status:* Tersimpan permanen. Bre AI kini akan merespons pertanyaan Anda dalam bahasa ini secara mutlak.\n\n` +
+          `_Ketik \`/language\` atau \`/bahasa\` kapan saja untuk mengganti bahasa kembali._`,
+          null, null, token
+        );
+        return true;
+      } else {
+        const supportedList = Object.entries(LANGUAGE_OPTIONS)
+          .map(([c, o]) => `• \`/bahasa ${c}\` -> ${o.label}`)
+          .join('\n');
+
+        await api.sendTelegramMessage(
+          chatId,
+          `⚠️ *Bahasa "${rawArg}" Tidak Dikenal*\n\n` +
+          `Pilihan bahasa yang tersedia:\n${supportedList}\n\n` +
+          `Atau kirim \`/language\` tanpa argumen untuk memilih via menu tombol.`,
+          null, null, token
+        );
+        return true;
       }
-    ]));
-    langRows.push([{ text: '❌ Tutup', callback_data: `set_lang:${chatId}:close` }]);
+    }
+
+    // 2. Interactive inline keyboard menu
+    const currentLang = getUserLanguage(chatId);
+    const entries = Object.entries(LANGUAGE_OPTIONS);
+    const langRows = [];
+
+    // Compact 2-column layout for clean Telegram presentation
+    for (let i = 0; i < entries.length; i += 2) {
+      const row = [];
+      const [code1, info1] = entries[i];
+      row.push({
+        text: (code1 === currentLang ? '✅ ' : '') + info1.label,
+        callback_data: `set_lang:${chatId}:${code1}`
+      });
+      if (entries[i + 1]) {
+        const [code2, info2] = entries[i + 1];
+        row.push({
+          text: (code2 === currentLang ? '✅ ' : '') + info2.label,
+          callback_data: `set_lang:${chatId}:${code2}`
+        });
+      }
+      langRows.push(row);
+    }
+    langRows.push([{ text: '❌ Tutup Menu', callback_data: `set_lang:${chatId}:close` }]);
 
     const langText = `🌐 *Pilih Bahasa Respons Bre AI*\n\n` +
-      `Bahasa saat ini: *${LANGUAGE_OPTIONS[currentLang]?.label || 'Bahasa Indonesia'}*\n\n` +
-      `Pilih bahasa yang diinginkan:`;
+      `Bahasa aktif saat ini: *${LANGUAGE_OPTIONS[currentLang]?.label || '🇮🇩 Bahasa Indonesia'}*\n\n` +
+      `Pilih bahasa respons yang Anda inginkan (tersimpan permanen):\n` +
+      `_Tips: Anda juga bisa mengetik cepat seperti \`/bahasa inggris\` atau \`/bahasa jepang\`._`;
 
     await api.sendTelegramMessage(chatId, langText, { inline_keyboard: langRows }, null, token);
     return true;
@@ -1436,7 +1516,7 @@ async function handleSlashCommand({
     const loadingMsgId = loadingMsg?.message_id || null;
 
     try {
-      const answer = await queryBreAIRouter(generationPrompt, [], senderTag, chatLanguages.get(chatId), chatStyles.get(chatId));
+      const answer = await queryBreAIRouter(generationPrompt, [], senderTag, getUserLanguage(chatId), getUserStyle(chatId));
       await processAndSendOutboundMedia(chatId, answer, token, loadingMsgId, raw);
     } catch (genErr) {
       const errTxt = `⚠️ Gagal membuat berkas file: ${genErr.message}`;

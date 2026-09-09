@@ -23,6 +23,11 @@ const {
   chatLanguages,
   chatStyles,
   LANGUAGE_OPTIONS,
+  getUserLanguage,
+  saveUserLanguage,
+  getUserStyle,
+  saveUserStyle,
+  resolveLanguageCode,
   getFileCategory
 } = require('./constants');
 
@@ -61,13 +66,30 @@ function queryBreAIRouter(userContent, history = [], senderInfo = '', langCode =
         content: userContent
       };
 
-      const effectiveLang = langCode || cfg.telegramLanguage || 'id';
-      const langEntry = LANGUAGE_OPTIONS[effectiveLang];
-      const langPrompt = langEntry ? langEntry.prompt : LANGUAGE_OPTIONS['id'].prompt;
+      const effectiveLang = (langCode || cfg.telegramLanguage || 'id').toLowerCase().trim();
+      const langEntry = LANGUAGE_OPTIONS[effectiveLang] || LANGUAGE_OPTIONS['id'];
+      const isIndonesian = effectiveLang === 'id';
 
       const effectiveStyle = styleCode || cfg.telegramStyle || cfg.defaultStyle || 'santai';
       const stylePrompt = STYLE_PROMPTS[effectiveStyle] || '';
       const styleName = STYLE_LABELS[effectiveStyle] || effectiveStyle;
+
+      let languageAndDialectSection = '';
+      if (isIndonesian) {
+        languageAndDialectSection = `[BAHASA RESPONS]: ${langEntry.prompt}
+
+[PENYESUAIAN WAJIB GAYA BAHASA & DIALEK INDONESIA (${styleName})]:
+Jika berinteraksi dalam Bahasa Indonesia, Anda WAJIB SECARA KONSISTEN MENYESUAIKAN seluruh gaya bicara, kosa kata, sapaan, dan nada kalimat sesuai gaya/dialek berikut:
+${stylePrompt}`;
+      } else {
+        languageAndDialectSection = `[PERINTAH MUTLAK PEMILIHAN BAHASA / MANDATORY LANGUAGE ENFORCEMENT - ${langEntry.name.toUpperCase()}]:
+Pengguna telah memilih bahasa resmi: ${langEntry.label} (${langEntry.name}).
+${langEntry.instruction}
+PERATURAN MUTLAK:
+1. Seluruh jawaban, penjelasan, dan bantuan Anda WAJIB 100% DISAMPAIKAN DALAM ${langEntry.name.toUpperCase()}.
+2. DILARANG KERAS merespons dalam Bahasa Indonesia atau bahasa selain ${langEntry.name.toUpperCase()}, MESKIPUN pertanyaan atau sapaan pengguna ditulis dalam Bahasa Indonesia.
+3. Terjemahkan pemahaman Anda dan tanggapi secara fasih, ramah, dan solutif sepenuhnya dalam ${langEntry.name.toUpperCase()}.`;
+      }
 
       const EventEmitter = require('events');
       const mockReq = Object.assign(new EventEmitter(), {
@@ -92,11 +114,7 @@ Identitas Anda adalah "Bre AI", sebuah asisten kecerdasan buatan serba bisa dan 
 Jika ada yang bertanya siapa Anda, siapa pembuat Anda, atau nama Anda, JAWAB DENGAN TEGAS, RAMAH, DAN BANGGA bahwa Anda adalah "Bre AI yang diciptakan oleh Amirun Rayan Ariandi". Jangan pernah menyebut atau mengakui nama perusahaan atau entitas lain.
 
 Anda sedang melayani pengguna Telegram ${senderInfo}.
-[BAHASA RESPONS]: ${langPrompt}
-
-[PENYESUAIAN WAJIB GAYA BAHASA & DIALEK INDONESIA (${styleName})]:
-Jika berinteraksi dalam Bahasa Indonesia, Anda WAJIB SECARA KONSISTEN MENYESUAIKAN seluruh gaya bicara, kosa kata, sapaan, dan nada kalimat sesuai gaya/dialek berikut:
-${stylePrompt}
+${languageAndDialectSection}
 
 [PANDUAN FORMAT TAMPILAN TELEGRAM]:
 - DILARANG KERAS menggunakan tag HTML apa pun (JANGAN gunakan <br>, <p>, <div>, <script>, dll). Gunakan baris baru biasa (Enter/newline) untuk jeda antar-kalimat.
@@ -433,8 +451,8 @@ async function handleMessage(msg, botService, ctx = null) {
       history = history.slice(-(botService.MAX_HISTORY - 1));
     }
 
-    const chatLang = chatLanguages.get(chatId) || null;
-    const chatStyle = chatStyles.get(chatId) || null;
+    const chatLang = getUserLanguage(chatId);
+    const chatStyle = getUserStyle(chatId);
     const contentToSend = visionPayload || userQueryPrompt;
 
     let answer = '';
@@ -476,5 +494,10 @@ module.exports = {
   chatLanguages,
   chatStyles,
   LANGUAGE_OPTIONS,
-  STYLE_LABELS
+  STYLE_LABELS,
+  getUserLanguage,
+  saveUserLanguage,
+  getUserStyle,
+  saveUserStyle,
+  resolveLanguageCode
 };

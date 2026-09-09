@@ -3,23 +3,203 @@
 // Created by Amirun Rayan Ariandi
 // ========================================================
 
+const {
+  LANGUAGE_OPTIONS: SHARED_LANGUAGES,
+  getConfig,
+  saveConfig
+} = require('../../api/_shared');
+
 // Per-chat language and style selections (in-memory state)
 const chatLanguages = new Map(); // chatId -> languageCode ('id', 'en', 'ja', etc.)
 const chatStyles = new Map();    // chatId -> styleCode ('santai', 'jakarta', 'jawa_halus', etc.)
 
-// Multi-language options matching web app prompts
-const LANGUAGE_OPTIONS = {
-  id: { label: '🇮🇩 Bahasa Indonesia', prompt: 'Responlah dalam Bahasa Indonesia secara alami dan akurat.' },
-  en: { label: '🇺🇸 English', prompt: 'Respond in English by default.' },
-  ja: { label: '🇯🇵 日本語 (Japanese)', prompt: '常に自然で流暢な日本語で回答してください。' },
-  zh: { label: '🇨🇳 中文 (Chinese)', prompt: '请始终使用自然流畅的中文进行回答。' },
-  es: { label: '🇪🇸 Español (Spanish)', prompt: 'Responde siempre en español de manera natural y precisa.' },
-  ar: { label: '🇸🇦 العربية (Arabic)', prompt: 'أجب باللغة العربية الفصحى الطبيعية والدقيقة دائماً.' },
-  de: { label: '🇩🇪 Deutsch (German)', prompt: 'Antworte immer auf natürlichem und präzisem Deutsch.' },
-  fr: { label: '🇫🇷 Français (French)', prompt: 'Répondez toujours en français soigné et naturel.' },
-  ru: { label: '🇷🇺 Русский (Russian)', prompt: 'Всегда отвечайте на естественном и грамотном русском языке.' },
-  ko: { label: '🇰🇷 한국어 (Korean)', prompt: '항상 자연스럽고 유창한 한국어로 답변해 주세요.' }
+// Multi-language options synchronized with core API
+const LANGUAGE_OPTIONS = SHARED_LANGUAGES || {
+  id: { label: '🇮🇩 Bahasa Indonesia', name: 'Bahasa Indonesia', prompt: 'Responlah dalam Bahasa Indonesia secara alami, cerdas, dan akurat.', instruction: 'Anda WAJIB menjawab secara alami, akurat, dan fasih dalam Bahasa Indonesia.' },
+  en: { label: '🇺🇸 English', name: 'English', prompt: 'You MUST respond EXCLUSIVELY and FLUENTLY in English. Even if the user asks in Indonesian, answer in English.', instruction: 'You MUST respond EXCLUSIVELY and FLUENTLY in English. Even if the user asks or greets in Indonesian or another language, your entire response MUST be in English.' },
+  ja: { label: '🇯🇵 日本語 (Japanese)', name: 'Japanese', prompt: '回答は必ず自然で流暢な日本語で行ってください。ユーザーが他の言語で質問しても、常に日本語で回答してください。', instruction: '回答は必ず自然で正確な日本語で行ってください。ユーザーが他の言語で話しかけても、常に流暢な日本語で回答してください。' },
+  zh: { label: '🇨🇳 中文 (Chinese)', name: 'Chinese', prompt: '请始终使用自然流畅的中文进行回答。即使用户使用其他语言提问，也必须用中文回答。', instruction: '请始终使用自然、准确且流畅的中文进行回答。即使提问使用了印尼语或其他语言，您的所有回复也必须是中文。' },
+  es: { label: '🇪🇸 Español (Spanish)', name: 'Spanish', prompt: 'Responde siempre en español fluido y natural. Incluso si el usuario pregunta en indonesio, responde en español.', instruction: 'Debes responder SIEMPRE de manera fluida, natural y precisa en español. Incluso si el usuario pregunta en indonesio u otro idioma, toda tu response debe estar en español.' },
+  ar: { label: '🇸🇦 العربية (Arabic)', name: 'Arabic', prompt: 'أجب باللغة العربية الفصحى الطبيعية والدقيقة دائماً. حتى لو سأل المستخدم بلغة أخرى، يجب أن تجيب بالعربية.', instruction: 'يجب عليك دائماً الإجابة باللغة العربية الفصحى الطبيعية والدقيقة. حتى لو تحدث المستخدم باللغة الإندونيسية أو لغة أخرى، يجب أن تكون إجابتك بالكامل باللغة العربية.' },
+  de: { label: '🇩🇪 Deutsch (German)', name: 'German', prompt: 'Antworte immer auf natürlichem und präzisem Deutsch. Selbst wenn der Benutzer auf Indonesisch fragt, antworte auf Deutsch.', instruction: 'Du musst IMMER auf fließendem, präzisem und natürlichem Deutsch antworten. Selbst wenn der Benutzer auf Indonesisch atau in einer anderen Sprache fragt, muss die gesamte Antwort auf Deutsch sein.' },
+  fr: { label: '🇫🇷 Français (French)', name: 'French', prompt: 'Répondez toujours en français soigné et naturel. Même si l\'utilisateur pose une question en indonésien, répondez en français.', instruction: 'Vous devez TOUJOURS répondre de manière fluide, soignée et naturelle en français. Même si l\'utilisateur pose une question en indonésien ou dans une autre langue, votre réponse doit être en français.' },
+  ru: { label: '🇷🇺 Русский (Russian)', name: 'Russian', prompt: 'Всегда отвечайте на естественном и грамотном русском языке. Даже если пользователь спрашивает на индонезийском, отвечайте по-русски.', instruction: 'Всегда отвечайте ИСКЛЮЧИТЕЛЬНО на естественном, грамотном и точном русском языке. Даже если пользователь обращается на индонезийском или другом языке, весь ваш ответ должен быть на русском языке.' },
+  ko: { label: '🇰🇷 한국어 (Korean)', name: 'Korean', prompt: '항상 자연스럽고 유창한 한국어로 답변해 주세요. 사용자가 인도네시아어로 질문하더라도 한국어로 답변하세요.', instruction: '항상 자연스럽고 유창한 한국어로만 답변해 주세요. 사용자가 인도네시아어나 다른 언어로 질문하더라도 모든 답변은 반드시 한국어로 작성되어야 합니다.' }
 };
+
+/**
+ * Normalizes input language name or code into supported canonical code ('id', 'en', etc.)
+ */
+function resolveLanguageCode(input) {
+  if (!input || typeof input !== 'string') return null;
+  let clean = input.trim().toLowerCase().replace(/^[/#]/, '');
+  clean = clean.replace(/^(bahasa|language|lang|setlang|setbahasa)\s+/i, '').trim();
+  if (LANGUAGE_OPTIONS[clean]) return clean;
+
+  const aliasMap = {
+    // Indonesian
+    'id': 'id', 'ind': 'id', 'indo': 'id', 'indonesia': 'id', 'bahasa': 'id', 'bahasaindonesia': 'id', 'indonesian': 'id',
+    // English
+    'en': 'en', 'eng': 'en', 'english': 'en', 'inggris': 'en', 'us': 'en', 'uk': 'en', 'amerika': 'en',
+    // Japanese
+    'ja': 'ja', 'jp': 'ja', 'jpn': 'ja', 'japan': 'ja', 'japanese': 'ja', 'jepang': 'ja', 'nihon': 'ja', 'nihongo': 'ja',
+    // Chinese
+    'zh': 'zh', 'cn': 'zh', 'chn': 'zh', 'chinese': 'zh', 'mandarin': 'zh', 'cina': 'zh', 'tiongkok': 'zh', 'zhongwen': 'zh',
+    // Spanish
+    'es': 'es', 'esp': 'es', 'spain': 'es', 'spanish': 'es', 'spanyol': 'es', 'espanol': 'es',
+    // Arabic
+    'ar': 'ar', 'ara': 'ar', 'arab': 'ar', 'arabic': 'ar', 'arabik': 'ar', 'arabiyah': 'ar',
+    // German
+    'de': 'de', 'ger': 'de', 'deu': 'de', 'german': 'de', 'jerman': 'de', 'deutsch': 'de',
+    // French
+    'fr': 'fr', 'fra': 'fr', 'fre': 'fr', 'french': 'fr', 'prancis': 'fr', 'perancis': 'fr', 'francais': 'fr',
+    // Russian
+    'ru': 'ru', 'rus': 'ru', 'russian': 'ru', 'rusia': 'ru', 'russkiy': 'ru',
+    // Korean
+    'ko': 'ko', 'kor': 'ko', 'kr': 'ko', 'korean': 'ko', 'korea': 'ko', 'hangul': 'ko'
+  };
+
+  return aliasMap[clean] || null;
+}
+
+/**
+ * Retrieves the current language preference for a given chatId with multi-layer fallback
+ */
+function getUserLanguage(chatId) {
+  if (!chatId) return 'id';
+  const val = chatLanguages.get(chatId) || chatLanguages.get(String(chatId)) || (!isNaN(Number(chatId)) ? chatLanguages.get(Number(chatId)) : null);
+  if (val && LANGUAGE_OPTIONS[val]) return val;
+
+  try {
+    const cfg = getConfig();
+    if (Array.isArray(cfg.telegramUsers)) {
+      const user = cfg.telegramUsers.find(u => String(u.id) === String(chatId));
+      if (user && user.language && LANGUAGE_OPTIONS[user.language]) {
+        chatLanguages.set(chatId, user.language);
+        chatLanguages.set(String(chatId), user.language);
+        if (!isNaN(Number(chatId))) chatLanguages.set(Number(chatId), user.language);
+        return user.language;
+      }
+    }
+    if (cfg.telegramLanguage && LANGUAGE_OPTIONS[cfg.telegramLanguage]) {
+      return cfg.telegramLanguage;
+    }
+  } catch (e) {}
+
+  return 'id';
+}
+
+/**
+ * Saves and persists user language selection in memory and config.json
+ */
+function saveUserLanguage(chatId, langCode) {
+  if (!chatId || !langCode) return false;
+  const canonical = resolveLanguageCode(langCode) || langCode;
+  if (!LANGUAGE_OPTIONS[canonical]) return false;
+
+  chatLanguages.set(chatId, canonical);
+  chatLanguages.set(String(chatId), canonical);
+  if (!isNaN(Number(chatId))) {
+    chatLanguages.set(Number(chatId), canonical);
+  }
+
+  try {
+    const cfg = getConfig();
+    const users = Array.isArray(cfg.telegramUsers) ? [...cfg.telegramUsers] : [];
+    const idx = users.findIndex(u => String(u.id) === String(chatId));
+    if (idx >= 0) {
+      users[idx] = { ...users[idx], language: canonical };
+    } else {
+      users.push({ id: String(chatId), language: canonical, role: 'user' });
+    }
+    saveConfig({ telegramUsers: users });
+  } catch (e) {
+    console.warn('[saveUserLanguage] Failed to persist into config.json:', e.message);
+  }
+
+  return true;
+}
+
+/**
+ * Retrieves the current style preference for a given chatId
+ */
+function getUserStyle(chatId) {
+  if (!chatId) return 'santai';
+  const val = chatStyles.get(chatId) || chatStyles.get(String(chatId)) || (!isNaN(Number(chatId)) ? chatStyles.get(Number(chatId)) : null);
+  if (val) return val;
+
+  try {
+    const cfg = getConfig();
+    if (Array.isArray(cfg.telegramUsers)) {
+      const user = cfg.telegramUsers.find(u => String(u.id) === String(chatId));
+      if (user && user.style) {
+        chatStyles.set(chatId, user.style);
+        chatStyles.set(String(chatId), user.style);
+        if (!isNaN(Number(chatId))) chatStyles.set(Number(chatId), user.style);
+        return user.style;
+      }
+    }
+    return cfg.telegramStyle || cfg.defaultStyle || 'santai';
+  } catch (e) {}
+
+  return 'santai';
+}
+
+/**
+ * Saves and persists user style selection in memory and config.json
+ */
+function saveUserStyle(chatId, styleCode) {
+  if (!chatId || !styleCode) return false;
+  chatStyles.set(chatId, styleCode);
+  chatStyles.set(String(chatId), styleCode);
+  if (!isNaN(Number(chatId))) {
+    chatStyles.set(Number(chatId), styleCode);
+  }
+
+  try {
+    const cfg = getConfig();
+    const users = Array.isArray(cfg.telegramUsers) ? [...cfg.telegramUsers] : [];
+    const idx = users.findIndex(u => String(u.id) === String(chatId));
+    if (idx >= 0) {
+      users[idx] = { ...users[idx], style: styleCode };
+    } else {
+      users.push({ id: String(chatId), style: styleCode, role: 'user' });
+    }
+    saveConfig({ telegramUsers: users });
+  } catch (e) {
+    console.warn('[saveUserStyle] Failed to persist into config.json:', e.message);
+  }
+
+  return true;
+}
+
+/**
+ * Preload persisted preferences from config.json into memory
+ */
+function initUserPreferences() {
+  try {
+    const cfg = getConfig();
+    if (Array.isArray(cfg.telegramUsers)) {
+      for (const u of cfg.telegramUsers) {
+        if (u.id) {
+          if (u.language) {
+            chatLanguages.set(u.id, u.language);
+            chatLanguages.set(String(u.id), u.language);
+            if (!isNaN(Number(u.id))) chatLanguages.set(Number(u.id), u.language);
+          }
+          if (u.style) {
+            chatStyles.set(u.id, u.style);
+            chatStyles.set(String(u.id), u.style);
+            if (!isNaN(Number(u.id))) chatStyles.set(Number(u.id), u.style);
+          }
+        }
+      }
+    }
+  } catch (e) {}
+}
+
+// Preload on startup
+initUserPreferences();
 
 // Map file extensions and MIME types to universal file categories
 function getCategoryFromFilename(filename = '', mimeType = '') {
@@ -61,6 +241,12 @@ module.exports = {
   chatLanguages,
   chatStyles,
   LANGUAGE_OPTIONS,
+  resolveLanguageCode,
+  getUserLanguage,
+  saveUserLanguage,
+  getUserStyle,
+  saveUserStyle,
+  initUserPreferences,
   getCategoryFromFilename,
   getFileCategory
 };
