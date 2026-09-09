@@ -167,7 +167,10 @@ class TelegramBotService {
     const data = cq.data || '';
     if (data.startsWith('set_lang:')) {
       const parts = data.split(':');
-      const targetChatId = parseInt(parts[1]);
+      // parts[1] = userId yang dikirim saat menu dibuat (fromUser.id)
+      // Tapi yang LEBIH AMAN dan PASTI adalah langsung pakai cq.from.id
+      // karena itu adalah Telegram account ID yang benar-benar menekan tombol.
+      const actualUserId = String(cq.from?.id || parts[1]);
       const langCode = parts[2];
       const token = this.activeToken || null;
 
@@ -179,21 +182,20 @@ class TelegramBotService {
             message_id: cq.message?.message_id
           }, token);
         } catch (e) {
-          await editTelegramMessage(cq.message?.chat?.id, cq.message?.message_id, '🌐 Menu bahasa ditutup. Kirim /language untuk membuka kembali.', null, token);
+          await editTelegramMessage(cq.message?.chat?.id, cq.message?.message_id, '\ud83c\udf10 Menu bahasa ditutup. Kirim /language untuk membuka kembali.', null, token);
         }
         await answerCallback(cq.id, 'Menu ditutup', false, token);
         return;
       }
 
       if (LANGUAGE_OPTIONS[langCode]) {
-        saveUserLanguage(targetChatId, langCode);
-        if (cq.from?.id && String(cq.from.id) !== String(targetChatId)) {
-          saveUserLanguage(cq.from.id, langCode);
-        }
+        // Simpan HANYA ke akun yang menekan tombol (cq.from.id)
+        saveUserLanguage(actualUserId, langCode);
         const selectedLabel = LANGUAGE_OPTIONS[langCode].label;
-        await answerCallback(cq.id, `✅ Bahasa diubah ke: ${selectedLabel}`, true, token);
+        await answerCallback(cq.id, `\u2705 Bahasa diubah ke: ${selectedLabel}`, true, token);
 
-        // Update the language menu with 2-column layout
+        // Refresh menu menampilkan checkmark pada bahasa yang baru dipilih
+        // Tetap embed actualUserId di callback_data agar konsisten
         const currentLang = langCode;
         const entries = Object.entries(LANGUAGE_OPTIONS);
         const langRows = [];
@@ -201,21 +203,21 @@ class TelegramBotService {
           const row = [];
           const [code1, info1] = entries[i];
           row.push({
-            text: (code1 === currentLang ? '✅ ' : '') + info1.label,
-            callback_data: `set_lang:${targetChatId}:${code1}`
+            text: (code1 === currentLang ? '\u2705 ' : '') + info1.label,
+            callback_data: `set_lang:${actualUserId}:${code1}`
           });
           if (entries[i + 1]) {
             const [code2, info2] = entries[i + 1];
             row.push({
-              text: (code2 === currentLang ? '✅ ' : '') + info2.label,
-              callback_data: `set_lang:${targetChatId}:${code2}`
+              text: (code2 === currentLang ? '\u2705 ' : '') + info2.label,
+              callback_data: `set_lang:${actualUserId}:${code2}`
             });
           }
           langRows.push(row);
         }
-        langRows.push([{ text: '❌ Tutup Menu', callback_data: `set_lang:${targetChatId}:close` }]);
+        langRows.push([{ text: '\u274c Tutup Menu', callback_data: `set_lang:${actualUserId}:close` }]);
 
-        const langText = `🌐 *Pilih Bahasa Respons Bre AI*\n\n` +
+        const langText = `\ud83c\udf10 *Pilih Bahasa Respons Bre AI*\n\n` +
           `Bahasa aktif: *${selectedLabel}*\n\n` +
           `Pilihan bahasa telah tersimpan permanen. Bre AI kini akan merespons dalam bahasa ini secara mutlak.\nPilih bahasa lain atau tutup menu:`;
 

@@ -1353,29 +1353,32 @@ async function handleSlashCommand({
     }
 
     // 2. Interactive inline keyboard menu
+    // PENTING: Selalu gunakan fromUser.id sebagai kunci akun, bukan chatId.
+    // Ini memastikan isolasi bahasa per-akun Telegram yang benar.
     const userAccountId = fromUser?.id || chatId;
-    const currentLang = getUserLanguage(userAccountId) || getUserLanguage(chatId);
+    const currentLang = getUserLanguage(userAccountId);
     const entries = Object.entries(LANGUAGE_OPTIONS);
     const langRows = [];
 
     // Compact 2-column layout for clean Telegram presentation
+    // callback_data menyertakan userId (fromUser.id) bukan chatId
     for (let i = 0; i < entries.length; i += 2) {
       const row = [];
       const [code1, info1] = entries[i];
       row.push({
         text: (code1 === currentLang ? '✅ ' : '') + info1.label,
-        callback_data: `set_lang:${chatId}:${code1}`
+        callback_data: `set_lang:${userAccountId}:${code1}`
       });
       if (entries[i + 1]) {
         const [code2, info2] = entries[i + 1];
         row.push({
           text: (code2 === currentLang ? '✅ ' : '') + info2.label,
-          callback_data: `set_lang:${chatId}:${code2}`
+          callback_data: `set_lang:${userAccountId}:${code2}`
         });
       }
       langRows.push(row);
     }
-    langRows.push([{ text: '❌ Tutup Menu', callback_data: `set_lang:${chatId}:close` }]);
+    langRows.push([{ text: '❌ Tutup Menu', callback_data: `set_lang:${userAccountId}:close` }]);
 
     const langText = `🌐 *Pilih Bahasa Respons Bre AI*\n\n` +
       `Bahasa aktif saat ini: *${LANGUAGE_OPTIONS[currentLang]?.label || '🇮🇩 Bahasa Indonesia'}*\n\n` +

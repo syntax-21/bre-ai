@@ -63,21 +63,21 @@ function resolveLanguageCode(input) {
 }
 
 /**
- * Retrieves the current language preference for a given chatId with multi-layer fallback
+ * Retrieves the current language preference for a given userId
+ * Selalu gunakan String(chatId) sebagai canonical key.
  */
 function getUserLanguage(chatId) {
   if (!chatId) return 'id';
-  const val = chatLanguages.get(chatId) || chatLanguages.get(String(chatId)) || (!isNaN(Number(chatId)) ? chatLanguages.get(Number(chatId)) : null);
+  const key = String(chatId);
+  const val = chatLanguages.get(key);
   if (val && LANGUAGE_OPTIONS[val]) return val;
 
   try {
     const cfg = getConfig();
     if (Array.isArray(cfg.telegramUsers)) {
-      const user = cfg.telegramUsers.find(u => String(u.id) === String(chatId));
+      const user = cfg.telegramUsers.find(u => String(u.id) === key);
       if (user && user.language && LANGUAGE_OPTIONS[user.language]) {
-        chatLanguages.set(chatId, user.language);
-        chatLanguages.set(String(chatId), user.language);
-        if (!isNaN(Number(chatId))) chatLanguages.set(Number(chatId), user.language);
+        chatLanguages.set(key, user.language);
         return user.language;
       }
     }
@@ -91,26 +91,24 @@ function getUserLanguage(chatId) {
 
 /**
  * Saves and persists user language selection in memory and config.json
+ * Selalu gunakan String(chatId) sebagai canonical key.
  */
 function saveUserLanguage(chatId, langCode) {
   if (!chatId || !langCode) return false;
-  const canonical = resolveLanguageCode(langCode) || langCode;
+  const canonical = resolveLanguageCode(String(langCode)) || String(langCode);
   if (!LANGUAGE_OPTIONS[canonical]) return false;
 
-  chatLanguages.set(chatId, canonical);
-  chatLanguages.set(String(chatId), canonical);
-  if (!isNaN(Number(chatId))) {
-    chatLanguages.set(Number(chatId), canonical);
-  }
+  const key = String(chatId);
+  chatLanguages.set(key, canonical);
 
   try {
     const cfg = getConfig();
     const users = Array.isArray(cfg.telegramUsers) ? [...cfg.telegramUsers] : [];
-    const idx = users.findIndex(u => String(u.id) === String(chatId));
+    const idx = users.findIndex(u => String(u.id) === key);
     if (idx >= 0) {
       users[idx] = { ...users[idx], language: canonical };
     } else {
-      users.push({ id: String(chatId), language: canonical, role: 'user' });
+      users.push({ id: key, language: canonical, role: 'user' });
     }
     saveConfig({ telegramUsers: users });
   } catch (e) {
@@ -121,21 +119,21 @@ function saveUserLanguage(chatId, langCode) {
 }
 
 /**
- * Retrieves the current style preference for a given chatId
+ * Retrieves the current style preference for a given userId
+ * Selalu gunakan String(chatId) sebagai canonical key.
  */
 function getUserStyle(chatId) {
   if (!chatId) return 'santai';
-  const val = chatStyles.get(chatId) || chatStyles.get(String(chatId)) || (!isNaN(Number(chatId)) ? chatStyles.get(Number(chatId)) : null);
+  const key = String(chatId);
+  const val = chatStyles.get(key);
   if (val) return val;
 
   try {
     const cfg = getConfig();
     if (Array.isArray(cfg.telegramUsers)) {
-      const user = cfg.telegramUsers.find(u => String(u.id) === String(chatId));
+      const user = cfg.telegramUsers.find(u => String(u.id) === key);
       if (user && user.style) {
-        chatStyles.set(chatId, user.style);
-        chatStyles.set(String(chatId), user.style);
-        if (!isNaN(Number(chatId))) chatStyles.set(Number(chatId), user.style);
+        chatStyles.set(key, user.style);
         return user.style;
       }
     }
@@ -147,23 +145,21 @@ function getUserStyle(chatId) {
 
 /**
  * Saves and persists user style selection in memory and config.json
+ * Selalu gunakan String(chatId) sebagai canonical key.
  */
 function saveUserStyle(chatId, styleCode) {
   if (!chatId || !styleCode) return false;
-  chatStyles.set(chatId, styleCode);
-  chatStyles.set(String(chatId), styleCode);
-  if (!isNaN(Number(chatId))) {
-    chatStyles.set(Number(chatId), styleCode);
-  }
+  const key = String(chatId);
+  chatStyles.set(key, styleCode);
 
   try {
     const cfg = getConfig();
     const users = Array.isArray(cfg.telegramUsers) ? [...cfg.telegramUsers] : [];
-    const idx = users.findIndex(u => String(u.id) === String(chatId));
+    const idx = users.findIndex(u => String(u.id) === key);
     if (idx >= 0) {
       users[idx] = { ...users[idx], style: styleCode };
     } else {
-      users.push({ id: String(chatId), style: styleCode, role: 'user' });
+      users.push({ id: key, style: styleCode, role: 'user' });
     }
     saveConfig({ telegramUsers: users });
   } catch (e) {
@@ -175,6 +171,7 @@ function saveUserStyle(chatId, styleCode) {
 
 /**
  * Preload persisted preferences from config.json into memory
+ * Selalu gunakan String sebagai canonical key.
  */
 function initUserPreferences() {
   try {
@@ -182,16 +179,9 @@ function initUserPreferences() {
     if (Array.isArray(cfg.telegramUsers)) {
       for (const u of cfg.telegramUsers) {
         if (u.id) {
-          if (u.language) {
-            chatLanguages.set(u.id, u.language);
-            chatLanguages.set(String(u.id), u.language);
-            if (!isNaN(Number(u.id))) chatLanguages.set(Number(u.id), u.language);
-          }
-          if (u.style) {
-            chatStyles.set(u.id, u.style);
-            chatStyles.set(String(u.id), u.style);
-            if (!isNaN(Number(u.id))) chatStyles.set(Number(u.id), u.style);
-          }
+          const key = String(u.id);
+          if (u.language) chatLanguages.set(key, u.language);
+          if (u.style) chatStyles.set(key, u.style);
         }
       }
     }

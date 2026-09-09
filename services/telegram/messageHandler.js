@@ -416,9 +416,9 @@ async function handleMessage(msg, botService, ctx = null) {
       history = history.slice(-(botService.MAX_HISTORY - 1));
     }
 
-    const userAccountId = fromUser?.id || chatId;
-    const chatLang = getUserLanguage(userAccountId) || getUserLanguage(chatId) || 'id';
-    const chatStyle = getUserStyle(userAccountId) || getUserStyle(chatId) || 'jakarta';
+    const userAccountId = String(fromUser?.id || chatId);
+    const chatLang = getUserLanguage(userAccountId);
+    const chatStyle = getUserStyle(userAccountId) || 'jakarta';
     const contentToSend = visionPayload || userQueryPrompt;
 
     let answer = '';
