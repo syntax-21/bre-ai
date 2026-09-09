@@ -396,6 +396,7 @@ async function handleMessage(msg, botService, ctx = null) {
 
     // Use 'auto' language — AI detects and mirrors user's language automatically.
     // Style is from global config only (set by owner via /style command).
+    const cfg = getConfig();
     const chatStyle = cfg.telegramStyle || cfg.defaultStyle || 'jakarta';
     const contentToSend = visionPayload || userQueryPrompt;
 
