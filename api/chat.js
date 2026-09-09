@@ -69,11 +69,42 @@ module.exports = async (req, res) => {
   const requestedLang = (req.headers['x-custom-language'] || body.language || cfg.telegramLanguage || 'id').trim().toLowerCase();
   const stream = cfg.forceStream === true ? true : (cfg.forceStream === false ? false : (body.stream !== undefined ? Boolean(body.stream) : cfg.streamEnabled !== false));
 
-  // 6. Select Candidates for Routing & Auto-Failover
+const KNOWN_VISION_PATTERNS = [
+  'gemini', 'claude', 'gpt-4o', 'gpt-4-turbo', 'gpt-4-vision', 'gpt-5.4-mini', 'gpt-5.6-sol', 'gpt-6-astra',
+  'qwen-vl', 'qwen2-vl', 'qwen2.5-vl', 'qwen3.7-plus', 'qwen3.8-max', 'glm-4v', 'pixtral', 'vision', 'vl'
+];
+
+function isVisionCapableModel(modelName) {
+  if (!modelName) return false;
+  const m = String(modelName).toLowerCase();
+  if (m.includes('minimax') || m.includes('kimi-k2') || m.includes('mercury') || m.includes('deepseek-v4') || m.includes('gpt-5.3-codex') || m.includes('glm-5.1') || m.includes('glm-5.2') || m.includes('glm-5.3') || m.includes('hy3') || m.includes('hy4') || m.includes('grok-4.5') || m.includes('grok-4.6')) {
+    return false;
+  }
+  return KNOWN_VISION_PATTERNS.some(pat => m.includes(pat));
+}
+
+function normalizeChatUrl(rawUrl) {
+  let u = (rawUrl || '').trim();
+  if (!u) return '';
+  if (u.endsWith('/chat/completions')) return u;
+  if (u.endsWith('/v1')) return `${u}/chat/completions`;
+  if (u.endsWith('/')) return `${u}v1/chat/completions`;
+  return `${u}/v1/chat/completions`;
+}
+
+// 6. Select Candidates for Routing & Auto-Failover
   let activeEps = (cfg.endpoints || []).filter(e => {
     const isStatusActive = e.status !== false && e.enabled !== false;
     const hasKeys = (Array.isArray(e.keys) && e.keys.some(k => k && String(k).trim())) || (e.apiKey && String(e.apiKey).trim());
     return isStatusActive && hasKeys;
+  });
+
+  // Detect whether request includes multimodal / image attachments
+  const hasImageAttachment = userMessages.some(m => {
+    if (Array.isArray(m.content)) {
+      return m.content.some(c => c && (c.type === 'image_url' || c.type === 'image'));
+    }
+    return false;
   });
 
   if (!activeEps.length) {
@@ -159,6 +190,18 @@ module.exports = async (req, res) => {
     }
   }
 
+  // If multimodal image is present, prioritize providers and models that support vision
+  if (hasImageAttachment) {
+    candidates.sort((a, b) => {
+      const aHasVision = Array.isArray(a.models) && a.models.some(isVisionCapableModel);
+      const bHasVision = Array.isArray(b.models) && b.models.some(isVisionCapableModel);
+      if (aHasVision && !bHasVision) return -1;
+      if (!aHasVision && bHasVision) return 1;
+      return 0;
+    });
+    if (candidates.length > 0) primaryTarget = candidates[0];
+  }
+
   // 7. Response Caching check (only for non-stream requests)
   const cacheKey = `${primaryTarget.name}:${targetModelName}:${requestedLang}:${requestedStyle}:${allUserText.trim()}`;
 
@@ -189,14 +232,14 @@ module.exports = async (req, res) => {
   for (let cIdx = 0; cIdx < candidates.length; cIdx++) {
     const currentTarget = candidates[cIdx];
     const isFailover = cIdx > 0;
-    const currApiUrl = currentTarget.url;
+    const currApiUrl = normalizeChatUrl(currentTarget.url);
     const currKeys = (Array.isArray(currentTarget.keys) && currentTarget.keys.length > 0)
       ? currentTarget.keys.map(k => String(k).trim()).filter(Boolean)
       : (currentTarget.apiKey ? [String(currentTarget.apiKey).trim()] : []);
     if (!currKeys.length) continue;
 
     // Build ordered list of models to try for this provider
-    const providerModels = [];
+    let providerModels = [];
     if (targetModelName && !providerModels.includes(targetModelName)) providerModels.push(targetModelName);
     if (Array.isArray(currentTarget.models)) {
       for (const m of currentTarget.models) {
@@ -204,6 +247,15 @@ module.exports = async (req, res) => {
       }
     }
     if (!providerModels.length) providerModels.push(targetModelName || 'mercury-2');
+
+    // If request contains image/vision, prioritize vision-capable models
+    if (hasImageAttachment) {
+      providerModels.sort((a, b) => {
+        const aV = isVisionCapableModel(a) ? 1 : 0;
+        const bV = isVisionCapableModel(b) ? 1 : 0;
+        return bV - aV;
+      });
+    }
 
     for (let mIdx = 0; mIdx < providerModels.length; mIdx++) {
       const currModel = providerModels[mIdx];

@@ -472,39 +472,105 @@ function setupDrop() {
 }
 
 
+async function compressImage(file, maxDimension = 1280, quality = 0.82) {
+  return new Promise((resolve) => {
+    if (!file) return resolve(null);
+    if (file.type === 'image/svg+xml' || file.size < 200 * 1024) {
+      const reader = new FileReader();
+      reader.onload = e => resolve(e.target.result);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxDimension || height > maxDimension) {
+          if (width > height) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve(compressedDataUrl);
+      };
+      img.onerror = () => resolve(e.target.result);
+      img.src = e.target.result;
+    };
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(file);
+  });
+}
+
 function setupPaste() {
-  document.addEventListener('paste', e => {
+  document.addEventListener('paste', async e => {
     const items = (e.clipboardData || e.originalEvent?.clipboardData)?.items;
     if (!items) return;
     for (let i = 0; i < items.length; i++) {
       if (items[i].type.indexOf('image') !== -1) {
         const file = items[i].getAsFile();
         if (file) {
-          const reader = new FileReader();
-          reader.onload = evt => {
+          toast('🖼️ Memproses gambar dari clipboard...', 'info');
+          const dataUrl = await compressImage(file);
+          if (dataUrl) {
             files.push({
-              name: `pasted_image_${Date.now()}.png`,
+              name: `pasted_image_${Date.now()}.jpg`,
               type: 'image',
-              content: evt.target.result,
-              data: evt.target.result
+              content: dataUrl,
+              data: dataUrl
             });
             renderAttachBar();
-            toast('🖼️ Image pasted from clipboard!', 'ok');
-          };
-          reader.readAsDataURL(file);
+            toast('🖼️ Gambar berhasil ditempel!', 'ok');
+          }
         }
       }
     }
   });
 }
 
-function handleFiles(list) {
-  Array.from(list).forEach(f => {
-    const isImg = f.type.startsWith('image/') || /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(f.name);
+async function handleFiles(list) {
+  for (const f of Array.from(list)) {
+    const isImg = f.type.startsWith('image/') || /\.(png|jpg|jpeg|gif|webp|svg|bmp|heic|heif)$/i.test(f.name);
     const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
     const isDocx = /\.docx$/i.test(f.name) || f.type.includes('wordprocessingml');
     const isExcel = /\.(xlsx|xls)$/i.test(f.name) || f.type.includes('spreadsheet') || f.type.includes('excel');
     const isText = f.type.startsWith('text/') || /\.(js|ts|py|html|css|json|md|c|cpp|java|go|rs|sql|sh|txt|prd|csv)$/i.test(f.name);
+
+    if (isImg) {
+      toast(`🖼️ Mengoptimalkan gambar: ${f.name}...`, 'info');
+      try {
+        const compressedDataUrl = await compressImage(f);
+        if (compressedDataUrl) {
+          files.push({
+            name: f.name,
+            type: 'image',
+            content: compressedDataUrl,
+            data: compressedDataUrl
+          });
+          renderAttachBar();
+          toast(`✅ Gambar terlampir: ${f.name}`, 'ok');
+        }
+      } catch (err) {
+        console.error('Image processing failed:', err);
+        toast('Gagal memproses gambar: ' + err.message, 'err');
+      }
+      continue;
+    }
 
     if (isPdf) {
       toast(`📑 Extracting PDF: ${f.name}...`, 'info');
@@ -543,7 +609,7 @@ function handleFiles(list) {
         }
       };
       reader.readAsArrayBuffer(f);
-      return;
+      continue;
     }
 
     if (isDocx) {
@@ -570,7 +636,7 @@ function handleFiles(list) {
         }
       };
       reader.readAsArrayBuffer(f);
-      return;
+      continue;
     }
 
     if (isExcel) {
@@ -605,15 +671,15 @@ function handleFiles(list) {
         }
       };
       reader.readAsArrayBuffer(f);
-      return;
+      continue;
     }
 
     const reader = new FileReader();
     reader.onload = e => {
       files.push({
         name: f.name,
-        type: isImg ? 'image' : (isText ? 'text' : 'binary'),
-        content: isText ? e.target.result : e.target.result,
+        type: isText ? 'text' : 'binary',
+        content: e.target.result,
         data: e.target.result
       });
       renderAttachBar();
@@ -621,7 +687,7 @@ function handleFiles(list) {
 
     if (isText) reader.readAsText(f);
     else reader.readAsDataURL(f);
-  });
+  }
 }
 
 function removeFile(i) {
@@ -1806,7 +1872,14 @@ async function executeBotGeneration(targetBotIdx = null, searchResults = []) {
     if (e.name !== 'AbortError') {
       if (activeChat?.msgs?.[botIdx]) {
         activeChat.msgs[botIdx].isTyping = false;
-        activeChat.msgs[botIdx].content = `⚠️ **Bre AI:** Tidak dapat memproses permintaan.\n\n*Kendala:* ${e.message}\n\n💡 *Tips:* Pastikan backend server aktif (\`node server.js\`) atau periksa konfigurasi Provider di menu **Settings**.`;
+        const errLower = (e.message || '').toLowerCase();
+        let tips = '💡 *Tips:* Pastikan backend server aktif (`node server.js`) atau periksa konfigurasi Provider di menu **Settings**.';
+        if (errLower.includes('network error') || errLower.includes('failed to fetch') || errLower.includes('load failed')) {
+          tips = '💡 *Tips:* Terjadi kendala koneksi jaringan atau respon serverless timeout/terputus. Pastikan koneksi internet stabil dan konfigurasi API Key provider di menu **Settings (Admin)** sudah tersimpan.';
+        } else if (errLower.includes('413') || errLower.includes('payload too large')) {
+          tips = '💡 *Tips:* Ukuran berkas/gambar terlalu besar untuk serverless (maksimal 4.5MB). Sistem sekarang otomatis mengompres gambar sebelum dikirim.';
+        }
+        activeChat.msgs[botIdx].content = `⚠️ **Bre AI:** Tidak dapat memproses permintaan.\n\n*Kendala:* ${e.message}\n\n${tips}`;
       }
       saveChats();
       renderMessages();
