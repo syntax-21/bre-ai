@@ -216,6 +216,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupKeyboardShortcuts();
   loadChats();
   setupInput();
+  renderAttachBar();
   setupDrop();
   setupPaste();
   setupSTT();
@@ -281,7 +282,7 @@ function applyLanguage(lang) {
 
 // ---- AI PROVIDER SELECTOR ----
 let selectedProvider = localStorage.getItem('bre_provider') || 'auto';
-let selectedModel = selectedProvider;
+selectedModel = selectedProvider;
 
 async function initModelSelect() {
   const sel = document.getElementById('modelSelect');
@@ -404,17 +405,34 @@ function updateTokensDisplay(val) {
 }
 
 
+function adjustInputHeight() {
+  const el = document.getElementById('msgInput');
+  if (!el) return;
+  el.style.height = 'auto';
+  const newHeight = Math.max(38, Math.min(el.scrollHeight, 180));
+  el.style.height = newHeight + 'px';
+  el.style.overflowY = el.scrollHeight > 180 ? 'auto' : 'hidden';
+}
+
 function setupInput() {
   const el = document.getElementById('msgInput');
   if (!el) return;
-  el.addEventListener('input', () => {
-    el.style.height = 'auto';
-    el.style.height = Math.min(el.scrollHeight, 200) + 'px';
-  });
+
+  el.addEventListener('input', adjustInputHeight);
+  el.addEventListener('change', adjustInputHeight);
+
   el.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendOrStop();
+    const isEnter = e.key === 'Enter' || e.keyCode === 13 || e.which === 13;
+    if (isEnter) {
+      if (e.shiftKey) {
+        // Shift + Enter: Buat baris baru (teks ke bawah)
+        setTimeout(adjustInputHeight, 0);
+      } else {
+        // Enter: Kirim pesan
+        if (e.isComposing) return;
+        e.preventDefault();
+        sendOrStop();
+      }
     } else if (e.key === 'ArrowUp' && !el.value.trim() && activeChat?.msgs?.length) {
       // Edit last user message shortcut
       for (let i = activeChat.msgs.length - 1; i >= 0; i--) {
@@ -624,11 +642,13 @@ function removeFile(i) {
 function renderAttachBar() {
   const bar = document.getElementById('attachBar');
   if (!bar) return;
-  if (!files.length) {
+  if (!files || !files.length) {
     bar.innerHTML = '';
     bar.style.display = 'none';
+    bar.classList.remove('active');
     return;
   }
+  bar.classList.add('active');
   bar.style.display = 'flex';
   bar.innerHTML = files.map((f, i) => {
     if (f.type === 'image' || (typeof f.content === 'string' && f.content.startsWith('data:image/'))) {
@@ -1048,9 +1068,10 @@ function renderMessages() {
     const hasVersions = Array.isArray(m.versions) && m.versions.length > 1;
     const curV = (typeof m.currentVersion === 'number' ? m.currentVersion : (m.versions?.length ? m.versions.length - 1 : 0)) + 1;
     const totalV = m.versions?.length || 1;
+    const isTypingNow = Boolean(m.isTyping || (!m.content && generating && i === activeChat.msgs.length - 1));
 
     let versionNavHtml = '';
-    if (hasVersions) {
+    if (hasVersions && !isTypingNow) {
       versionNavHtml = `
         <div class="version-nav">
           <button class="version-btn" onclick="switchBotVersion(${i}, -1)" ${curV <= 1 ? 'disabled' : ''} title="Previous version">&lt;</button>
@@ -1061,7 +1082,7 @@ function renderMessages() {
     }
 
     let statsHtml = '';
-    if (m.stats) {
+    if (m.stats && !isTypingNow) {
       statsHtml = `<div class="bot-meta-stats"><span class="tok-speed">⚡ ${m.stats.tokPerSec} tok/s</span> &bull; <span>⏱️ ${m.stats.elapsed}s</span> &bull; <span>${m.stats.tokens} tokens</span></div>`;
     }
 
@@ -1088,19 +1109,32 @@ function renderMessages() {
       }
     }
 
+    let bubbleInnerHtml = '';
+    if (isTypingNow) {
+      const thinkLabel = currentLang === 'id' ? 'Bre AI sedang berpikir...' : 'Bre AI is thinking...';
+      bubbleInnerHtml = `<div class="typing-indicator"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-text">${thinkLabel}</span></div>`;
+    } else {
+      bubbleInnerHtml = renderContent(m.content, false);
+    }
+
+    let actionsHtml = '';
+    if (!isTypingNow && m.content) {
+      actionsHtml = `<div class="mactions">
+        ${versionNavHtml}
+        <button onclick="regenerateBotMsg(${i})" title="Regenerate this response">🔄 Regenerate</button>
+        <button onclick="copyMsg(${i})" title="Copy text">📋 Copy</button>
+      </div>`;
+    }
+
     return `<div class="mrow bot">
       <div class="mavatar">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
       </div>
       <div class="mwrap">
         ${searchSourcesHtml}
-        <div class="mbubble" id="b${i}">${renderContent(m.content, false)}</div>
+        <div class="mbubble" id="b${i}">${bubbleInnerHtml}</div>
         ${statsHtml}
-        <div class="mactions">
-          ${versionNavHtml}
-          <button onclick="regenerateBotMsg(${i})" title="Regenerate this response">🔄 Regenerate</button>
-          <button onclick="copyMsg(${i})" title="Copy text">📋 Copy</button>
-        </div>
+        ${actionsHtml}
         ${followUpHtml}
       </div>
     </div>`;
@@ -1567,7 +1601,7 @@ async function sendOrStop() {
   files = [];
   renderAttachBar();
   el.value = '';
-  el.style.height = 'auto';
+  adjustInputHeight();
   
   if (!activeChat) newChat();
   if (!activeChat.msgs.length) {
@@ -1620,6 +1654,7 @@ async function sendOrStop() {
   saveChats();
   renderChatList();
   renderMessages();
+  scrollToBottom(true);
   
   await executeBotGeneration(null, searchResults);
 }
@@ -1631,14 +1666,19 @@ async function executeBotGeneration(targetBotIdx = null, searchResults = []) {
     activeChat.msgs.push({
       role: 'assistant',
       content: '',
+      isTyping: true,
       versions: [''],
       currentVersion: 0,
       searchSources: searchResults
     });
   } else {
     activeChat.msgs[botIdx].content = '';
+    activeChat.msgs[botIdx].isTyping = true;
   }
   setBusy(true);
+  saveChats();
+  renderMessages();
+  scrollToBottom(true);
   
   const genStartTime = performance.now();
   
@@ -1677,12 +1717,14 @@ async function executeBotGeneration(targetBotIdx = null, searchResults = []) {
         'Content-Type': 'application/json',
         'x-custom-provider': selectedProvider,
         'x-custom-model': selectedProvider,
-        'x-custom-style': currentStyle
+        'x-custom-style': currentStyle,
+        'x-custom-language': currentLang
       },
       body: JSON.stringify({
         messages: msgs,
         customSystemPrompt: pExtra,
         style: currentStyle,
+        language: currentLang,
         stream: true,
         provider: selectedProvider,
         model: selectedProvider,
@@ -1724,6 +1766,7 @@ async function executeBotGeneration(targetBotIdx = null, searchResults = []) {
             try {
               const d = JSON.parse(t.slice(6))?.choices?.[0]?.delta;
               if (d) {
+                activeChat.msgs[botIdx].isTyping = false;
                 if (d.reasoning_content) {
                   const c = activeChat.msgs[botIdx].content;
                   activeChat.msgs[botIdx].content = c.startsWith('<think>') ? c + d.reasoning_content : '<think>' + d.reasoning_content;
@@ -1739,8 +1782,12 @@ async function executeBotGeneration(targetBotIdx = null, searchResults = []) {
         }
       }
     } else {
-      activeChat.msgs[botIdx].content = (await r.json()).choices?.[0]?.message?.content || '';
+      const respData = await r.json();
+      activeChat.msgs[botIdx].isTyping = false;
+      activeChat.msgs[botIdx].content = respData.choices?.[0]?.message?.content || respData.error || '';
     }
+
+    activeChat.msgs[botIdx].isTyping = false;
 
     // Sync current version array
     const finalContent = activeChat.msgs[botIdx].content;
@@ -1767,17 +1814,25 @@ async function executeBotGeneration(targetBotIdx = null, searchResults = []) {
     if (autoTTS) speakText(finalContent);
   } catch(e) {
     if (e.name !== 'AbortError') {
-      activeChat.msgs[botIdx].content = '**Error:** ' + e.message;
+      if (activeChat?.msgs?.[botIdx]) {
+        activeChat.msgs[botIdx].isTyping = false;
+        activeChat.msgs[botIdx].content = `⚠️ **Bre AI:** Tidak dapat memproses permintaan.\n\n*Kendala:* ${e.message}\n\n💡 *Tips:* Pastikan backend server aktif (\`node server.js\`) atau periksa konfigurasi Provider di menu **Settings**.`;
+      }
       saveChats();
       renderMessages();
+      scrollToBottom(true);
     }
   } finally {
+    if (activeChat?.msgs?.[botIdx]) {
+      activeChat.msgs[botIdx].isTyping = false;
+    }
     setBusy(false);
   }
 }
 
 function streamUpdate(idx) {
   const m = activeChat.msgs[idx];
+  if (m) m.isTyping = false;
   if (m && m.versions && typeof m.currentVersion === 'number') {
     m.versions[m.currentVersion] = m.content;
   }
