@@ -281,73 +281,19 @@ function applyLanguage(lang) {
 }
 
 // ---- AI PROVIDER SELECTOR ----
-let selectedProvider = localStorage.getItem('bre_provider') || 'auto';
-selectedModel = selectedProvider;
+let selectedProvider = 'auto';
+selectedModel = 'auto';
 
 async function initModelSelect() {
   const sel = document.getElementById('modelSelect');
   if (!sel) return;
 
-  try {
-    const res = await fetch('/api/info');
-    if (res.ok) {
-      const data = await res.json();
-      sel.innerHTML = '';
-
-      // 1. Always provide Master Bre AI Auto Router as first / default option
-      const autoOpt = document.createElement('option');
-      autoOpt.value = 'auto';
-      autoOpt.textContent = '✨ Bre AI (Auto Smart Router)';
-      sel.appendChild(autoOpt);
-
-      if (Array.isArray(data.providers) && data.providers.length > 0) {
-        const icons = {
-          'inception': '⚡',
-          'deepseek': '🧠',
-          'openai': '🚀',
-          'anthropic': '🎭',
-          'gemini': '✨',
-          'google': '✨',
-          'groq': '⚡',
-          'openrouter': '🌐',
-          'ollama': '🦙',
-          'hcsec': '🛡️',
-          'griprouter': '🔄',
-          'mistral': '🌪️',
-          'cohere': '🔮',
-          'xai': '🪐',
-          'grok': '🪐'
-        };
-
-        data.providers.forEach(p => {
-          const opt = document.createElement('option');
-          opt.value = p.name;
-          let ico = '🤖';
-          const lower = (p.name || '').toLowerCase();
-          for (const [key, iconVal] of Object.entries(icons)) {
-            if (lower.includes(key)) { ico = iconVal; break; }
-          }
-          const modelBadge = p.defaultModel ? ` (${p.defaultModel})` : '';
-          opt.textContent = `${ico} ${p.name}${modelBadge}`;
-          sel.appendChild(opt);
-        });
-      }
-
-      // Check if previously stored provider still exists in active list
-      const validValues = Array.from(sel.options).map(o => o.value);
-      if (selectedProvider && validValues.includes(selectedProvider)) {
-        sel.value = selectedProvider;
-      } else {
-        selectedProvider = 'auto';
-        selectedModel = 'auto';
-        localStorage.setItem('bre_provider', 'auto');
-        localStorage.setItem('bre_model', 'auto');
-        sel.value = 'auto';
-      }
-    }
-  } catch(e) {
-    console.warn('Could not load providers from /api/info:', e);
-  }
+  sel.innerHTML = '<option value="auto">✨ Bre AI (Auto Smart Router)</option>';
+  sel.value = 'auto';
+  selectedProvider = 'auto';
+  selectedModel = 'auto';
+  localStorage.setItem('bre_provider', 'auto');
+  localStorage.setItem('bre_model', 'auto');
 }
 
 function setProvider(val) {
