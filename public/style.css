@@ -64,21 +64,30 @@
   
   * { box-sizing: border-box; margin: 0; padding: 0; }
   
-  body {
+  html, body {
     background-color: var(--bg-main);
     color: var(--text-primary);
     font-family: var(--font-sans);
     font-size: 15px;
     line-height: 1.6;
+    height: 100%;
+    height: 100dvh;
     overflow: hidden;
     -webkit-font-smoothing: antialiased;
+    margin: 0;
+    padding: 0;
   }
   
   /* Layout */
   #layout {
     display: flex;
-    height: 100vh;
+    height: 100%;
+    height: 100dvh;
     width: 100vw;
+    max-width: 100vw;
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
   }
   
   /* Sidebar */
@@ -208,11 +217,13 @@
     flex: 1;
     display: flex;
     flex-direction: column;
+    height: 100%;
+    height: 100dvh;
     position: relative;
     background: var(--bg-main);
     min-width: 0;
     max-width: 100vw;
-    overflow-x: hidden;
+    overflow: hidden;
   }
   
   /* Topbar */
@@ -791,69 +802,114 @@
       gap: 6px;
       flex: 1;
       min-width: 0;
-      overflow-x: auto;
-      scrollbar-width: none;
     }
-    .topbar-left::-webkit-scrollbar { display: none; }
     .topbar-right {
       gap: 4px;
       flex-shrink: 0;
     }
-    .persona-select-wrapper, .model-select-wrapper, .style-select-wrapper {
-      max-width: 120px;
-      flex-shrink: 0;
+    .persona-select-wrapper, .style-select-wrapper {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 3px 6px 3px 8px;
+      max-width: 140px;
+      display: flex;
+      align-items: center;
     }
-    #personaSelect, #modelSelect, #styleSelect {
-      max-width: 95px;
-      font-size: 13px;
+    #personaSelect, #styleSelect {
+      max-width: 110px;
+      font-size: 12px;
+      font-weight: 500;
       text-overflow: ellipsis;
       white-space: nowrap;
       overflow: hidden;
-      padding-right: 16px;
+      padding-right: 14px;
+    }
+    .dropdown-icon {
+      right: 6px;
     }
 
     /* Messages on mobile */
+    #messagesContainer {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: 8px;
+    }
     #messages {
-      padding: 14px 10px 24px;
-      gap: 16px;
+      padding: 12px 12px 20px;
+      gap: 14px;
     }
     .mwrap {
-      max-width: 92% !important;
+      max-width: 90% !important;
     }
     .mbubble {
-      padding: 10px 14px;
+      padding: 10px 13px;
       font-size: 14.5px;
       line-height: 1.55;
     }
     .empty-state {
-      margin-top: 4vh;
-      padding: 0 8px;
+      margin-top: 1.5vh;
+      padding: 0 12px;
     }
     .empty-state h1 {
-      font-size: 26px;
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .empty-state p {
+      font-size: 13px;
+      line-height: 1.4;
+      color: var(--text-secondary);
+      max-width: 300px;
+      margin: 0 auto;
     }
     .suggestions {
-      flex-direction: column;
-      align-items: stretch;
-      margin-top: 24px;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 6px;
+      margin-top: 14px;
+      max-width: 290px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .s-card {
+      padding: 9px 12px;
+      font-size: 13px;
+      border-radius: 10px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      max-width: 100%;
+      display: flex;
+      align-items: center;
       gap: 8px;
     }
 
     /* Input area on mobile */
     .input-container {
-      padding: 0 10px 12px;
+      padding: 4px 10px max(8px, env(safe-area-inset-bottom, 8px));
+      background: var(--bg-main);
+      flex-shrink: 0;
+      width: 100%;
     }
     .input-box {
       border-radius: 16px;
-      padding: 8px 10px;
-      gap: 4px;
+      padding: 6px 10px;
+      gap: 2px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      box-shadow: 0 -2px 12px rgba(0,0,0,0.3);
     }
     #msgInput {
       font-size: 16px; /* Prevents auto-zoom on iOS Safari */
-      padding: 2px 2px;
+      padding: 3px 2px;
+      height: 36px;
+      min-height: 36px;
     }
     .input-tools-row {
       gap: 4px;
+      padding-top: 2px;
     }
     .input-tools-left, .input-tools-right {
       gap: 4px;
@@ -865,6 +921,12 @@
     .send-btn {
       width: 34px;
       height: 34px;
+      border-radius: 10px;
+    }
+    .footer-hint {
+      font-size: 10.5px;
+      margin-top: 3px;
+      color: var(--text-muted);
     }
     
     /* Modals on mobile */
@@ -890,11 +952,16 @@
   }
 
   @media (max-width: 480px) {
-    .persona-select-wrapper, .model-select-wrapper, .style-select-wrapper {
-      max-width: 85px;
+    .topbar {
+      height: 50px;
+      padding: 0 8px;
     }
-    #personaSelect, #modelSelect, #styleSelect {
-      max-width: 68px;
+    .persona-select-wrapper, .style-select-wrapper {
+      max-width: 115px;
+      padding: 2px 4px 2px 6px;
+    }
+    #personaSelect, #styleSelect {
+      max-width: 90px;
       font-size: 11.5px;
     }
     .topbar-left {
@@ -910,6 +977,20 @@
     .send-btn {
       width: 32px;
       height: 32px;
+    }
+    .empty-state h1 {
+      font-size: 22px;
+    }
+    .suggestions {
+      max-width: 270px;
+      gap: 5px;
+    }
+    .s-card {
+      padding: 8px 10px;
+      font-size: 12.5px;
+    }
+    .input-container {
+      padding: 2px 8px max(6px, env(safe-area-inset-bottom, 6px));
     }
   }
 
