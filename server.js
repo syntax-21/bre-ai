@@ -8,6 +8,7 @@ const fs   = require('fs');
 const url  = require('url');
 
 const chat     = require('./api/chat');
+const models   = require('./api/models');
 const config   = require('./api/config');
 const info     = require('./api/info');
 const test     = require('./api/test');
@@ -63,12 +64,18 @@ const server = http.createServer((req, res) => {
 
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-custom-endpoint, x-custom-keys, x-custom-model');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-custom-endpoint, x-custom-keys, x-custom-model, x-custom-provider, x-custom-style, x-custom-language');
   if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
 
   const wres = wrapRes(res);
 
-  if (pathname === '/api/chat')     return chat(req, wres);
+  // OpenAI-compatible and native endpoints
+  if (pathname === '/api/chat' || pathname === '/v1/chat/completions' || pathname === '/chat/completions') {
+    return chat(req, wres);
+  }
+  if (pathname === '/api/models' || pathname === '/v1/models' || pathname === '/models') {
+    return models(req, wres);
+  }
   if (pathname === '/api/config')   return config(req, wres);
   if (pathname === '/api/info')     return info(req, wres);
   if (pathname === '/api/test')     return test(req, wres);

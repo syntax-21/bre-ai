@@ -154,7 +154,50 @@ Pemilik bot (*Owner*) dapat mengontrol seluruh konfigurasi proxy router langsung
 
 ---
 
-## 4. Daftar Perintah Slash Telegram (/commands)
+## 4. Panduan Integrasi Klien Eksternal (OpenAI-Compatible Gateway)
+
+Proxy Bre AI mendukung standar **OpenAI API Specification**, sehingga Anda dapat menghubungkan server Bre AI (misal: `https://www.breai.my.id`) ke berbagai aplikasi AI desktop, web client, ekstensi code editor, atau SDK pemrograman.
+
+### Kredensial & URL Endpoint
+- **Base URL / API Host (Standar OpenAI SDK):** `https://www.breai.my.id/v1`
+- **Full Chat Endpoint (POST Direct):** `https://www.breai.my.id/v1/chat/completions`
+- **Models Endpoint (GET Models List):** `https://www.breai.my.id/v1/models`
+- **API Key:** Buat di **Web Admin Dashboard** ➔ Tab **🛡️ Keamanan & Klien API** (contoh: `sk-bre-xxxx...`).
+- **Nama Model (Model ID):** `bre-ai` *(Master Unified Auto-Failover)*, `mercury-2`, `gpt-4o`, `claude-3-5-sonnet`, atau model aktif lainnya.
+
+### Contoh Konfigurasi di Berbagai Aplikasi:
+1. **NextChat (ChatGPT-Next-Web)**:
+   - Provider: `OpenAI`
+   - API Key: `sk-bre-xxxx...`
+   - Endpoint / Base URL: `https://www.breai.my.id/v1`
+   - Custom Model: `bre-ai`
+2. **Cherry Studio / Chatbox / LibreChat / Open WebUI**:
+   - Provider: `OpenAI-Compatible`
+   - API Host / Base URL: `https://www.breai.my.id/v1`
+   - API Key: `sk-bre-xxxx...`
+3. **VS Code (Cline / Roo Code / Continue)**:
+   - Provider: `OpenAI-Compatible`
+   - Base URL: `https://www.breai.my.id/v1`
+   - API Key: `sk-bre-xxxx...`
+   - Model ID: `bre-ai`
+4. **Python SDK (`openai`)**:
+   ```python
+   from openai import OpenAI
+
+   client = OpenAI(
+       base_url="https://www.breai.my.id/v1",
+       api_key="sk-bre-xxxx..."
+   )
+   response = client.chat.completions.create(
+       model="bre-ai",
+       messages=[{"role": "user", "content": "Halo Bre AI!"}]
+   )
+   print(response.choices[0].message.content)
+   ```
+
+---
+
+## 5. Daftar Perintah Slash Telegram (/commands)
 
 ### A. Perintah Pengguna Umum
 | Perintah | Deskripsi |

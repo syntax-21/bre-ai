@@ -44,11 +44,11 @@ module.exports = async (req, res) => {
   // 2. Client Authentication Check
   const authHeader = req.headers['authorization'] || '';
   const apiKey = authHeader.replace(/^Bearer\s+/i, '').trim();
-  const isValidAuth = validateClientKey(apiKey, cfg);
-  if (!isValidAuth) {
+  const authRes = validateClientKey(apiKey, cfg);
+  if (!authRes || !authRes.valid) {
     recordFailedAttempt(ip);
-    logRequest({ ip, provider: 'Auth', model: 'n/a', status: 401, latencyMs: 1, error: 'Unauthorized Client API Key' });
-    return res.status(401).json({ error: 'Akses ditolak: Client API Key tidak valid atau belum diisi.' });
+    logRequest({ ip, provider: 'Auth', model: 'n/a', status: 401, latencyMs: 1, error: authRes?.error || 'Unauthorized Client API Key' });
+    return res.status(401).json({ error: `Akses ditolak: ${authRes?.error || 'Client API Key tidak valid atau belum diisi.'}` });
   }
 
   // Check Rate Limits

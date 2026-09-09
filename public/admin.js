@@ -86,6 +86,7 @@ function switchTab(tabId, btn) {
   if (tabId === 'tabLogs') loadLogs();
   if (tabId === 'tabTelegram') loadTelegramStatus();
   if (tabId === 'tabCloud') loadCloudStorageStatus();
+  if (tabId === 'tabSecurity') initIntegrationGuide();
 }
 
 async function doLogin() {
@@ -242,7 +243,7 @@ async function loadConfig() {
     if (defStEl) defStEl.value = c.defaultStyle || 'santai';
     
     // Security
-    document.getElementById('cfgClientKey').value = c.clientApiKey || '';
+    document.getElementById('cfgClientKey').value = c.clientKey || c.clientApiKey || '';
     document.getElementById('cfgRateMax').value = c.rateLimitMax || 5;
     document.getElementById('cfgRateWin').value = c.rateLimitWindow || 30;
     
@@ -289,6 +290,7 @@ async function loadConfig() {
 
     renderProviders();
     updateTestModelDropdown();
+    initIntegrationGuide();
   } catch(e) {
     toast('Error load config: ' + e.message, 'err');
   }
@@ -1045,6 +1047,7 @@ function renderClientKeys() {
   if (!tbody) return;
   if (!clientKeys.length) {
     tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #64748b; padding: 20px;">Belum ada Client API Key khusus. Buat di atas.</td></tr>`;
+    updateGuideKeyDropdown();
     return;
   }
 
@@ -1079,6 +1082,8 @@ function renderClientKeys() {
       </tr>
     `;
   }).join('');
+
+  updateGuideKeyDropdown();
 }
 
 function addNewClientKey() {
@@ -1127,6 +1132,259 @@ function copyClientKey(key) {
   }).catch(() => {
     prompt('Salin API Key:', key);
   });
+}
+
+// ==========================================
+// INTEGRATION GUIDE & ENDPOINT HELPER
+// ==========================================
+function initIntegrationGuide() {
+  const origin = window.location.origin || 'https://www.breai.my.id';
+  const baseUrl = origin + '/v1';
+  const chatUrl = origin + '/v1/chat/completions';
+  const modelsUrl = origin + '/v1/models';
+
+  const gBase = document.getElementById('guideBaseUrl');
+  if (gBase) gBase.value = baseUrl;
+  const gChat = document.getElementById('guideChatUrl');
+  if (gChat) gChat.value = chatUrl;
+  const gModels = document.getElementById('guideModelsUrl');
+  if (gModels) gModels.value = modelsUrl;
+
+  // Update dynamic base URLs in HTML text
+  document.querySelectorAll('.guide-dyn-base').forEach(el => {
+    el.textContent = baseUrl;
+  });
+
+  updateGuideKeyDropdown();
+}
+
+function updateGuideKeyDropdown() {
+  const sel = document.getElementById('guideKeySelect');
+  if (!sel) return;
+
+  const currentVal = sel.value;
+  const masterKey = (document.getElementById('cfgClientKey')?.value || '').trim();
+
+  let options = [];
+  if (masterKey) {
+    options.push({ key: masterKey, label: `Master Key (${masterKey.slice(0, 10)}...)` });
+  }
+
+  if (Array.isArray(clientKeys)) {
+    clientKeys.forEach((k, idx) => {
+      if (k.enabled !== false) {
+        options.push({ key: k.key, label: `${k.label || 'Client ' + (idx + 1)} (${k.key.slice(0, 10)}...)` });
+      }
+    });
+  }
+
+  if (!options.length) {
+    sel.innerHTML = '<option value="">Belum ada API Key (Buat di atas)</option>';
+  } else {
+    sel.innerHTML = options.map(o => `<option value="${o.key}">${o.label}</option>`).join('');
+    if (currentVal && options.some(o => o.key === currentVal)) {
+      sel.value = currentVal;
+    }
+  }
+
+  updateGuideCodeSnippets();
+}
+
+function getSelectedOrFirstKey() {
+  const sel = document.getElementById('guideKeySelect');
+  if (sel && sel.value) return sel.value;
+  const masterKey = (document.getElementById('cfgClientKey')?.value || '').trim();
+  if (masterKey) return masterKey;
+  if (Array.isArray(clientKeys) && clientKeys.length > 0) {
+    const active = clientKeys.find(k => k.enabled !== false);
+    if (active) return active.key;
+  }
+  return 'sk-bre-xxxxxxxxx';
+}
+
+function updateGuideSelectedKey() {
+  updateGuideCodeSnippets();
+}
+
+function updateGuideCodeSnippets() {
+  const origin = window.location.origin || 'https://www.breai.my.id';
+  const baseUrl = origin + '/v1';
+  const chatUrl = origin + '/v1/chat/completions';
+  const key = getSelectedOrFirstKey();
+
+  const curlEl = document.getElementById('codeSnippetCurl');
+  if (curlEl) {
+    curlEl.textContent = `curl "${chatUrl}" \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer ${key}" \\
+  -d '{
+    "model": "bre-ai",
+    "messages": [
+      { "role": "user", "content": "Halo Bre AI, tes koneksi!" }
+    ],
+    "temperature": 0.7
+  }'`;
+  }
+
+  const pyEl = document.getElementById('codeSnippetPython');
+  if (pyEl) {
+    pyEl.textContent = `from openai import OpenAI
+
+# Inisialisasi klien OpenAI dengan endpoint Bre AI
+client = OpenAI(
+    base_url="${baseUrl}",
+    api_key="${key}"
+)
+
+response = client.chat.completions.create(
+    model="bre-ai", # Bre AI Proxy akan auto-routing ke provider aktif
+    messages=[
+        {"role": "user", "content": "Halo Bre AI, perkenalkan dirimu!"}
+    ]
+)
+
+print(response.choices[0].message.content)`;
+  }
+
+  const jsEl = document.getElementById('codeSnippetNodejs');
+  if (jsEl) {
+    jsEl.textContent = `import OpenAI from 'openai';
+
+// Inisialisasi SDK OpenAI dengan endpoint proxy Bre AI
+const openai = new OpenAI({
+  baseURL: '${baseUrl}',
+  apiKey: '${key}'
+});
+
+async function main() {
+  const completion = await openai.chat.completions.create({
+    model: 'bre-ai',
+    messages: [{ role: 'user', content: 'Halo Bre AI!' }]
+  });
+
+  console.log(completion.choices[0].message.content);
+}
+
+main();`;
+  }
+}
+
+function copyInputText(inputId, successMsg) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  navigator.clipboard.writeText(input.value).then(() => {
+    toast(successMsg || 'Berhasil disalin!', 'ok');
+  }).catch(() => {
+    prompt('Salin teks:', input.value);
+  });
+}
+
+function copyText(text, successMsg) {
+  navigator.clipboard.writeText(text).then(() => {
+    toast(successMsg || 'Disalin ke clipboard!', 'ok');
+  }).catch(() => {
+    prompt('Salin:', text);
+  });
+}
+
+function copySelectedGuideKey() {
+  const key = getSelectedOrFirstKey();
+  if (!key || key.includes('xxxx')) {
+    return toast('Belum ada API Key. Buat API Key baru di atas terlebih dahulu.', 'err');
+  }
+  copyText(key, 'Client API Key disalin!');
+}
+
+function copyCodeSnippet(snippetId) {
+  const el = document.getElementById(snippetId);
+  if (!el) return;
+  copyText(el.textContent, 'Kode berhasil disalin!');
+}
+
+function switchGuideTab(tabId, btn) {
+  document.querySelectorAll('.guide-app-tab').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+
+  document.querySelectorAll('.guide-tab-content').forEach(c => c.style.display = 'none');
+  const target = document.getElementById('guideTab_' + tabId);
+  if (target) target.style.display = 'block';
+}
+
+async function runGuideConnectionTest() {
+  const promptInput = document.getElementById('guideTestPrompt');
+  const promptText = (promptInput?.value || '').trim() || 'Halo Bre AI, tes koneksi API!';
+  const key = getSelectedOrFirstKey();
+  const resBox = document.getElementById('guideTestResultBox');
+  const btn = document.getElementById('btnRunGuideTest');
+
+  if (!key || key.includes('xxxx')) {
+    return toast('Buat Client API Key terlebih dahulu di tabel atas sebelum menguji.', 'err');
+  }
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span>⏳</span> Menguji...';
+  }
+
+  if (resBox) {
+    resBox.style.display = 'block';
+    resBox.innerHTML = '<span style="color: #94a3b8;">Sedang mengirim request POST ke <code>/v1/chat/completions</code>...</span>';
+  }
+
+  const startTime = Date.now();
+  try {
+    const res = await fetch('/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${key}`
+      },
+      body: JSON.stringify({
+        model: 'bre-ai',
+        messages: [{ role: 'user', content: promptText }],
+        stream: false
+      })
+    });
+
+    const elapsed = Date.now() - startTime;
+    const data = await res.json();
+
+    if (res.ok) {
+      const reply = data.choices?.[0]?.message?.content || JSON.stringify(data);
+      resBox.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid #1e293b; padding-bottom: 6px;">
+          <span style="color: #10b981; font-weight: 700;">🟢 HTTP 200 OK — Koneksi Berhasil!</span>
+          <span style="color: #38bdf8;">Latensi: ${elapsed} ms</span>
+        </div>
+        <div style="color: #94a3b8; font-size: 11px; margin-bottom: 6px;">Model Response ID: <b style="color:#e2e8f0;">${data.model || 'bre-ai'}</b></div>
+        <div style="background: rgba(15, 23, 42, 0.8); padding: 10px; border-radius: 6px; color: #f1f5f9; white-space: pre-wrap; word-break: break-word; font-size: 12.5px; border-left: 3px solid #10b981;">${reply}</div>
+      `;
+      toast('Tes koneksi API berhasil!', 'ok');
+    } else {
+      resBox.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid #1e293b; padding-bottom: 6px;">
+          <span style="color: #ef4444; font-weight: 700;">🔴 HTTP ${res.status} — Kendala Akses</span>
+          <span style="color: #94a3b8;">${elapsed} ms</span>
+        </div>
+        <div style="color: #ef4444; white-space: pre-wrap; font-size: 12px;">${data.error || JSON.stringify(data)}</div>
+      `;
+      toast(`Gagal: ${data.error || 'HTTP ' + res.status}`, 'err');
+    }
+  } catch (err) {
+    const elapsed = Date.now() - startTime;
+    if (resBox) {
+      resBox.innerHTML = `
+        <div style="color: #ef4444; font-weight: 700; margin-bottom: 4px;">🔴 Error Jaringan / Server (${elapsed} ms)</div>
+        <div style="color: #94a3b8; font-size: 12px;">${err.message}</div>
+      `;
+    }
+    toast('Error saat tes endpoint: ' + err.message, 'err');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<span>🚀</span> Tes Koneksi Sekarang';
+    }
+  }
 }
 
 function applyPromptPreset(type) {

@@ -520,6 +520,49 @@
       transform: translateX(20px);
       background-color: #fff;
     }
+    
+    /* Integration Guide Styles */
+    .guide-model-badge {
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      color: #38bdf8;
+      font-size: 11.5px;
+      font-family: 'JetBrains Mono', monospace;
+      padding: 3px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+      user-select: none;
+      display: inline-flex;
+      align-items: center;
+    }
+    .guide-model-badge:hover {
+      background: rgba(56, 189, 248, 0.25);
+      border-color: #38bdf8;
+      transform: translateY(-1px);
+    }
+    .guide-app-tab {
+      background: transparent;
+      border: 1px solid transparent;
+      color: #94a3b8;
+      padding: 6px 14px;
+      font-size: 13px;
+      font-weight: 500;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .guide-app-tab:hover {
+      color: #f1f5f9;
+      background: #141824;
+    }
+    .guide-app-tab.active {
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.15);
+      border-color: rgba(56, 189, 248, 0.3);
+      font-weight: 600;
+    }
   </style>
 </head>
 <body>
@@ -914,7 +957,7 @@
           <div class="form-group">
             <label class="form-label">Master Client API Key (Fallback)</label>
             <div style="display: flex; gap: 8px;">
-              <input type="text" id="cfgClientKey" class="input-text" placeholder="sk-bre-ai-master-key...">
+              <input type="text" id="cfgClientKey" class="input-text" placeholder="sk-bre-ai-master-key..." oninput="updateGuideKeyDropdown()">
               <button class="btn btn-outline" style="white-space: nowrap;" onclick="generateRandomKey()">🎲 Generate</button>
             </div>
             <div class="form-hint">Gunakan key ini untuk menghubungkan aplikasi desktop/web eksternal ke proxy Bre AI Anda.</div>
@@ -966,6 +1009,202 @@
               </tr>
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <!-- Panduan Integrasi Klien AI Card -->
+      <div class="card" style="background: linear-gradient(135deg, #0d121f, #080b12); border: 1px solid #1e293b; box-shadow: 0 4px 20px rgba(0,0,0,0.4);">
+        <div class="card-header" style="border-bottom: 1px solid #1e2433; padding-bottom: 14px; margin-bottom: 18px;">
+          <div>
+            <div class="card-title" style="color: #38bdf8; display: flex; align-items: center; gap: 8px; font-size: 17px;">
+              <span>📖</span> Panduan Integrasi Klien AI (Cara Setting &amp; Akses API)
+            </div>
+            <div class="card-subtitle" style="color: #94a3b8; margin-top: 4px;">
+              Gunakan kredensial dan endpoint di bawah ini untuk menghubungkan aplikasi desktop (NextChat, Cherry Studio), ekstensi VS Code (Cline, Roo Code), atau skrip program ke proxy Bre AI Anda.
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 1: Endpoints & Credentials Quick Copy Box -->
+        <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid #1e293b; border-radius: 10px; padding: 18px; margin-bottom: 22px;">
+          <div style="font-size: 14px; font-weight: 700; color: #f1f5f9; margin-bottom: 14px; display: flex; align-items: center; gap: 6px;">
+            <span>🔌</span> Endpoint &amp; Kredensial Akses OpenAI-Compatible
+          </div>
+
+          <div class="grid-2" style="gap: 16px; margin-bottom: 14px;">
+            <!-- Base URL Field -->
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-weight: 600; color: #38bdf8;">🌐 Base URL / API Host (Paling Umum)</span>
+                <span style="font-size: 11px; color: #10b981; background: rgba(16,185,129,0.12); padding: 1px 6px; border-radius: 4px;">Standar OpenAI SDK</span>
+              </label>
+              <div style="display: flex; gap: 8px;">
+                <input type="text" id="guideBaseUrl" class="input-text" readonly style="font-family: monospace; font-size: 13px; background: #060911; color: #38bdf8; font-weight: 600;">
+                <button type="button" class="btn btn-outline" style="white-space: nowrap; font-size: 12px; padding: 6px 12px;" onclick="copyInputText('guideBaseUrl', 'Base URL disalin!')">📋 Salin</button>
+              </div>
+              <div class="form-hint" style="color: #94a3b8; font-size: 11.5px; margin-top: 4px;">
+                Masukkan di kolom <b>Base URL</b> / <b>API Host</b> / <b>Endpoint</b> pada NextChat, Cherry Studio, Cline, LibreChat, Chatbox, Cursor, dll.
+              </div>
+            </div>
+
+            <!-- Full Chat Endpoint -->
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-weight: 600; color: #a78bfa;">⚡ Full Chat Endpoint (POST Direct)</span>
+                <span style="font-size: 11px; color: #a78bfa; background: rgba(167,139,250,0.12); padding: 1px 6px; border-radius: 4px;">Direct POST</span>
+              </label>
+              <div style="display: flex; gap: 8px;">
+                <input type="text" id="guideChatUrl" class="input-text" readonly style="font-family: monospace; font-size: 13px; background: #060911; color: #cbd5e1;">
+                <button type="button" class="btn btn-outline" style="white-space: nowrap; font-size: 12px; padding: 6px 12px;" onclick="copyInputText('guideChatUrl', 'Chat Endpoint disalin!')">📋 Salin</button>
+              </div>
+              <div class="form-hint" style="color: #94a3b8; font-size: 11.5px; margin-top: 4px;">
+                Gunakan URL lengkap ini jika aplikasi meminta URL spesifik POST (cURL, Webhook, REST client).
+              </div>
+            </div>
+          </div>
+
+          <div class="grid-2" style="gap: 16px;">
+            <!-- Client API Key Selector -->
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-weight: 600; color: #fbbf24;">🔑 Client API Key (Authorization Bearer)</span>
+              </label>
+              <div style="display: flex; gap: 8px;">
+                <select id="guideKeySelect" class="input-text" style="font-family: monospace; font-size: 12px; background: #060911; color: #f1f5f9; flex: 1;" onchange="updateGuideSelectedKey()">
+                  <option value="">Pilih Key...</option>
+                </select>
+                <button type="button" class="btn btn-outline" style="white-space: nowrap; font-size: 12px; padding: 6px 12px;" onclick="copySelectedGuideKey()">📋 Salin Key</button>
+              </div>
+              <div class="form-hint" style="color: #94a3b8; font-size: 11.5px; margin-top: 4px;">
+                Pilih salah satu key aktif di atas atau buat key baru khusus untuk tiap klien/aplikasi.
+              </div>
+            </div>
+
+            <!-- Recommended Model IDs -->
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label">
+                <span style="font-weight: 600; color: #34d399;">🤖 Nama Model (Model ID) yang Didukung</span>
+              </label>
+              <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px;">
+                <span class="guide-model-badge" onclick="copyText('bre-ai', 'Model bre-ai disalin!')" title="Klik untuk salin">🌟 bre-ai</span>
+                <span class="guide-model-badge" onclick="copyText('mercury-2', 'Model mercury-2 disalin!')" title="Klik untuk salin">mercury-2</span>
+                <span class="guide-model-badge" onclick="copyText('gpt-4o', 'Model gpt-4o disalin!')" title="Klik untuk salin">gpt-4o</span>
+                <span class="guide-model-badge" onclick="copyText('gemini-2.5-flash', 'Model gemini-2.5-flash disalin!')" title="Klik untuk salin">gemini-2.5-flash</span>
+                <span class="guide-model-badge" onclick="copyText('claude-3-5-sonnet', 'Model claude-3-5-sonnet disalin!')" title="Klik untuk salin">claude-3-5-sonnet</span>
+              </div>
+              <div class="form-hint" style="color: #94a3b8; font-size: 11.5px; margin-top: 4px;">
+                Gunakan <code>bre-ai</code> untuk rute otomatis (Auto-Failover). Anda juga dapat mengisi nama model provider yang aktif.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 2: Step-by-Step App Guides -->
+        <div>
+          <div style="font-size: 14px; font-weight: 700; color: #f1f5f9; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+            <span>📱</span> Panduan Setting Berdasarkan Aplikasi
+          </div>
+
+          <!-- App Tabs Navigator -->
+          <div style="display: flex; gap: 6px; margin-bottom: 16px; border-bottom: 1px solid #1e2433; padding-bottom: 8px; overflow-x: auto;">
+            <button type="button" class="guide-app-tab active" onclick="switchGuideTab('nextchat', this)">💬 NextChat</button>
+            <button type="button" class="guide-app-tab" onclick="switchGuideTab('cherry', this)">🍒 Cherry Studio / Chatbox</button>
+            <button type="button" class="guide-app-tab" onclick="switchGuideTab('cline', this)">💻 VS Code (Cline / Roo)</button>
+            <button type="button" class="guide-app-tab" onclick="switchGuideTab('curl', this)">⚡ cURL</button>
+            <button type="button" class="guide-app-tab" onclick="switchGuideTab('python', this)">🐍 Python SDK</button>
+            <button type="button" class="guide-app-tab" onclick="switchGuideTab('nodejs', this)">🟨 Node.js SDK</button>
+          </div>
+
+          <!-- App Tab 1: NextChat -->
+          <div id="guideTab_nextchat" class="guide-tab-content">
+            <div style="background: #090c14; border: 1px solid #1e2433; border-radius: 8px; padding: 16px; font-size: 13px; line-height: 1.6;">
+              <div style="font-weight: 600; color: #38bdf8; margin-bottom: 8px; font-size: 14px;">Cara Konfigurasi di NextChat (ChatGPT-Next-Web):</div>
+              <ol style="padding-left: 20px; color: #cbd5e1; margin-bottom: 12px;">
+                <li>Buka aplikasi atau web <b>NextChat</b> Anda, lalu masuk ke menu <b>Settings (Pengaturan ⚙️)</b> di pojok kiri bawah.</li>
+                <li>Pada bagian <b>Model Provider</b>, pilih <b>OpenAI</b>.</li>
+                <li>Pada kolom <b>API Key</b>, masukkan <b>Client API Key</b> yang telah dibuat di tabel atas (misal: <code>sk-bre-...</code>).</li>
+                <li>Pada kolom <b>Endpoint / Base URL</b>, masukkan: <code class="guide-dyn-base" style="color:#38bdf8; background:#0f172a; padding:2px 6px; border-radius:4px; font-weight:600;">https://www.breai.my.id/v1</code></li>
+                <li>Pada bagian <b>Custom Models</b>, tambahkan model <code>bre-ai</code> atau <code>mercury-2</code>.</li>
+                <li>Selesai! Sekarang Anda dapat langsung memulai percakapan di NextChat melalui proxy Bre AI.</li>
+              </ol>
+            </div>
+          </div>
+
+          <!-- App Tab 2: Cherry Studio -->
+          <div id="guideTab_cherry" class="guide-tab-content" style="display: none;">
+            <div style="background: #090c14; border: 1px solid #1e2433; border-radius: 8px; padding: 16px; font-size: 13px; line-height: 1.6;">
+              <div style="font-weight: 600; color: #38bdf8; margin-bottom: 8px; font-size: 14px;">Cara Konfigurasi di Cherry Studio / Chatbox / LibreChat:</div>
+              <ol style="padding-left: 20px; color: #cbd5e1; margin-bottom: 12px;">
+                <li>Buka <b>Settings</b> ➔ <b>Model Providers</b> ➔ Tambahkan Provider Baru (Pilih <b>OpenAI</b> atau <b>OpenAI-Compatible</b>).</li>
+                <li>Pada kolom <b>API Host / Base URL</b>, masukkan: <code class="guide-dyn-base" style="color:#38bdf8; background:#0f172a; padding:2px 6px; border-radius:4px; font-weight:600;">https://www.breai.my.id/v1</code></li>
+                <li>Pada kolom <b>API Key</b>, masukkan <b>Client API Key</b> Anda.</li>
+                <li>Klik tombol <b>"Check / Manage Models"</b> (akan mengambil daftar model dari <code>/v1/models</code> secara otomatis!) atau ketik nama model <code>bre-ai</code>.</li>
+                <li>Simpan pengaturan dan nikmati chat multi-model cepat!</li>
+              </ol>
+            </div>
+          </div>
+
+          <!-- App Tab 3: Cline / Roo Code -->
+          <div id="guideTab_cline" class="guide-tab-content" style="display: none;">
+            <div style="background: #090c14; border: 1px solid #1e2433; border-radius: 8px; padding: 16px; font-size: 13px; line-height: 1.6;">
+              <div style="font-weight: 600; color: #38bdf8; margin-bottom: 8px; font-size: 14px;">Cara Konfigurasi di Ekstensi VS Code (Cline / Roo Code / Continue):</div>
+              <ol style="padding-left: 20px; color: #cbd5e1; margin-bottom: 12px;">
+                <li>Buka panel ekstensi <b>Cline</b> atau <b>Roo Code</b> di VS Code, lalu klik ikon <b>Settings (⚙️)</b>.</li>
+                <li>Pilih <b>API Provider</b>: <b>OpenAI-Compatible</b>.</li>
+                <li>Pada kolom <b>Base URL</b>, masukkan: <code class="guide-dyn-base" style="color:#38bdf8; background:#0f172a; padding:2px 6px; border-radius:4px; font-weight:600;">https://www.breai.my.id/v1</code></li>
+                <li>Pada kolom <b>API Key</b>, masukkan <b>Client API Key</b> Anda.</li>
+                <li>Pada kolom <b>Model ID</b>, masukkan <code>bre-ai</code> atau model pilihan Anda (seperti <code>mercury-2</code>).</li>
+                <li>Klik tombol <b>Done / Save</b>. Ekstensi sekarang siap melakukan coding asisten dengan proxy Bre AI.</li>
+              </ol>
+            </div>
+          </div>
+
+          <!-- App Tab 4: cURL -->
+          <div id="guideTab_curl" class="guide-tab-content" style="display: none;">
+            <div style="position: relative; background: #06080e; border: 1px solid #1e2433; border-radius: 8px; padding: 14px;">
+              <button type="button" class="btn btn-outline" style="position: absolute; top: 10px; right: 10px; font-size: 11px; padding: 4px 8px;" onclick="copyCodeSnippet('codeSnippetCurl')">📋 Salin cURL</button>
+              <pre id="codeSnippetCurl" style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #38bdf8; overflow-x: auto; margin: 0; line-height: 1.5;"></pre>
+            </div>
+          </div>
+
+          <!-- App Tab 5: Python -->
+          <div id="guideTab_python" class="guide-tab-content" style="display: none;">
+            <div style="position: relative; background: #06080e; border: 1px solid #1e2433; border-radius: 8px; padding: 14px;">
+              <button type="button" class="btn btn-outline" style="position: absolute; top: 10px; right: 10px; font-size: 11px; padding: 4px 8px;" onclick="copyCodeSnippet('codeSnippetPython')">📋 Salin Python</button>
+              <pre id="codeSnippetPython" style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #a78bfa; overflow-x: auto; margin: 0; line-height: 1.5;"></pre>
+            </div>
+          </div>
+
+          <!-- App Tab 6: Node.js -->
+          <div id="guideTab_nodejs" class="guide-tab-content" style="display: none;">
+            <div style="position: relative; background: #06080e; border: 1px solid #1e2433; border-radius: 8px; padding: 14px;">
+              <button type="button" class="btn btn-outline" style="position: absolute; top: 10px; right: 10px; font-size: 11px; padding: 4px 8px;" onclick="copyCodeSnippet('codeSnippetNodejs')">📋 Salin Node.js</button>
+              <pre id="codeSnippetNodejs" style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #34d399; overflow-x: auto; margin: 0; line-height: 1.5;"></pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 3: Live API Ping & Connection Tester Widget -->
+        <div style="margin-top: 22px; background: rgba(9, 12, 20, 0.7); border: 1px solid #1e2433; border-radius: 10px; padding: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px;">
+            <div style="font-size: 14px; font-weight: 700; color: #f1f5f9; display: flex; align-items: center; gap: 6px;">
+              <span>🧪</span> Uji Koneksi Klien API Langsung
+            </div>
+            <div style="font-size: 12px; color: #94a3b8;">
+              Kirim request uji coba ke <code>/v1/chat/completions</code> untuk memastikan endpoint &amp; key Anda berfungsi 100%.
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap;">
+            <input type="text" id="guideTestPrompt" class="input-text" style="flex: 1; min-width: 240px; font-size: 13px;" value="Halo Bre AI! Tolong verifikasi bahwa koneksi API Client berjalan lancar.">
+            <button type="button" class="btn" id="btnRunGuideTest" onclick="runGuideConnectionTest()" style="background: #2563eb; color: #ffffff; font-weight: 600; font-size: 13px; padding: 8px 18px; border: none; border-radius: 6px; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+              <span>🚀</span> Tes Koneksi Sekarang
+            </button>
+          </div>
+
+          <div id="guideTestResultBox" style="display: none; background: #06080e; border: 1px solid #1e293b; border-radius: 6px; padding: 12px; font-family: 'JetBrains Mono', monospace; font-size: 12px;">
+            <!-- Dynamic Test Results -->
+          </div>
         </div>
       </div>
 

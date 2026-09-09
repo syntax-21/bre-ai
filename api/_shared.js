@@ -327,17 +327,25 @@ function clearResponseCache() {
 }
 
 function validateClientKey(authHeader, cfg) {
-  if (!authHeader) return { valid: false };
+  if (!authHeader) return { valid: false, error: 'API Key tidak disertakan' };
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : authHeader.trim();
-  if (!token) return { valid: false };
+  if (!token) return { valid: false, error: 'API Key kosong' };
   
-  if (token === cfg.adminPassword) return { valid: true, name: 'Admin Master' };
+  if (cfg.adminPassword && token === cfg.adminPassword.trim()) {
+    return { valid: true, name: 'Admin Master' };
+  }
+  
+  if (cfg.clientKey && token === cfg.clientKey.trim()) {
+    return { valid: true, name: 'Master Client Key' };
+  }
   
   if (Array.isArray(cfg.clientKeys)) {
     const found = cfg.clientKeys.find(k => k.key === token);
     if (found) {
-      if (found.active === false) return { valid: false, error: 'API Key dinonaktifkan (Revoked)' };
-      return { valid: true, name: found.name || 'Client Key' };
+      if (found.active === false || found.enabled === false) {
+        return { valid: false, error: 'API Key dinonaktifkan (Revoked)' };
+      }
+      return { valid: true, name: found.label || found.name || 'Client Key' };
     }
   }
   
