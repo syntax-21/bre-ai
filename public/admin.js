@@ -195,6 +195,25 @@ function restoreFullConfigFromLocalStorage(c) {
   return c;
 }
 
+function renderClientKeys() {
+  const container = document.getElementById('clientKeysList') || document.getElementById('clientKeysContainer');
+  if (!container) return;
+  if (!Array.isArray(clientKeys) || clientKeys.length === 0) {
+    container.innerHTML = '<div style="color:#64748b; font-size:13px; font-style:italic;">Belum ada Client API Key.</div>';
+    return;
+  }
+  container.innerHTML = clientKeys.map((k, i) => `
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; background:#0b0f19; border:1px solid #1c2438; border-radius:6px; margin-bottom:6px;">
+      <span style="font-family:monospace; font-size:13px; color:#38bdf8;">${k.key || k}</span>
+      <span style="font-size:12px; color:#94a3b8;">${k.label || ('Key #' + (i+1))}</span>
+    </div>
+  `).join('');
+}
+
+function initIntegrationGuide() {
+  // Graceful initialization for integration guides if present
+}
+
 async function loadConfig() {
   try {
     const r = await fetch('/api/config', {
@@ -224,27 +243,28 @@ async function loadConfig() {
 
     // Multi-Client Keys
     clientKeys = Array.isArray(c.clientKeys) ? c.clientKeys : [];
-    renderClientKeys();
+    if (typeof renderClientKeys === 'function') {
+      try { renderClientKeys(); } catch(e) {}
+    }
 
     // Endpoints & Providers
     endpoints = Array.isArray(c.endpoints) ? c.endpoints : [];
     renderProviders();
 
     // Engine
-    document.getElementById('cfgPrompt').value = c.systemPrompt || '';
-    document.getElementById('cfgTemp').value = c.temperature ?? 0.7;
-    document.getElementById('cfgTopP').value = c.topP ?? 1.0;
-    document.getElementById('cfgFreqPenalty').value = c.frequencyPenalty ?? 0.0;
-    document.getElementById('cfgPresPenalty').value = c.presencePenalty ?? 0.0;
-    document.getElementById('cfgMaxTokens').value = c.maxTokens || 16384;
-    document.getElementById('cfgStream').value = c.forceStream === true ? 'true' : (c.forceStream === false ? 'false' : 'auto');
-    const defStEl = document.getElementById('cfgDefaultStyle');
-    if (defStEl) defStEl.value = c.defaultStyle || 'santai';
+    const prEl = document.getElementById('cfgPrompt'); if (prEl) prEl.value = c.systemPrompt || '';
+    const tempEl = document.getElementById('cfgTemp'); if (tempEl) tempEl.value = c.temperature ?? 0.7;
+    const topPEl = document.getElementById('cfgTopP'); if (topPEl) topPEl.value = c.topP ?? 1.0;
+    const freqEl = document.getElementById('cfgFreqPenalty'); if (freqEl) freqEl.value = c.frequencyPenalty ?? 0.0;
+    const presEl = document.getElementById('cfgPresPenalty'); if (presEl) presEl.value = c.presencePenalty ?? 0.0;
+    const maxTokEl = document.getElementById('cfgMaxTokens'); if (maxTokEl) maxTokEl.value = c.maxTokens || 16384;
+    const streamEl = document.getElementById('cfgStream'); if (streamEl) streamEl.value = c.forceStream === true ? 'true' : (c.forceStream === false ? 'false' : 'auto');
+    const defStEl = document.getElementById('cfgDefaultStyle'); if (defStEl) defStEl.value = c.defaultStyle || 'santai';
     
     // Security
-    document.getElementById('cfgClientKey').value = c.clientKey || c.clientApiKey || '';
-    document.getElementById('cfgRateMax').value = c.rateLimitMax || 5;
-    document.getElementById('cfgRateWin').value = c.rateLimitWindow || 30;
+    const ckEl = document.getElementById('cfgClientKey'); if (ckEl) ckEl.value = c.clientKey || c.clientApiKey || '';
+    const rateMaxEl = document.getElementById('cfgRateMax'); if (rateMaxEl) rateMaxEl.value = c.rateLimitMax || 5;
+    const rateWinEl = document.getElementById('cfgRateWin'); if (rateWinEl) rateWinEl.value = c.rateLimitWindow || 30;
     
     // Telegram Bot
     const tgEn = document.getElementById('cfgTelegramEnabled');
@@ -289,7 +309,9 @@ async function loadConfig() {
 
     renderProviders();
     updateTestModelDropdown();
-    initIntegrationGuide();
+    if (typeof initIntegrationGuide === 'function') {
+      try { initIntegrationGuide(); } catch(e) {}
+    }
   } catch(e) {
     toast('Error load config: ' + e.message, 'err');
   }
@@ -1316,7 +1338,8 @@ function generateRandomKey() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   let rand = 'sk-bre-';
   for (let i = 0; i < 32; i++) rand += chars.charAt(Math.floor(Math.random() * chars.length));
-  document.getElementById('cfgClientKey').value = rand;
+  const ckEl = document.getElementById('cfgClientKey');
+  if (ckEl) ckEl.value = rand;
   toast('Master API Key baru di-generate!', 'ok');
 }
 
@@ -1454,9 +1477,9 @@ async function saveAllConfig() {
     presencePenalty: parseNum(document.getElementById('cfgPresPenalty')?.value, 0.0),
     maxTokens: parseInt(document.getElementById('cfgMaxTokens')?.value) || 16384,
     defaultStyle: document.getElementById('cfgDefaultStyle') ? document.getElementById('cfgDefaultStyle').value : 'santai',
-    clientApiKey: document.getElementById('cfgClientKey').value.trim(),
-    rateLimitMax: parseInt(document.getElementById('cfgRateMax').value) || 5,
-    rateLimitWindow: parseInt(document.getElementById('cfgRateWin').value) || 30,
+    clientApiKey: (document.getElementById('cfgClientKey')?.value || '').trim(),
+    rateLimitMax: parseInt(document.getElementById('cfgRateMax')?.value) || 5,
+    rateLimitWindow: parseInt(document.getElementById('cfgRateWin')?.value) || 30,
     telegramEnabled: document.getElementById('cfgTelegramEnabled') ? document.getElementById('cfgTelegramEnabled').checked : false,
     telegramBotToken: document.getElementById('cfgTelegramToken') ? document.getElementById('cfgTelegramToken').value.trim() : '',
     telegramOwnerId: document.getElementById('cfgTelegramOwner') ? document.getElementById('cfgTelegramOwner').value.trim() : '',
@@ -1546,7 +1569,10 @@ function importConfigFile(e) {
   const reader = new FileReader();
   reader.onload = async evt => {
     try {
-      const parsed = JSON.parse(evt.target.result);
+      let parsed = JSON.parse(evt.target.result);
+      if (parsed.config && typeof parsed.config === 'object') {
+        parsed = parsed.config;
+      }
       if (!parsed.endpoints && !parsed.apiUrl) throw new Error('Format file config tidak valid');
       
       const r = await fetch('/api/config', {
@@ -1555,10 +1581,14 @@ function importConfigFile(e) {
         body: JSON.stringify(parsed)
       });
       if (r.ok) {
+        try {
+          localStorage.setItem('bre_full_config', JSON.stringify(parsed));
+        } catch(e) {}
         toast('✅ Konfigurasi berhasil dipulihkan dari file!', 'ok');
-        loadConfig();
+        await loadConfig();
       } else {
-        toast('Gagal menyimpan file restore', 'err');
+        const errData = await r.json().catch(() => ({}));
+        toast('Gagal menyimpan file restore: ' + (errData.error || r.statusText), 'err');
       }
     } catch(err) {
       toast('Error file JSON: ' + err.message, 'err');

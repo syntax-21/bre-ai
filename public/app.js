@@ -414,7 +414,51 @@ function adjustInputHeight() {
   el.style.overflowY = el.scrollHeight > 180 ? 'auto' : 'hidden';
 }
 
+function ensureInputStructure() {
+  const box = document.querySelector('.input-box');
+  if (!box) return;
+  if (box.querySelector('.input-tools-row')) return; // Already has modern row layout
+
+  const msgInput = box.querySelector('#msgInput');
+  const attachBtn = box.querySelector('.attach-btn') || box.querySelector('button[title*="Attach"]');
+  const fileInput = box.querySelector('#fileInput');
+  const webBtn = box.querySelector('.web-search-btn') || box.querySelector('#btnWebSearch');
+  const imgBtn = box.querySelector('.img-gen-btn') || box.querySelector('#btnImgGen');
+  const micBtn = box.querySelector('.mic-btn') || box.querySelector('#btnMic');
+  const sendBtn = box.querySelector('.send-btn') || box.querySelector('#btnSend');
+
+  // Wrap textarea in input-main-wrap if needed
+  let mainWrap = box.querySelector('.input-main-wrap');
+  if (!mainWrap && msgInput) {
+    mainWrap = document.createElement('div');
+    mainWrap.className = 'input-main-wrap';
+    msgInput.parentNode.insertBefore(mainWrap, msgInput);
+    mainWrap.appendChild(msgInput);
+  }
+
+  // Create tools row with left and right groupings
+  const toolsRow = document.createElement('div');
+  toolsRow.className = 'input-tools-row';
+
+  const toolsLeft = document.createElement('div');
+  toolsLeft.className = 'input-tools-left';
+  if (attachBtn) toolsLeft.appendChild(attachBtn);
+  if (fileInput) toolsLeft.appendChild(fileInput);
+  if (webBtn) toolsLeft.appendChild(webBtn);
+  if (imgBtn) toolsLeft.appendChild(imgBtn);
+
+  const toolsRight = document.createElement('div');
+  toolsRight.className = 'input-tools-right';
+  if (micBtn) toolsRight.appendChild(micBtn);
+  if (sendBtn) toolsRight.appendChild(sendBtn);
+
+  toolsRow.appendChild(toolsLeft);
+  toolsRow.appendChild(toolsRight);
+  box.appendChild(toolsRow);
+}
+
 function setupInput() {
+  ensureInputStructure();
   const el = document.getElementById('msgInput');
   if (!el) return;
 

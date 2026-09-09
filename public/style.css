@@ -453,6 +453,22 @@
     box-shadow: 0 6px 28px rgba(0,0,0,0.45);
   }
 
+  /* Robust fallback for legacy/cached HTML (where buttons were direct children of .input-box) */
+  .input-box:not(:has(.input-tools-row)) {
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 8px !important;
+  }
+  .input-box:not(:has(.input-tools-row)) #msgInput,
+  .input-box:not(:has(.input-tools-row)) .input-main-wrap {
+    width: 100% !important;
+    flex-basis: 100% !important;
+  }
+  .input-box:not(:has(.input-tools-row)) .send-btn {
+    margin-left: auto !important;
+  }
+
   .input-main-wrap {
     width: 100%;
     display: flex;
