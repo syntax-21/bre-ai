@@ -10,6 +10,7 @@ const {
   getLogs,
   clearResponseCache,
   testSingleModel,
+  fetchAvailableModels,
   STYLE_LABELS
 } = require('../../api/_shared');
 
@@ -129,6 +130,158 @@ async function handleSlashCommand({
       return true;
     }
     await sendAdminPanel(chatId, senderName, botService.conversations.size, token);
+    return true;
+  }
+
+  // /ping
+  if (lowerText === '/ping' || lowerText.startsWith('/ping ')) {
+    const t0 = Date.now();
+    const cfg = getConfig();
+    const eps = Array.isArray(cfg.endpoints) ? cfg.endpoints.filter(e => e.status !== false && e.enabled !== false) : [];
+    const activeEp = eps[0] || (cfg.endpoints && cfg.endpoints[0]) || null;
+    const activeModel = cfg.telegramModel || cfg.model || (activeEp?.models?.[0]) || 'mercury-2';
+
+    let providerLatencyStr = 'N/A';
+    let providerStatus = '⚪ Belum ada endpoint aktif';
+
+    if (activeEp && activeEp.url) {
+      try {
+        const probe = await testSingleModel(activeEp, activeModel);
+        providerLatencyStr = `${probe.latencyMs} ms`;
+        providerStatus = probe.ok ? '🟢 Online (200 OK)' : `🔴 Error (${probe.error || 'Timeout'})`;
+      } catch (e) {
+        providerStatus = `🔴 Error: ${e.message}`;
+      }
+    }
+
+    const botLatency = Date.now() - t0;
+    const activeStyle = STYLE_LABELS[chatStyles.get(chatId) || cfg.telegramStyle || cfg.defaultStyle || 'santai'] || '✨ Santai & Friendly';
+
+    await api.sendTelegramMessage(
+      chatId,
+      `🏓 *Pong! Status Latensi & Koneksi Bre AI*\n\n` +
+      `• *Bot Gateway Latensi:* \`${botLatency} ms\`\n` +
+      `• *Provider AI Aktif:* *${activeEp?.name || 'Inception Labs'}*\n` +
+      `• *Provider Latensi:* \`${providerLatencyStr}\` (${providerStatus})\n` +
+      `• *Model Aktif:* \`${activeModel}\`\n` +
+      `• *Gaya Bahasa:* ${activeStyle}\n` +
+      `• *Waktu Server:* ${new Date().toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB\n\n` +
+      `_Sistem berjalan normal. Ketik \`/admin\` untuk membuka Dashboard Panel._`,
+      null, null, token
+    );
+    return true;
+  }
+
+  // /detect [index|nama]
+  if (lowerText === '/detect' || lowerText.startsWith('/detect ') || lowerText.startsWith('/detectmodels')) {
+    if (!isOwnerUser) {
+      await api.sendTelegramMessage(chatId, '⛔ Perintah ini hanya dapat dijalankan oleh Owner.', null, null, token);
+      return true;
+    }
+    const rawArg = text.replace(/^\/(detectmodels|detect)/i, '').trim();
+    const cfg = getConfig();
+    const eps = Array.isArray(cfg.endpoints) ? cfg.endpoints : [];
+    if (!eps.length) {
+      await api.sendTelegramMessage(chatId, '⚠️ Belum ada provider yang terdaftar di konfigurasi.', null, null, token);
+      return true;
+    }
+
+    let targetIdx = 0;
+    if (rawArg) {
+      const found = resolveTargetProvider(rawArg, eps);
+      if (found === -1) {
+        await api.sendTelegramMessage(chatId, `⚠️ Provider "${rawArg}" tidak ditemukan.`, null, null, token);
+        return true;
+      }
+      targetIdx = found;
+    }
+
+    const ep = eps[targetIdx];
+    await api.sendTelegramMessage(chatId, `🔍 *Sedang mendeteksi daftar model dari [${ep.name}]...*\nTarget URL: \`${ep.url}\`\nMohon tunggu beberapa detik...`, null, null, token);
+
+    const res = await fetchAvailableModels(ep);
+    if (res.ok && res.models && res.models.length > 0) {
+      eps[targetIdx].models = res.models;
+      saveConfig({ endpoints: eps });
+
+      const sample = res.models.slice(0, 10).map((m, i) => `${i + 1}. \`${m}\``).join('\n');
+      const more = res.models.length > 10 ? `\n_...dan ${res.models.length - 10} model lainnya_` : '';
+
+      await api.sendTelegramMessage(
+        chatId,
+        `✅ *Berhasil Mendeteksi ${res.models.length} Model dari [${ep.name}]!*\n\n` +
+        `*Daftar Model Tersedia:*\n${sample}${more}\n\n` +
+        `_Seluruh model telah otomatis disimpan ke konfigurasi provider ini._\n` +
+        `Gunakan \`/setmodel ${targetIdx + 1} [nama_model]\` untuk memilih model aktif.`,
+        null, null, token
+      );
+    } else {
+      await api.sendTelegramMessage(
+        chatId,
+        `❌ *Gagal Mendeteksi Model dari [${ep.name}]:*\n\n` +
+        `• Target URL: \`${ep.url}\`\n` +
+        `• Kendala: \`${res.error || 'Endpoint tidak merespons rute /v1/models atau format JSON tidak sesuai'}\`\n\n` +
+        `_Gunakan \`/setmodel ${targetIdx + 1} [nama_model]\` untuk memasukkan nama model secara manual._`,
+        null, null, token
+      );
+    }
+    return true;
+  }
+
+  // /livetest [index|nama|model]
+  if (lowerText === '/livetest' || lowerText.startsWith('/livetest ') || lowerText.startsWith('/testmodel')) {
+    if (!isOwnerUser) {
+      await api.sendTelegramMessage(chatId, '⛔ Perintah ini hanya dapat dijalankan oleh Owner.', null, null, token);
+      return true;
+    }
+    const rawArg = text.replace(/^\/(livetest|testmodel)/i, '').trim();
+    const cfg = getConfig();
+    const eps = Array.isArray(cfg.endpoints) ? cfg.endpoints : [];
+    if (!eps.length) {
+      await api.sendTelegramMessage(chatId, '⚠️ Belum ada provider yang terdaftar di konfigurasi.', null, null, token);
+      return true;
+    }
+
+    let targetIdx = 0;
+    if (rawArg) {
+      const found = resolveTargetProvider(rawArg, eps);
+      if (found !== -1) targetIdx = found;
+    }
+
+    const ep = eps[targetIdx];
+    const testModel = (rawArg && isNaN(parseInt(rawArg)) && targetIdx === 0 && !eps.some(e => e.name.toLowerCase() === rawArg.toLowerCase()))
+      ? rawArg
+      : (ep.models?.[0] || cfg.telegramModel || cfg.model || 'mercury-2');
+
+    await api.sendTelegramMessage(chatId, `🧪 *Menguji Model [${testModel}] Secara Live...*\nProvider: *${ep.name}*\nMohon tunggu beberapa detik...`, null, null, token);
+
+    const start = Date.now();
+    const probeResult = await testSingleModel(ep, testModel);
+    const elapsed = probeResult.latencyMs || (Date.now() - start);
+
+    if (probeResult.ok) {
+      await api.sendTelegramMessage(
+        chatId,
+        `✅ *Live Test Model Berhasil!*\n\n` +
+        `• *Provider:* *${ep.name}*\n` +
+        `• *Model:* \`${testModel}\`\n` +
+        `• *Latensi:* \`${elapsed} ms\`\n` +
+        `• *Status HTTP:* 🟢 200 OK\n\n` +
+        `*Cuplikan Respon Model:*\n"${probeResult.preview || 'Sukses'}"\n\n` +
+        `_Engine AI berfungsi normal dan siap melayani percakapan pengguna!_`,
+        null, null, token
+      );
+    } else {
+      await api.sendTelegramMessage(
+        chatId,
+        `❌ *Live Test Model Gagal:*\n\n` +
+        `• *Provider:* *${ep.name}*\n` +
+        `• *Model:* \`${testModel}\`\n` +
+        `• *Latensi:* \`${elapsed} ms\`\n` +
+        `• *Error:* \`${probeResult.error || 'Gagal menghubungi model'}\``,
+        null, null, token
+      );
+    }
     return true;
   }
 

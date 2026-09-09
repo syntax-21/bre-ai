@@ -19,13 +19,12 @@ const {
   STYLE_PROMPTS
 } = require('../../api/_shared');
 
-const {
-  apiCall,
-  sendTelegramMessage,
-  editTelegramMessage,
-  answerCallback,
-  sendTelegramDocument
-} = require('./api');
+const api = require('./api');
+function apiCall(...args) { return api.apiCall(...args); }
+function sendTelegramMessage(...args) { return api.sendTelegramMessage(...args); }
+function editTelegramMessage(...args) { return api.editTelegramMessage(...args); }
+function answerCallback(...args) { return api.answerCallback(...args); }
+function sendTelegramDocument(...args) { return api.sendTelegramDocument(...args); }
 
 const {
   recentUsers,
@@ -729,18 +728,55 @@ async function handleAdminCallback(cq, botService) {
     const idx = parseInt(data.split(':')[1]);
     const endpoints = Array.isArray(cfg.endpoints) ? cfg.endpoints : [];
     const ep = endpoints[idx];
-    if (!ep || !ep.url) return answerCallback(cq.id, 'URL provider tidak valid', true, token);
-
-    await answerCallback(cq.id, '⏳ Menguji ping endpoint...', false, token);
-    const testResult = await testSingleModel(ep, ep.models?.[0] || 'mercury-2');
-
-    let msg = '';
-    if (testResult.ok) {
-      msg = `✅ [${ep.name}] Online!\nLatensi: ${testResult.latencyMs}ms\nStatus: HTTP 200 OK`;
-    } else {
-      msg = `❌ [${ep.name}] Gagal: ${testResult.error || 'Timeout/Error'} (${testResult.latencyMs}ms)`;
+    if (!ep || !ep.url) {
+      await answerCallback(cq.id, 'URL provider tidak valid atau belum diisi', true, token);
+      return;
     }
-    await answerCallback(cq.id, msg, true, token);
+
+    await answerCallback(cq.id, null, false, token);
+    const targetModel = ep.models?.[0] || 'mercury-2';
+
+    await editTelegramMessage(
+      chatId,
+      messageId,
+      `⏳ *Sedang Menguji Ping & Latensi Endpoint...*\n\n` +
+      `• *Provider:* *${ep.name || 'Unnamed'}* (Index #${idx + 1})\n` +
+      `• *Target URL:* \`${ep.url}\`\n` +
+      `• *Model:* \`${targetModel}\`\n\n` +
+      `_Sedang mengirim probe minimal dan mengukur waktu respons (RTT)..._`,
+      null,
+      token
+    );
+
+    const testResult = await testSingleModel(ep, targetModel);
+    const isOk = testResult.ok;
+    const statusIcon = isOk ? '🟢' : '🔴';
+    const statusText = isOk ? 'Online (HTTP 200 OK)' : 'Offline / Mengalami Kendala';
+
+    const text = `⚡ *Hasil Uji Ping & Latensi Provider*\n\n` +
+      `• *Provider:* *${ep.name || 'Unnamed'}* (Index #${idx + 1})\n` +
+      `• *Status Koneksi:* ${statusIcon} *${statusText}*\n` +
+      `• *Waktu Respons (Latensi):* \`${testResult.latencyMs} ms\`\n` +
+      `• *Target URL:* \`${ep.url}\`\n` +
+      `• *Model Diuji:* \`${targetModel}\`\n` +
+      (testResult.preview ? `• *Respon Sample:* \`"${testResult.preview}"\`\n` : '') +
+      (testResult.error ? `• *Detail Kendala:* \`${testResult.error}\`\n` : '') +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `_Waktu pengujian: ${new Date().toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB_`;
+
+    const markup = {
+      inline_keyboard: [
+        [
+          { text: '⚡ Uji Ping Ulang', callback_data: `adm_prov_ping:${idx}` },
+          { text: '🧪 Test Model Live', callback_data: `adm_prov_test:${idx}` }
+        ],
+        [
+          { text: '🔍 Detect Model', callback_data: `adm_prov_detect:${idx}` },
+          { text: '⬅️ Kembali ke Provider', callback_data: `adm_prov_det:${idx}` }
+        ]
+      ]
+    };
+    await editTelegramMessage(chatId, messageId, text, markup, token);
     return;
   }
 
@@ -749,19 +785,169 @@ async function handleAdminCallback(cq, botService) {
     const idx = parseInt(data.split(':')[1]);
     const endpoints = Array.isArray(cfg.endpoints) ? [...cfg.endpoints] : [];
     const ep = endpoints[idx];
-    if (!ep) return;
+    if (!ep || !ep.url) {
+      await answerCallback(cq.id, 'URL provider tidak valid', true, token);
+      return;
+    }
 
-    await answerCallback(cq.id, '🔍 Mendeteksi model dari /v1/models...', false, token);
+    await answerCallback(cq.id, null, false, token);
+    await editTelegramMessage(
+      chatId,
+      messageId,
+      `🔍 *Mendeteksi Daftar Model AI dari Endpoint...*\n\n` +
+      `• *Provider:* *${ep.name || 'Unnamed'}* (Index #${idx + 1})\n` +
+      `• *Target URL:* \`${ep.url}\`\n\n` +
+      `_Sedang mengirim permintaan GET ke rute /v1/models..._`,
+      null,
+      token
+    );
+
     const res = await fetchAvailableModels(ep);
     if (res.ok && res.models && res.models.length > 0) {
       endpoints[idx].models = res.models;
       saveConfig({ endpoints });
-      await answerCallback(cq.id, `✅ Terdeteksi ${res.models.length} model: ${res.models.slice(0, 3).join(', ')}...`, true, token);
+
+      const sampleList = res.models.slice(0, 8).map((m, i) => `  ${i + 1}. \`${m}\``).join('\n');
+      const moreText = res.models.length > 8 ? `\n  _...dan ${res.models.length - 8} model lainnya_` : '';
+
+      const text = `✅ *Berhasil Mendeteksi Model dari Provider!*\n\n` +
+        `• *Provider:* *${ep.name || 'Unnamed'}* (Index #${idx + 1})\n` +
+        `• *Total Model Ditemukan:* *${res.models.length} model*\n` +
+        `• *Endpoint models:* \`${res.modelsUrl || ep.url}\`\n\n` +
+        `*Daftar Model Tersedia:*\n${sampleList}${moreText}\n\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `_Seluruh model di atas telah otomatis disimpan ke konfigurasi provider ini._`;
+
+      const markup = {
+        inline_keyboard: [
+          [
+            { text: `⚡ Jadikan Model: ${res.models[0].slice(0, 18)}`, callback_data: `adm_prov_set_active_model:${idx}:0` }
+          ],
+          [
+            { text: '🧪 Test Model Live', callback_data: `adm_prov_test:${idx}` },
+            { text: '⚡ Test Ping Latensi', callback_data: `adm_prov_ping:${idx}` }
+          ],
+          [
+            { text: '⬅️ Kembali ke Provider', callback_data: `adm_prov_det:${idx}` }
+          ]
+        ]
+      };
+      await editTelegramMessage(chatId, messageId, text, markup, token);
     } else {
-      await answerCallback(cq.id, `❌ Gagal: ${res.error || 'Endpoint tidak mengembalikan daftar model'}`, true, token);
+      const text = `❌ *Gagal Mendeteksi Model AI*\n\n` +
+        `• *Provider:* *${ep.name || 'Unnamed'}* (Index #${idx + 1})\n` +
+        `• *Endpoint:* \`${ep.url}\`\n` +
+        `• *Kendala:* \`${res.error || 'Endpoint tidak merespons rute /v1/models atau format JSON tidak sesuai'}\`\n\n` +
+        `_Catatan: Beberapa provider API (seperti custom endpoint atau proxy pihak ketiga) menonaktifkan rute \`/v1/models\`. Anda tetap dapat mengatur nama model secara manual via menu Edit._`;
+
+      const markup = {
+        inline_keyboard: [
+          [
+            { text: '🔄 Coba Deteksi Lagi', callback_data: `adm_prov_detect:${idx}` },
+            { text: '✏️ Edit Model Manual', callback_data: `adm_prov_edit_field:${idx}:model` }
+          ],
+          [
+            { text: '⚡ Test Ping Latensi', callback_data: `adm_prov_ping:${idx}` },
+            { text: '⬅️ Kembali ke Provider', callback_data: `adm_prov_det:${idx}` }
+          ]
+        ]
+      };
+      await editTelegramMessage(chatId, messageId, text, markup, token);
+    }
+    return;
+  }
+
+  // 4f-sub. Set Active Model from Detected List
+  if (data.startsWith('adm_prov_set_active_model:')) {
+    const parts = data.split(':');
+    const idx = parseInt(parts[1]);
+    const mIdx = parseInt(parts[2]) || 0;
+    const endpoints = Array.isArray(cfg.endpoints) ? [...cfg.endpoints] : [];
+    if (endpoints[idx] && endpoints[idx].models && endpoints[idx].models[mIdx]) {
+      const chosen = endpoints[idx].models[mIdx];
+      endpoints[idx].models = [chosen, ...endpoints[idx].models.filter(m => m !== chosen)];
+      saveConfig({ endpoints, telegramModel: chosen });
+      await answerCallback(cq.id, `✅ Model aktif diubah ke: ${chosen}`, true, token);
     }
     cq.data = `adm_prov_det:${idx}`;
     return handleAdminCallback(cq, botService);
+  }
+
+  // 4f-test. Test Model Live for Specific Provider
+  if (data.startsWith('adm_prov_test:')) {
+    const idx = parseInt(data.split(':')[1]);
+    const endpoints = Array.isArray(cfg.endpoints) ? cfg.endpoints : [];
+    const ep = endpoints[idx];
+    if (!ep || !ep.url) {
+      await answerCallback(cq.id, 'URL provider tidak valid', true, token);
+      return;
+    }
+
+    await answerCallback(cq.id, null, false, token);
+    const targetModel = ep.models?.[0] || cfg.telegramModel || cfg.model || 'mercury-2';
+
+    await editTelegramMessage(
+      chatId,
+      messageId,
+      `🧪 *Sedang Menguji Model Secara Live...*\n\n` +
+      `• *Provider:* *${ep.name || 'Unnamed'}* (Index #${idx + 1})\n` +
+      `• *Model:* \`${targetModel}\`\n` +
+      `• *Prompt Uji:* _"Hai Bre AI, perkenalkan dirimu secara singkat."_\n\n` +
+      `_Mengirim chat completion ke endpoint dan mengukur waktu proses..._`,
+      null,
+      token
+    );
+
+    const startTime = Date.now();
+    const testResult = await testSingleModel(ep, targetModel);
+    const elapsed = testResult.latencyMs || (Date.now() - startTime);
+
+    if (testResult.ok) {
+      const text = `✅ *Live Test Model Berhasil! (200 OK)*\n\n` +
+        `• *Provider:* *${ep.name || 'Unnamed'}* (Index #${idx + 1})\n` +
+        `• *Model:* \`${targetModel}\`\n` +
+        `• *Waktu Respons:* \`${elapsed} ms\`\n` +
+        `• *Status:* 🟢 Online (HTTP 200 OK)\n\n` +
+        `*Cuplikan Respon Model:*\n"${testResult.preview || 'Model merespons dengan normal.'}"\n\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `_Model siap digunakan untuk melayani percakapan pengguna!_`;
+
+      const markup = {
+        inline_keyboard: [
+          [
+            { text: '🔄 Tes Live Ulang', callback_data: `adm_prov_test:${idx}` },
+            { text: '⚡ Test Ping Latensi', callback_data: `adm_prov_ping:${idx}` }
+          ],
+          [
+            { text: '🔍 Detect Model', callback_data: `adm_prov_detect:${idx}` },
+            { text: '⬅️ Kembali ke Provider', callback_data: `adm_prov_det:${idx}` }
+          ]
+        ]
+      };
+      await editTelegramMessage(chatId, messageId, text, markup, token);
+    } else {
+      const text = `❌ *Live Test Model Gagal*\n\n` +
+        `• *Provider:* *${ep.name || 'Unnamed'}* (Index #${idx + 1})\n` +
+        `• *Model:* \`${targetModel}\`\n` +
+        `• *Waktu Respons:* \`${elapsed} ms\`\n` +
+        `• *Kendala:* \`${testResult.error || 'Gagal menghubungi model'}\`\n\n` +
+        `_Periksa kembali API Key, kuota token akun provider, atau nama model._`;
+
+      const markup = {
+        inline_keyboard: [
+          [
+            { text: '🔄 Coba Tes Lagi', callback_data: `adm_prov_test:${idx}` },
+            { text: '✏️ Edit Model', callback_data: `adm_prov_edit_field:${idx}:model` }
+          ],
+          [
+            { text: '⚡ Test Ping Latensi', callback_data: `adm_prov_ping:${idx}` },
+            { text: '⬅️ Kembali ke Provider', callback_data: `adm_prov_det:${idx}` }
+          ]
+        ]
+      };
+      await editTelegramMessage(chatId, messageId, text, markup, token);
+    }
+    return;
   }
 
   // 4g. Delete Provider
@@ -1604,20 +1790,23 @@ async function handleAdminCallback(cq, botService) {
 
   if (data.startsWith('adm_run_test:')) {
     const targetModel = data.split(':')[1] || 'mercury-2';
-    await answerCallback(cq.id, `⏳ Menguji model ${targetModel}...`, false, token);
+    await answerCallback(cq.id, null, false, token);
     await editTelegramMessage(chatId, messageId, `⏳ *Sedang Mengirim Test Query ke [${targetModel}]...*\nMohon tunggu beberapa detik...`, null, token);
 
     const startTime = Date.now();
     try {
       const probePrompt = 'Hai Bre AI, perkenalkan dirimu secara singkat.';
-      const answer = await botService.queryBreAIRouter(probePrompt, [{ role: 'user', content: probePrompt }]);
+      const queryRouter = (botService && typeof botService.queryBreAIRouter === 'function')
+        ? botService.queryBreAIRouter.bind(botService)
+        : require('./messageHandler').queryBreAIRouter;
+      const answer = await queryRouter(probePrompt, [{ role: 'user', content: probePrompt }]);
       const elapsed = Date.now() - startTime;
 
       const resultText = `✅ *Hasil Live Test Model:*\n\n` +
         `• *Model:* \`${targetModel}\`\n` +
         `• *Latensi:* \`${elapsed} ms\`\n` +
-        `• *Status HTTP:* 200 OK\n\n` +
-        `*Cuplikan Respon:*\n"${answer.slice(0, 180)}..."`;
+        `• *Status HTTP:* 🟢 200 OK\n\n` +
+        `*Cuplikan Respon:*\n"${(answer || '').slice(0, 250)}..."`;
 
       const markup = {
         inline_keyboard: [

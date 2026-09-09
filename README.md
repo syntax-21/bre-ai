@@ -177,6 +177,8 @@ Pemilik bot (*Owner*) dapat mengontrol seluruh konfigurasi proxy router langsung
 | `/metrics` | Melihat statistik permintaan, token, latensi, dan histori panggilan |
 | `/logs` | Menampilkan log sistem dan pesan kesalahan terakhir |
 | `/providers` | Menampilkan daftar seluruh provider upstream dan status kunci API |
+| `/detect [index\|nama]` | Mendeteksi daftar model AI yang tersedia dari endpoint `/v1/models` |
+| `/livetest [index\|nama\|model]` | Menguji responsivitas model AI secara live dengan probe query dan latensi |
 | `/setrouting [failover\|loadbalance]` | Mengganti strategi perutean permintaan AI |
 | `/addprovider [nama] [url] [model] [key]` | Menambahkan provider AI baru secara langsung |
 | `/delprovider [index\|nama]` | Menghapus provider AI dari sistem |
@@ -235,7 +237,8 @@ bre-ai-main/
 │   │   └── messageHandler.js          # Koordinator penerima pesan Telegram & query ke router
 │   └── telegramBot.js                 # Wrapper backward-compatibility untuk ekosistem lama
 │
-├── tests/                             # SUITE PENGUJIAN OTOMATIS & VERIFIKASI QC
+├── tests/                             # SUITE PENGUJIAN OTOMATIS & VERIFIKASI QC (npm test)
+│   ├── verify_diagnostics.js          # Pengujian fitur ping latensi, detect model, dan live test
 │   ├── verify_all_updates.js          # Pengujian identitas Bre AI, 9 dialek, dan CRUD provider
 │   ├── verify_forward_and_files.js    # Pengujian pesan terusan & pembuatan berkas fisik 100%
 │   └── verify_telegram_modular.js     # Pengujian integritas modularitas layanan Telegram

@@ -144,6 +144,11 @@ class TelegramBotService {
     return sendAdminPanel(chatId, senderName, this.conversations.size, this.activeToken);
   }
 
+  // Delegated AI Routing
+  queryBreAIRouter(...args) {
+    return queryBreAIRouter(...args);
+  }
+
   async handleCallbackQuery(cq, ctx = null) {
     if (ctx) {
       if (ctx.token) this.activeToken = ctx.token;
