@@ -19,16 +19,6 @@ module.exports = async (req, res) => {
 
   const cfg = await syncCloudConfig();
 
-  // Optional: check API Key if client provided one
-  const authHeader = req.headers['authorization'] || '';
-  if (authHeader) {
-    const apiKey = authHeader.replace(/^Bearer\s+/i, '').trim();
-    const authRes = validateClientKey(apiKey, cfg);
-    if (!authRes || !authRes.valid) {
-      return res.status(401).json({ error: `Akses ditolak: ${authRes?.error || 'Client API Key tidak valid.'}` });
-    }
-  }
-
   // Collect all active models from providers and mapping aliases
   const modelSet = new Set(['bre-ai']); // Master unified model ID
   const modelDetails = [
@@ -46,7 +36,9 @@ module.exports = async (req, res) => {
 
   if (Array.isArray(cfg.endpoints)) {
     cfg.endpoints.forEach(ep => {
-      if (ep.status !== false) {
+      const isStatusActive = ep.status !== false && ep.enabled !== false;
+      const hasKeys = (Array.isArray(ep.keys) && ep.keys.some(k => k && String(k).trim())) || (ep.apiKey && String(ep.apiKey).trim());
+      if (isStatusActive && hasKeys) {
         const owner = (ep.name || 'custom').toLowerCase().replace(/\s+/g, '-');
         
         // Models in endpoint.models array

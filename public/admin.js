@@ -86,7 +86,6 @@ function switchTab(tabId, btn) {
   if (tabId === 'tabLogs') loadLogs();
   if (tabId === 'tabTelegram') loadTelegramStatus();
   if (tabId === 'tabCloud') loadCloudStorageStatus();
-  if (tabId === 'tabSecurity') initIntegrationGuide();
 }
 
 async function doLogin() {
@@ -1041,307 +1040,132 @@ function toggleAutoRefreshLogs(el) {
   }
 }
 
-// Multi-Client Keys CRUD
-function renderClientKeys() {
-  const tbody = document.getElementById('clientKeysTableBody');
-  if (!tbody) return;
-  if (!clientKeys.length) {
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: #64748b; padding: 20px;">Belum ada Client API Key khusus. Buat di atas.</td></tr>`;
-    updateGuideKeyDropdown();
-    return;
-  }
-
-  tbody.innerHTML = clientKeys.map((item, i) => {
-    const masked = item.key.slice(0, 10) + '••••••••' + item.key.slice(-4);
-    const isAct = item.enabled !== false;
-    const statusBadge = isAct
-      ? `<span class="ping-badge ok">🟢 Aktif</span>`
-      : `<span class="ping-badge fail">🔴 Dicabut (Revoked)</span>`;
-    
-    const dateStr = item.createdAt ? new Date(item.createdAt).toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
-
-    return `
-      <tr>
-        <td style="font-weight: 600; color: #f1f5f9;">${item.label || 'Klien ' + (i+1)}</td>
-        <td>
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <code style="font-family: monospace; color: #38bdf8; background: #06080e; padding: 3px 8px; border-radius: 4px; font-size: 12px;">${masked}</code>
-            <button class="btn btn-outline" style="font-size: 11px; padding: 3px 8px;" onclick="copyClientKey('${item.key}')" title="Salin Full API Key">📋 Salin</button>
-          </div>
-        </td>
-        <td>${statusBadge}</td>
-        <td style="font-size: 12px; color: #94a3b8;">${dateStr}</td>
-        <td style="text-align: right;">
-          <div style="display: inline-flex; gap: 6px;">
-            <button class="btn btn-outline" style="font-size: 11px; padding: 4px 8px;" onclick="toggleClientKey(${i})">
-              ${isAct ? 'Cabut Akses' : 'Aktifkan'}
-            </button>
-            <button class="btn btn-danger" style="font-size: 11px; padding: 4px 8px;" onclick="deleteClientKey(${i})">Hapus</button>
-          </div>
-        </td>
-      </tr>
-    `;
-  }).join('');
-
-  updateGuideKeyDropdown();
-}
-
-function addNewClientKey() {
-  const input = document.getElementById('newClientKeyLabel');
-  const label = (input?.value || '').trim() || `Client App #${clientKeys.length + 1}`;
-  
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let rand = 'sk-bre-';
-  for (let i = 0; i < 32; i++) rand += chars.charAt(Math.floor(Math.random() * chars.length));
-
-  const newObj = {
-    id: 'ck_' + Date.now(),
-    label: label,
-    key: rand,
-    enabled: true,
-    createdAt: new Date().toISOString()
-  };
-
-  clientKeys.unshift(newObj);
-  if (input) input.value = '';
-  renderClientKeys();
-  saveAllConfig();
-  toast(`API Key untuk "${label}" berhasil dibuat & disimpan!`, 'ok');
-}
-
-function toggleClientKey(idx) {
-  if (!clientKeys[idx]) return;
-  clientKeys[idx].enabled = !clientKeys[idx].enabled;
-  renderClientKeys();
-  saveAllConfig();
-  toast(`Status key ${clientKeys[idx].label} diperbarui`, 'ok');
-}
-
-function deleteClientKey(idx) {
-  if (!clientKeys[idx]) return;
-  if (!confirm(`Hapus API Key untuk "${clientKeys[idx].label}"? Klien yang menggunakan key ini tidak dapat lagi mengakses API.`)) return;
-  clientKeys.splice(idx, 1);
-  renderClientKeys();
-  saveAllConfig();
-  toast('Client Key dihapus', 'ok');
-}
-
-function copyClientKey(key) {
-  navigator.clipboard.writeText(key).then(() => {
-    toast('API Key disalin ke clipboard!', 'ok');
-  }).catch(() => {
-    prompt('Salin API Key:', key);
-  });
-}
-
-// ==========================================
-// INTEGRATION GUIDE & ENDPOINT HELPER
-// ==========================================
-function initIntegrationGuide() {
-  const origin = window.location.origin || 'https://www.breai.my.id';
-  const baseUrl = origin + '/v1';
-  const chatUrl = origin + '/v1/chat/completions';
-  const modelsUrl = origin + '/v1/models';
-
-  const gBase = document.getElementById('guideBaseUrl');
-  if (gBase) gBase.value = baseUrl;
-  const gChat = document.getElementById('guideChatUrl');
-  if (gChat) gChat.value = chatUrl;
-  const gModels = document.getElementById('guideModelsUrl');
-  if (gModels) gModels.value = modelsUrl;
-
-  // Update dynamic base URLs in HTML text
-  document.querySelectorAll('.guide-dyn-base').forEach(el => {
-    el.textContent = baseUrl;
-  });
-
-  updateGuideKeyDropdown();
-}
-
-function updateGuideKeyDropdown() {
-  const sel = document.getElementById('guideKeySelect');
-  if (!sel) return;
-
-  const currentVal = sel.value;
-  const masterKey = (document.getElementById('cfgClientKey')?.value || '').trim();
-
-  let options = [];
-  if (masterKey) {
-    options.push({ key: masterKey, label: `Master Key (${masterKey.slice(0, 10)}...)` });
-  }
-
-  if (Array.isArray(clientKeys)) {
-    clientKeys.forEach((k, idx) => {
-      if (k.enabled !== false) {
-        options.push({ key: k.key, label: `${k.label || 'Client ' + (idx + 1)} (${k.key.slice(0, 10)}...)` });
-      }
-    });
-  }
-
-  if (!options.length) {
-    sel.innerHTML = '<option value="">Belum ada API Key (Buat di atas)</option>';
-  } else {
-    sel.innerHTML = options.map(o => `<option value="${o.key}">${o.label}</option>`).join('');
-    if (currentVal && options.some(o => o.key === currentVal)) {
-      sel.value = currentVal;
+// ========================================================
+// AI TOOLS & PROMPT STUDIO CONTROLLER
+// ========================================================
+const STUDIO_TOOLS = {
+  search: {
+    title: '🔍 Web Search & Riset Internet Live',
+    cmd: '/search [kueri]',
+    desc: 'Mencari informasi terkini dari internet dan merangkumnya secara akurat dengan sumber data valid.',
+    label: 'Topik / Kueri Pencarian Web',
+    placeholder: 'Masukkan kueri pencarian (contoh: perkembangan AI terkini 2026)...',
+    buildPrompt: (input) => `[PENCARIAN WEB LIVE: "${input}"]\n\nSebagai Bre AI, carilah informasi akurat dan rangkum topik "${input}" secara komprehensif lengkap dengan poin penting dan sumber/referensi.`
+  },
+  code: {
+    title: '💻 Code Assistant & Bug Fixer',
+    cmd: '/code [deskripsi]',
+    desc: 'Menghasilkan kode pemrograman berkualitas tinggi, bersih, optimal, dan terstruktur siap pakai.',
+    label: 'Deskripsi Program / Bug yang Ingin Diperbaiki',
+    placeholder: 'Contoh: Buatkan script scraper website dengan Python BeautifulSoup dan simpan ke CSV...',
+    buildPrompt: (input) => `Bertindaklah sebagai Principal Software Engineer. Buatkan kode pemrograman berkualitas tinggi, bersih, optimal, dan aman untuk: "${input}". Berikan penjelasan ringkas dan letakkan seluruh kode lengkap di dalam blok kode dengan nama file di baris pertama.`
+  },
+  summary: {
+    title: '📝 Smart Document Summarizer',
+    cmd: '/summary [teks]',
+    desc: 'Merangkum artikel atau teks panjang menjadi ringkasan eksekutif, Key Takeaways, dan Action Items.',
+    label: 'Teks / Dokumen yang Ingin Dirangkum',
+    placeholder: 'Tempelkan artikel, laporan, atau teks panjang yang ingin dirangkum di sini...',
+    buildPrompt: (input) => `Tolong buatkan ringkasan eksekutif, poin-poin penting (Key Takeaways), dan Action Items yang terstruktur dan mudah dipahami dari teks berikut:\n\n${input}`
+  },
+  prd: {
+    title: '📋 Product Requirement Document (PRD) Builder',
+    cmd: '/prd [nama fitur]',
+    desc: 'Menyusun dokumen PRD lengkap standar industri dengan User Stories dan Acceptance Criteria.',
+    label: 'Nama Fitur / Konsep Produk',
+    placeholder: 'Contoh: Fitur Multi-Tenant Booking & Pembayaran Otomatis QRIS...',
+    buildPrompt: (input) => `Bertindaklah sebagai Senior Product Manager (PRD Specialist). Susun dokumen PRD (Product Requirement Document) lengkap dan terstruktur rapi untuk: "${input}". Format: 1. Overview, 2. Problem Statement & Goals, 3. User Stories, 4. Functional Specs, 5. Acceptance Criteria, 6. Edge Cases, 7. Success Metrics (KPIs).`
+  },
+  copy: {
+    title: '✍️ Viral Copywriting & Marketing Content',
+    cmd: '/copy [topik]',
+    desc: 'Meracik formula copywriting persuasif berkonversi tinggi (Headline, Hook, Benefit, CTA).',
+    label: 'Produk / Topik Promosi Iklan',
+    placeholder: 'Contoh: Layanan Konsultasi Bisnis Digital Marketing UMKM...',
+    buildPrompt: (input) => `Bertindaklah sebagai Master Copywriter kelas dunia (AIDA & PAS framework). Buatkan materi copywriting persuasif dan berkonversi tinggi untuk topik/produk: "${input}". Berikan: 1. 3 Pilihan Hook/Headline menarik, 2. Emotional & Functional Benefits, 3. Value Proposition, 4. Call to Action (CTA) persuasif.`
+  },
+  think: {
+    title: '🧠 Deep Analytical Reasoning (Chain of Thought)',
+    cmd: '/think [masalah]',
+    desc: 'Memecahkan masalah analitis kompleks dengan penalaran sistematis langkah demi langkah.',
+    label: 'Pertanyaan / Masalah Analitis',
+    placeholder: 'Contoh: Analisis perbandingan arsitektur Monolith vs Microservices untuk startup skala awal...',
+    buildPrompt: (input) => `Analisis dan pecahkan pertanyaan/masalah berikut dengan penalaran sistematis langkah demi langkah (Deep Analytical Reasoning / Chain of Thought):\n\n"${input}"\n\nSajikan analisis komparatif, trade-offs, mitigasi risiko, dan rekomendasi konkrit.`
+  },
+  translate: {
+    title: '🌐 Smart Polyglot Translator',
+    cmd: '/translate [bahasa] [teks]',
+    desc: 'Menerjemahkan teks secara natural, profesional, dan memperbaiki tata bahasa.',
+    label: 'Bahasa Target & Teks Sumber',
+    placeholder: 'english Selamat pagi rekan-rekan, mari kita review progress sprint minggu ini.',
+    buildPrompt: (input) => {
+      const parts = input.trim().split(/\s+/);
+      const target = parts[0] || 'English';
+      const text = parts.slice(1).join(' ') || input;
+      return `Terjemahkan teks berikut ke dalam bahasa ${target} dengan nada profesional, natural, dan akurat secara tata bahasa:\n\n"${text}"\n\nSertakan juga opsi alternatif santai jika ada.`;
     }
   }
+};
 
-  updateGuideCodeSnippets();
-}
+let currentStudioToolKey = 'search';
 
-function getSelectedOrFirstKey() {
-  const sel = document.getElementById('guideKeySelect');
-  if (sel && sel.value) return sel.value;
-  const masterKey = (document.getElementById('cfgClientKey')?.value || '').trim();
-  if (masterKey) return masterKey;
-  if (Array.isArray(clientKeys) && clientKeys.length > 0) {
-    const active = clientKeys.find(k => k.enabled !== false);
-    if (active) return active.key;
-  }
-  return 'sk-bre-xxxxxxxxx';
-}
+function selectStudioTool(toolKey, btn) {
+  currentStudioToolKey = toolKey;
+  const tool = STUDIO_TOOLS[toolKey];
+  if (!tool) return;
 
-function updateGuideSelectedKey() {
-  updateGuideCodeSnippets();
-}
-
-function updateGuideCodeSnippets() {
-  const origin = window.location.origin || 'https://www.breai.my.id';
-  const baseUrl = origin + '/v1';
-  const chatUrl = origin + '/v1/chat/completions';
-  const key = getSelectedOrFirstKey();
-
-  const curlEl = document.getElementById('codeSnippetCurl');
-  if (curlEl) {
-    curlEl.textContent = `curl "${chatUrl}" \\
-  -H "Content-Type: application/json" \\
-  -H "Authorization: Bearer ${key}" \\
-  -d '{
-    "model": "bre-ai",
-    "messages": [
-      { "role": "user", "content": "Halo Bre AI, tes koneksi!" }
-    ],
-    "temperature": 0.7
-  }'`;
-  }
-
-  const pyEl = document.getElementById('codeSnippetPython');
-  if (pyEl) {
-    pyEl.textContent = `from openai import OpenAI
-
-# Inisialisasi klien OpenAI dengan endpoint Bre AI
-client = OpenAI(
-    base_url="${baseUrl}",
-    api_key="${key}"
-)
-
-response = client.chat.completions.create(
-    model="bre-ai", # Bre AI Proxy akan auto-routing ke provider aktif
-    messages=[
-        {"role": "user", "content": "Halo Bre AI, perkenalkan dirimu!"}
-    ]
-)
-
-print(response.choices[0].message.content)`;
-  }
-
-  const jsEl = document.getElementById('codeSnippetNodejs');
-  if (jsEl) {
-    jsEl.textContent = `import OpenAI from 'openai';
-
-// Inisialisasi SDK OpenAI dengan endpoint proxy Bre AI
-const openai = new OpenAI({
-  baseURL: '${baseUrl}',
-  apiKey: '${key}'
-});
-
-async function main() {
-  const completion = await openai.chat.completions.create({
-    model: 'bre-ai',
-    messages: [{ role: 'user', content: 'Halo Bre AI!' }]
-  });
-
-  console.log(completion.choices[0].message.content);
-}
-
-main();`;
-  }
-}
-
-function copyInputText(inputId, successMsg) {
-  const input = document.getElementById(inputId);
-  if (!input) return;
-  navigator.clipboard.writeText(input.value).then(() => {
-    toast(successMsg || 'Berhasil disalin!', 'ok');
-  }).catch(() => {
-    prompt('Salin teks:', input.value);
-  });
-}
-
-function copyText(text, successMsg) {
-  navigator.clipboard.writeText(text).then(() => {
-    toast(successMsg || 'Disalin ke clipboard!', 'ok');
-  }).catch(() => {
-    prompt('Salin:', text);
-  });
-}
-
-function copySelectedGuideKey() {
-  const key = getSelectedOrFirstKey();
-  if (!key || key.includes('xxxx')) {
-    return toast('Belum ada API Key. Buat API Key baru di atas terlebih dahulu.', 'err');
-  }
-  copyText(key, 'Client API Key disalin!');
-}
-
-function copyCodeSnippet(snippetId) {
-  const el = document.getElementById(snippetId);
-  if (!el) return;
-  copyText(el.textContent, 'Kode berhasil disalin!');
-}
-
-function switchGuideTab(tabId, btn) {
-  document.querySelectorAll('.guide-app-tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('#tabTools .guide-app-tab').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
 
-  document.querySelectorAll('.guide-tab-content').forEach(c => c.style.display = 'none');
-  const target = document.getElementById('guideTab_' + tabId);
-  if (target) target.style.display = 'block';
+  const titleEl = document.getElementById('studioToolTitle');
+  if (titleEl) titleEl.textContent = tool.title;
+  const badgeEl = document.getElementById('studioTelegramCommandBadge');
+  if (badgeEl) badgeEl.textContent = `Perintah Bot: ${tool.cmd}`;
+  const descEl = document.getElementById('studioToolDesc');
+  if (descEl) descEl.textContent = tool.desc;
+  const labelEl = document.getElementById('studioInputLabel');
+  if (labelEl) labelEl.textContent = tool.label;
+  const inputEl = document.getElementById('studioInputText');
+  if (inputEl) {
+    inputEl.placeholder = tool.placeholder;
+    inputEl.value = '';
+  }
+
+  const resContainer = document.getElementById('studioResultContainer');
+  if (resContainer) resContainer.style.display = 'none';
 }
 
-async function runGuideConnectionTest() {
-  const promptInput = document.getElementById('guideTestPrompt');
-  const promptText = (promptInput?.value || '').trim() || 'Halo Bre AI, tes koneksi API!';
-  const key = getSelectedOrFirstKey();
-  const resBox = document.getElementById('guideTestResultBox');
-  const btn = document.getElementById('btnRunGuideTest');
+async function executeStudioTool() {
+  const tool = STUDIO_TOOLS[currentStudioToolKey];
+  const inputEl = document.getElementById('studioInputText');
+  const input = (inputEl?.value || '').trim();
+  const resContainer = document.getElementById('studioResultContainer');
+  const resContent = document.getElementById('studioResultContent');
+  const latencyEl = document.getElementById('studioExecutionLatency');
+  const btn = document.getElementById('btnExecuteStudioTool');
 
-  if (!key || key.includes('xxxx')) {
-    return toast('Buat Client API Key terlebih dahulu di tabel atas sebelum menguji.', 'err');
+  if (!input) {
+    return toast('Silakan masukkan input teks untuk menjalankan alat ini.', 'err');
   }
 
   if (btn) {
     btn.disabled = true;
-    btn.innerHTML = '<span>⏳</span> Menguji...';
+    btn.innerHTML = '⏳ Menjalankan...';
   }
 
-  if (resBox) {
-    resBox.style.display = 'block';
-    resBox.innerHTML = '<span style="color: #94a3b8;">Sedang mengirim request POST ke <code>/v1/chat/completions</code>...</span>';
+  if (resContainer) {
+    resContainer.style.display = 'block';
+    if (resContent) resContent.innerHTML = '<span style="color: #94a3b8;">Sedang menghubungi engine AI Bre AI...</span>';
   }
 
   const startTime = Date.now();
   try {
-    const res = await fetch('/v1/chat/completions', {
+    const promptToSend = tool.buildPrompt(input);
+    const res = await fetch('/api/chat', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${key}`
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'bre-ai',
-        messages: [{ role: 'user', content: promptText }],
+        messages: [{ role: 'user', content: promptToSend }],
         stream: false
       })
     });
@@ -1350,39 +1174,132 @@ async function runGuideConnectionTest() {
     const data = await res.json();
 
     if (res.ok) {
+      if (latencyEl) latencyEl.textContent = `Latensi: ${elapsed} ms`;
       const reply = data.choices?.[0]?.message?.content || JSON.stringify(data);
-      resBox.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid #1e293b; padding-bottom: 6px;">
-          <span style="color: #10b981; font-weight: 700;">🟢 HTTP 200 OK — Koneksi Berhasil!</span>
-          <span style="color: #38bdf8;">Latensi: ${elapsed} ms</span>
-        </div>
-        <div style="color: #94a3b8; font-size: 11px; margin-bottom: 6px;">Model Response ID: <b style="color:#e2e8f0;">${data.model || 'bre-ai'}</b></div>
-        <div style="background: rgba(15, 23, 42, 0.8); padding: 10px; border-radius: 6px; color: #f1f5f9; white-space: pre-wrap; word-break: break-word; font-size: 12.5px; border-left: 3px solid #10b981;">${reply}</div>
-      `;
-      toast('Tes koneksi API berhasil!', 'ok');
+      if (resContent) resContent.textContent = reply;
+      toast('Alat AI berhasil dieksekusi!', 'ok');
     } else {
-      resBox.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid #1e293b; padding-bottom: 6px;">
-          <span style="color: #ef4444; font-weight: 700;">🔴 HTTP ${res.status} — Kendala Akses</span>
-          <span style="color: #94a3b8;">${elapsed} ms</span>
-        </div>
-        <div style="color: #ef4444; white-space: pre-wrap; font-size: 12px;">${data.error || JSON.stringify(data)}</div>
-      `;
-      toast(`Gagal: ${data.error || 'HTTP ' + res.status}`, 'err');
+      if (latencyEl) latencyEl.textContent = `Error (${elapsed} ms)`;
+      if (resContent) resContent.innerHTML = `<span style="color: #ef4444;">${data.error || 'Gagal mengeksekusi alat'}</span>`;
+      toast(data.error || 'Eksekusi gagal', 'err');
     }
   } catch (err) {
     const elapsed = Date.now() - startTime;
-    if (resBox) {
-      resBox.innerHTML = `
-        <div style="color: #ef4444; font-weight: 700; margin-bottom: 4px;">🔴 Error Jaringan / Server (${elapsed} ms)</div>
-        <div style="color: #94a3b8; font-size: 12px;">${err.message}</div>
-      `;
-    }
-    toast('Error saat tes endpoint: ' + err.message, 'err');
+    if (latencyEl) latencyEl.textContent = `Error (${elapsed} ms)`;
+    if (resContent) resContent.innerHTML = `<span style="color: #ef4444;">${err.message}</span>`;
+    toast('Error: ' + err.message, 'err');
   } finally {
     if (btn) {
       btn.disabled = false;
-      btn.innerHTML = '<span>🚀</span> Tes Koneksi Sekarang';
+      btn.innerHTML = '🚀 Jalankan Alat AI Ini';
+    }
+  }
+}
+
+// ========================================================
+// MULTI-PROVIDER REAL-TIME HEALTH BENCHMARK
+// ========================================================
+async function runMultiProviderBenchmark() {
+  syncProvidersFromUI();
+  const tbody = document.getElementById('healthBenchmarkTableBody');
+  const btn = document.getElementById('btnBenchmarkAll');
+
+  if (!endpoints.length) {
+    return toast('Belum ada provider yang terdaftar di konfigurasi.', 'err');
+  }
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '⏳ Menguji Semua Provider...';
+  }
+
+  if (tbody) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" style="text-align: center; color: #38bdf8; padding: 25px;">
+          ⏳ Sedang mengirim permintaan uji latensi paralel ke ${endpoints.length} provider...
+        </td>
+      </tr>
+    `;
+  }
+
+  try {
+    const results = await Promise.all(
+      endpoints.map(async (ep, idx) => {
+        const primaryModel = ep.models?.[0] || 'default';
+        const start = Date.now();
+        try {
+          const r = await fetch('/api/test', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              customEndpoint: ep.url,
+              customKeys: (ep.keys || []).join('\n'),
+              customModel: primaryModel,
+              prompt: 'Ping'
+            })
+          });
+          const elapsed = Date.now() - start;
+          const data = await r.json();
+          return {
+            idx: idx + 1,
+            name: ep.name || `Provider #${idx + 1}`,
+            url: ep.url || '-',
+            model: primaryModel,
+            ok: r.ok && !data.error,
+            status: r.status,
+            latency: data.latencyMs || elapsed,
+            error: data.error || (r.ok ? null : 'HTTP ' + r.status),
+            active: ep.status !== false
+          };
+        } catch (e) {
+          const elapsed = Date.now() - start;
+          return {
+            idx: idx + 1,
+            name: ep.name || `Provider #${idx + 1}`,
+            url: ep.url || '-',
+            model: primaryModel,
+            ok: false,
+            status: 0,
+            latency: elapsed,
+            error: e.message,
+            active: ep.status !== false
+          };
+        }
+      })
+    );
+
+    if (tbody) {
+      tbody.innerHTML = results.map(r => {
+        const badge = r.active
+          ? (r.ok ? `<span class="ping-badge ok">🟢 200 OK</span>` : `<span class="ping-badge fail">🔴 ${r.error ? r.error.slice(0, 30) : 'Error'}</span>`)
+          : `<span class="ping-badge" style="background:#1e293b; color:#94a3b8;">⚪ Nonaktif</span>`;
+
+        const failoverStatus = r.ok
+          ? `<span style="color:#10b981; font-size:12px;">✅ Siap Melayani</span>`
+          : `<span style="color:#ef4444; font-size:12px;">⚠️ Auto-Skipped</span>`;
+
+        return `
+          <tr>
+            <td>${r.idx}</td>
+            <td style="font-weight: 600; color: #f1f5f9;">${r.name}</td>
+            <td style="font-family: monospace; font-size: 11.5px; color: #94a3b8;">${r.url}</td>
+            <td><code style="background: #060911; padding: 2px 6px; border-radius: 4px; font-size: 11.5px; color: #38bdf8;">${r.model}</code></td>
+            <td>${badge}</td>
+            <td style="font-weight: 600; color: ${r.ok ? '#38bdf8' : '#ef4444'};">${r.latency} ms</td>
+            <td>${failoverStatus}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    toast(`Benchmark selesai! ${results.filter(r => r.ok).length}/${results.length} provider sehat.`, 'ok');
+  } catch (err) {
+    toast('Gagal menjalankan benchmark: ' + err.message, 'err');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '⚡ Uji Semua Provider Bersamaan';
     }
   }
 }

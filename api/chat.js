@@ -38,20 +38,10 @@ module.exports = async (req, res) => {
   body = body || {};
 
   // 1. IP and Rate Limiting
-  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || '127.0.0.1';
+  const ip = req.headers?.['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || '127.0.0.1';
   const cfg = await syncCloudConfig();
 
-  // 2. Client Authentication Check
-  const authHeader = req.headers['authorization'] || '';
-  const apiKey = authHeader.replace(/^Bearer\s+/i, '').trim();
-  const authRes = validateClientKey(apiKey, cfg);
-  if (!authRes || !authRes.valid) {
-    recordFailedAttempt(ip);
-    logRequest({ ip, provider: 'Auth', model: 'n/a', status: 401, latencyMs: 1, error: authRes?.error || 'Unauthorized Client API Key' });
-    return res.status(401).json({ error: `Akses ditolak: ${authRes?.error || 'Client API Key tidak valid atau belum diisi.'}` });
-  }
-
-  // Check Rate Limits
+  // Check Rate Limits (Anti-Spam per IP)
   if (!checkRateLimit(ip)) {
     logRequest({ ip, provider: 'RateLimiter', model: 'n/a', status: 429, latencyMs: 1, error: 'Rate limit exceeded' });
     return res.status(429).json({ error: 'Batas kuota request tercapai. Silakan coba beberapa detik lagi.' });
@@ -75,58 +65,35 @@ module.exports = async (req, res) => {
   }
 
   // 5. Select Candidates for Routing & Auto-Failover
-  let activeEps = (cfg.endpoints || []).filter(e => e.status !== false && e.keys?.length > 0);
+  let activeEps = (cfg.endpoints || []).filter(e => {
+    const isStatusActive = e.status !== false && e.enabled !== false;
+    const hasKeys = (Array.isArray(e.keys) && e.keys.some(k => k && String(k).trim())) || (e.apiKey && String(e.apiKey).trim());
+    return isStatusActive && hasKeys;
+  });
+
   if (!activeEps.length) {
     logRequest({ ip, provider: 'None', model: requestedModel, status: 500, latencyMs: 1, error: 'No active providers with API keys' });
-    return res.status(500).json({ error: 'Tidak ada Provider AI aktif yang memiliki API Key.' });
+    return res.status(500).json({ error: 'Tidak ada Provider AI aktif yang memiliki API Key yang valid.' });
   }
 
   const routingMode = (cfg.routingStrategy || cfg.providerRoutingMode || 'auto').toLowerCase();
   const searchProv = requestedProvider || requestedModel;
-  const isExplicitAuto = searchProv && searchProv.toLowerCase() === 'auto';
-  const isAutoRouting = routingMode === 'auto' || isExplicitAuto;
+  const isAutoSelection = !searchProv || ['auto', 'bre-ai', 'unified', 'all'].includes(searchProv.toLowerCase());
 
   let candidates = [];
   let primaryTarget = null;
   let targetModelName = requestedModel;
 
-  if (isAutoRouting) {
-    // Mode AUTO: Rotasi bergantian secara teratur (Round-Robin Sequential) ke semua provider aktif
-    const startIdx = getNextRoundRobinIndex(activeEps.length);
-    for (let i = 0; i < activeEps.length; i++) {
-      candidates.push(activeEps[(startIdx + i) % activeEps.length]);
-    }
-    primaryTarget = candidates[0];
-    targetModelName = primaryTarget.models?.[0] || requestedModel || 'mercury-2';
-  } else if (routingMode === 'weighted') {
-    // Mode WEIGHTED: Pilih provider berdasarkan bobot (weight)
-    let totalWeight = activeEps.reduce((acc, ep) => acc + (Math.max(1, parseInt(ep.weight) || 1)), 0);
-    let randWeight = Math.random() * totalWeight;
-    let chosenIdx = 0;
-    for (let i = 0; i < activeEps.length; i++) {
-      const w = Math.max(1, parseInt(activeEps[i].weight) || 1);
-      if (randWeight < w) {
-        chosenIdx = i;
-        break;
-      }
-      randWeight -= w;
-    }
-    primaryTarget = activeEps[chosenIdx];
-    targetModelName = primaryTarget.models?.[0] || requestedModel || 'mercury-2';
-    candidates = [primaryTarget, ...activeEps.filter((_, idx) => idx !== chosenIdx)];
-  } else {
-    // Mode PRIORITY: Sesuai provider/model tertentu yang diminta, atau fallback urutan pertama
-    if (searchProv && !isExplicitAuto) {
-      primaryTarget = activeEps.find(e => e.name && e.name.toLowerCase() === searchProv.toLowerCase())
-                   || activeEps.find(e => e.name && (e.name.toLowerCase().includes(searchProv.toLowerCase()) || searchProv.toLowerCase().includes(e.name.toLowerCase())));
-      if (primaryTarget) targetModelName = primaryTarget.models?.[0] || requestedModel;
-    }
+  // 5A. Check if user explicitly requested a specific provider or model
+  if (!isAutoSelection) {
+    primaryTarget = activeEps.find(e => e.name && e.name.toLowerCase() === searchProv.toLowerCase())
+                 || activeEps.find(e => e.name && (e.name.toLowerCase().includes(searchProv.toLowerCase()) || searchProv.toLowerCase().includes(e.name.toLowerCase())));
 
     if (!primaryTarget) {
       for (const e of activeEps) {
-        if (e.models && e.models.some(m => m.toLowerCase() === requestedModel.toLowerCase())) {
+        if (e.models && e.models.some(m => m.toLowerCase() === searchProv.toLowerCase())) {
           primaryTarget = e;
-          targetModelName = requestedModel;
+          targetModelName = searchProv;
           break;
         }
         if (e.mapping) {
@@ -134,7 +101,7 @@ module.exports = async (req, res) => {
           const pairs = mapStr.split(',').map(p => p.trim()).filter(Boolean);
           for (const p of pairs) {
             const [alias, real] = p.split(':').map(s => s.trim());
-            if (alias && real && alias.toLowerCase() === requestedModel.toLowerCase()) {
+            if (alias && real && alias.toLowerCase() === searchProv.toLowerCase()) {
               primaryTarget = e;
               targetModelName = real;
               break;
@@ -145,16 +112,43 @@ module.exports = async (req, res) => {
       }
     }
 
-    if (!primaryTarget) {
-      primaryTarget = activeEps[0];
-      targetModelName = primaryTarget.models?.[0] || requestedModel || 'mercury-2';
+    if (primaryTarget) {
+      targetModelName = targetModelName || primaryTarget.models?.[0] || 'mercury-2';
+      candidates = [primaryTarget];
+      if (cfg.autoFailover !== false) {
+        activeEps.forEach(e => {
+          if (e !== primaryTarget && !candidates.includes(e)) candidates.push(e);
+        });
+      }
     }
+  }
 
-    candidates = [primaryTarget];
-    if (cfg.autoFailover !== false) {
-      activeEps.forEach(e => {
-        if (e !== primaryTarget && !candidates.includes(e)) candidates.push(e);
-      });
+  // 5B. If Auto Mode or requested provider was not found, apply Routing Strategy
+  if (!candidates.length) {
+    if (routingMode === 'weighted') {
+      // Mode WEIGHTED: Pilih provider berdasarkan bobot (weight)
+      let totalWeight = activeEps.reduce((acc, ep) => acc + (Math.max(1, parseInt(ep.weight) || 1)), 0);
+      let randWeight = Math.random() * totalWeight;
+      let chosenIdx = 0;
+      for (let i = 0; i < activeEps.length; i++) {
+        const w = Math.max(1, parseInt(activeEps[i].weight) || 1);
+        if (randWeight < w) {
+          chosenIdx = i;
+          break;
+        }
+        randWeight -= w;
+      }
+      primaryTarget = activeEps[chosenIdx];
+      targetModelName = primaryTarget.models?.[0] || requestedModel || 'mercury-2';
+      candidates = [primaryTarget, ...activeEps.filter((_, idx) => idx !== chosenIdx)];
+    } else {
+      // Mode AUTO: Rotasi bergantian secara teratur (Round-Robin Sequential) ke semua provider aktif
+      const startIdx = getNextRoundRobinIndex(activeEps.length);
+      for (let i = 0; i < activeEps.length; i++) {
+        candidates.push(activeEps[(startIdx + i) % activeEps.length]);
+      }
+      primaryTarget = candidates[0];
+      targetModelName = primaryTarget.models?.[0] || requestedModel || 'mercury-2';
     }
   }
 
@@ -194,7 +188,9 @@ module.exports = async (req, res) => {
     const currentTarget = candidates[cIdx];
     const isFailover = cIdx > 0;
     const currApiUrl = currentTarget.url;
-    const currKeys = currentTarget.keys || [];
+    const currKeys = (Array.isArray(currentTarget.keys) && currentTarget.keys.length > 0)
+      ? currentTarget.keys.map(k => String(k).trim()).filter(Boolean)
+      : (currentTarget.apiKey ? [String(currentTarget.apiKey).trim()] : []);
     if (!currKeys.length) continue;
 
     // Build ordered list of models to try for this provider

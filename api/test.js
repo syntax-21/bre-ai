@@ -24,7 +24,7 @@ module.exports = async (req, res) => {
   if (body.testAll) {
     const endpoints = (Array.isArray(body.endpoints) && body.endpoints.length) ? body.endpoints : (cfg.endpoints || []);
     const probes = endpoints.map(async ep => {
-      const firstKey = ep.keys?.[0] || '';
+      const firstKey = (Array.isArray(ep.keys) && ep.keys[0]) || ep.apiKey || '';
       const provName = ep.name || 'Provider';
       if (!firstKey) {
         return {
@@ -102,8 +102,8 @@ module.exports = async (req, res) => {
   // SINGLE PROVIDER TEST
   const apiUrl = (body.customEndpoint || cfg.apiUrl || 'https://api.inceptionlabs.ai/v1/chat/completions').trim();
   const model = (body.customModel || cfg.model || 'mercury-2').trim();
-  let keys = parseKeys(body.customKeys || '');
-  if (!keys.length) keys = cfg.apiKeys || [];
+  let keys = parseKeys(body.customKeys || body.keys || body.key || '');
+  if (!keys.length && cfg.endpoints?.[0]) keys = cfg.endpoints[0].keys || (cfg.endpoints[0].apiKey ? [cfg.endpoints[0].apiKey] : []);
 
   const results = [];
   for (let i = 0; i < keys.length; i++) {

@@ -16,6 +16,8 @@ Aplikasi ini menggabungkan antarmuka obrolan web modern (*glassmorphism, markdow
    - [Dukungan Pesan Terusan (Telegram Bot API 7.0+ & Classic)](#dukungan-pesan-terusan-telegram-bot-api-70--classic)
    - [Media Interaktif Non-Teks & Multimodal](#media-interaktif-non-teks--multimodal)
    - [Sistem Bahasa & 9 Dialek Nusantara](#sistem-bahasa--9-dialek-nusantara)
+   - [Fitur Spesialis AI & Prompt Studio (Web & Bot)](#fitur-spesialis-ai--prompt-studio-web--bot)
+   - [Multi-Provider Real-Time Health Benchmark](#multi-provider-real-time-health-benchmark)
    - [Manajemen Provider & Endpoint via Chat Telegram](#manajemen-provider--endpoint-via-chat-telegram)
    - [Sistem Akses Kontrol: Mode Publik & Mode Diizinkan](#sistem-akses-kontrol-mode-publik--mode-diizinkan)
 4. [Daftar Perintah Slash Telegram (/commands)](#4-daftar-perintah-slash-telegram-commands)
@@ -140,6 +142,18 @@ Bre AI menggunakan **sistem deteksi bahasa otomatis** — tidak ada pengaturan b
   8. `makassar`: Logat Makassar/Bugis (*Tabe'*, *ki'*, *ji*, *mi*, bersemangat).
   9. `standar`: Bahasa cerdas standar Bre AI.
 
+### Fitur Spesialis AI & Prompt Studio (Web & Bot)
+Bre AI menyediakan serangkaian perkakas kecerdasan buatan (*Specialized AI Tools*) yang siap pakai baik melalui Web Dashboard di tab **🛠️ AI Tools** maupun perintah slash di Telegram Bot:
+- 🌐 **Web Search & Synthesis** (`/search` / `/cari`): Pencarian daring real-time yang merangkum hasil riset beserta referensi sumber terpercaya.
+- 💻 **Software Architect & Code Generator** (`/code` / `/coding`): Arsitektur perangkat lunak cerdas yang menghasilkan kode siap pakai dan langsung dikemas jadi berkas fisik.
+- 📑 **Executive Summary Extractor** (`/summary` / `/ringkas`): Meringkas naskah panjang atau artikel menjadi poin-poin eksekutif kunci (*key takeaways*).
+- 📋 **PRD Document Builder** (`/prd`): Menyusun dokumen persyaratan produk profesional (tujuan, user persona, feature specs, & timeline).
+- ✍️ **Viral Marketing Copywriter** (`/copy` / `/copywriting`): Menghasilkan salinan iklan dengan framework psikologis AIDA & PAS.
+- 🧠 **Deep Analytical Reasoning** (`/think` / `/analisis`): Penalaran analitis mendalam langkah-demi-langkah (Chain of Thought).
+- 🌍 **Polyglot Translator** (`/translate` / `/terjemah`): Penerjemahan multi-bahasa dengan polesan tata bahasa profesional.
+
+### Multi-Provider Real-Time Health Benchmark
+Di Web Dashboard dan melalui perintah `/health` di Telegram, Bre AI dapat memicu uji latensi (*ping probe*) secara paralel ke seluruh upstream provider yang terdaftar, memberikan visibilitas status kesehatan model dalam milidetik secara *real-time*.
 
 ### Manajemen Provider & Endpoint via Chat Telegram
 Pemilik bot (*Owner*) dapat mengontrol seluruh konfigurasi proxy router langsung dari obrolan Telegram tanpa perlu membuka file `config.json` atau merestart bot:
@@ -154,56 +168,22 @@ Pemilik bot (*Owner*) dapat mengontrol seluruh konfigurasi proxy router langsung
 
 ---
 
-## 4. Panduan Integrasi Klien Eksternal (OpenAI-Compatible Gateway)
+## 4. Daftar Perintah Slash Telegram (/commands)
 
-Proxy Bre AI mendukung standar **OpenAI API Specification**, sehingga Anda dapat menghubungkan server Bre AI (misal: `https://www.breai.my.id`) ke berbagai aplikasi AI desktop, web client, ekstensi code editor, atau SDK pemrograman.
-
-### Kredensial & URL Endpoint
-- **Base URL / API Host (Standar OpenAI SDK):** `https://www.breai.my.id/v1`
-- **Full Chat Endpoint (POST Direct):** `https://www.breai.my.id/v1/chat/completions`
-- **Models Endpoint (GET Models List):** `https://www.breai.my.id/v1/models`
-- **API Key:** Buat di **Web Admin Dashboard** ➔ Tab **🛡️ Keamanan & Klien API** (contoh: `sk-bre-xxxx...`).
-- **Nama Model (Model ID):** `bre-ai` *(Master Unified Auto-Failover)*, `mercury-2`, `gpt-4o`, `claude-3-5-sonnet`, atau model aktif lainnya.
-
-### Contoh Konfigurasi di Berbagai Aplikasi:
-1. **NextChat (ChatGPT-Next-Web)**:
-   - Provider: `OpenAI`
-   - API Key: `sk-bre-xxxx...`
-   - Endpoint / Base URL: `https://www.breai.my.id/v1`
-   - Custom Model: `bre-ai`
-2. **Cherry Studio / Chatbox / LibreChat / Open WebUI**:
-   - Provider: `OpenAI-Compatible`
-   - API Host / Base URL: `https://www.breai.my.id/v1`
-   - API Key: `sk-bre-xxxx...`
-3. **VS Code (Cline / Roo Code / Continue)**:
-   - Provider: `OpenAI-Compatible`
-   - Base URL: `https://www.breai.my.id/v1`
-   - API Key: `sk-bre-xxxx...`
-   - Model ID: `bre-ai`
-4. **Python SDK (`openai`)**:
-   ```python
-   from openai import OpenAI
-
-   client = OpenAI(
-       base_url="https://www.breai.my.id/v1",
-       api_key="sk-bre-xxxx..."
-   )
-   response = client.chat.completions.create(
-       model="bre-ai",
-       messages=[{"role": "user", "content": "Halo Bre AI!"}]
-   )
-   print(response.choices[0].message.content)
-   ```
-
----
-
-## 5. Daftar Perintah Slash Telegram (/commands)
-
-### A. Perintah Pengguna Umum
+### A. Perintah Pengguna Umum & Perkakas Spesialis AI
 | Perintah | Deskripsi |
 |---|---|
 | `/start` | Memulai interaksi, registrasi akun, dan melihat pesan selamat datang |
 | `/help` | Menampilkan panduan lengkap penggunaan fitur dan format pesan |
+| `/tools` atau `/alat` | **Hub Perkakas AI**: Menu navigasi lengkap seluruh alat bantu cerdas |
+| `/search [topik]` atau `/cari` | **Riset Web Real-Time**: Merangkum informasi web aktual beserta sumber |
+| `/code [instruksi]` atau `/coding` | **Coding & Berkas**: Generator kode instan + pembuatan berkas fisik |
+| `/summary [teks]` atau `/ringkas` | **Ringkasan Eksekutif**: Ekstraksi poin inti dari teks panjang |
+| `/prd [ide produk]` | **Product Manager**: Pembuat Product Requirement Document lengkap |
+| `/copy [topik]` atau `/copywriting` | **Copywriting Viral**: Iklan persuasif dengan format AIDA & PAS |
+| `/think [masalah]` atau `/analisis` | **Deep Reasoning**: Analisis langkah-demi-langkah (Chain of Thought) |
+| `/translate [teks]` atau `/terjemah` | **Penerjemah Cerdas**: Terjemahan multibahasa akurat dan natural |
+| `/health` atau `/kesehatan` | **Health Benchmark**: Cek latensi dan status seluruh provider AI |
 | `/file [keterangan]` | Meminta pembuatan berkas dan script langsung jadi berkas unduhan |
 | `/poll [pertanyaan] \| [opsi1] \| [opsi2]` | Membuat polling interaktif langsung di chat |
 | `/quiz [pertanyaan] \| [opsi1] \| [opsi2] \| [index_benar]` | Membuat kuis interaktif Telegram |

@@ -6,15 +6,19 @@ module.exports = (req, res) => {
   
   let allModels = [];
   let providers = [];
-  if (cfg.endpoints) {
+  if (cfg.endpoints && Array.isArray(cfg.endpoints)) {
     cfg.endpoints.forEach(e => {
-      if (e.status !== false) {
+      const isStatusActive = e.status !== false && e.enabled !== false;
+      const hasKeys = (Array.isArray(e.keys) && e.keys.some(k => k && String(k).trim())) || (e.apiKey && String(e.apiKey).trim());
+      if (isStatusActive && hasKeys) {
+        const provModels = Array.isArray(e.models) && e.models.length > 0 ? e.models : (e.model ? [e.model] : ['mercury-2']);
         providers.push({
           name: e.name || 'Unnamed Provider',
-          defaultModel: e.models?.[0] || '',
-          models: e.models || []
+          defaultModel: provModels[0] || e.model || 'mercury-2',
+          models: provModels,
+          weight: e.weight || 1
         });
-        if (e.models) allModels.push(...e.models);
+        allModels.push(...provModels);
         if (e.mapping) {
           const mapStr = Array.isArray(e.mapping) ? e.mapping.join(',') : e.mapping;
           const pairs = mapStr.split(',').map(p => p.trim()).filter(Boolean);

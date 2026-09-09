@@ -47,15 +47,15 @@ async function runTests() {
   console.log('Total Button Rows in Admin Menu:', markup.inline_keyboard.length);
   const allButtons = markup.inline_keyboard.flat();
   console.log('Available Button Actions:', allButtons.map(b => b.callback_data).join(', '));
-  if (allButtons.some(b => b.callback_data === 'adm_benchmark') &&
-      allButtons.some(b => b.callback_data === 'adm_params') &&
-      allButtons.some(b => b.callback_data === 'adm_broadcast') &&
-      allButtons.some(b => b.callback_data === 'adm_diag') &&
+  if (allButtons.some(b => b.callback_data === 'adm_metrics') &&
       allButtons.some(b => b.callback_data === 'adm_logs') &&
-      allButtons.some(b => b.callback_data === 'adm_flush_confirm')) {
-    console.log('PASS: All advanced admin controls present in menu markup');
+      allButtons.some(b => b.callback_data === 'adm_providers') &&
+      allButtons.some(b => b.callback_data === 'adm_engine') &&
+      allButtons.some(b => b.callback_data === 'adm_broadcast') &&
+      allButtons.some(b => b.callback_data === 'adm_tester')) {
+    console.log('PASS: All admin controls present in menu markup');
   } else {
-    console.error('FAIL: Missing advanced buttons');
+    console.error('FAIL: Missing admin buttons');
     process.exit(1);
   }
 
