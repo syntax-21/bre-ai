@@ -876,10 +876,16 @@
 
     /* Artifact panel on mobile */
     .artifact-panel {
+      display: none;
+      width: 0 !important;
+    }
+    .artifact-panel.open {
+      display: flex;
       position: fixed;
       inset: 0;
       width: 100vw !important;
-      z-index: 60;
+      height: 100vh !important;
+      z-index: 100;
     }
   }
 
