@@ -158,9 +158,13 @@ module.exports = async (req, res) => {
     }
   }
 
-  // 6. Response Caching check (only for non-stream requests)
+  // 6. Language & Style Resolution
+  const requestedStyle = (req.headers['x-custom-style'] || body.style || cfg.defaultStyle || 'santai').trim();
+  const requestedLang = (req.headers['x-custom-language'] || body.language || cfg.telegramLanguage || 'id').trim().toLowerCase();
+
+  // 7. Response Caching check (only for non-stream requests)
   const stream = cfg.forceStream === true ? true : (cfg.forceStream === false ? false : (body.stream !== undefined ? Boolean(body.stream) : cfg.streamEnabled !== false));
-  const cacheKey = `${primaryTarget.name}:${targetModelName}:${allUserText.trim()}`;
+  const cacheKey = `${primaryTarget.name}:${targetModelName}:${requestedLang}:${requestedStyle}:${allUserText.trim()}`;
 
   if (cfg.cacheEnabled && !stream && allUserText.trim()) {
     const cachedData = getCachedResponse(cacheKey);
@@ -172,9 +176,7 @@ module.exports = async (req, res) => {
     }
   }
 
-  // 7. Execute Request across candidate providers (Auto-Failover)
-  const requestedStyle = (req.headers['x-custom-style'] || body.style || cfg.defaultStyle || 'santai').trim();
-  const requestedLang = (req.headers['x-custom-language'] || body.language || '').trim();
+  // 8. Execute Request across candidate providers (Auto-Failover)
   const masterSystemContent = buildBreAISystemPrompt({
     cfg,
     style: requestedStyle,

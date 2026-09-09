@@ -179,26 +179,42 @@ console.log('\n3. Testing Slash Command Switching (/bahasa, /lang, /language)...
 
   // 4a. When English is selected:
   const enSystemPrompt = buildBreAISystemPrompt({ language: 'en', style: 'santai' });
-  assert.ok(enSystemPrompt.includes('MANDATORY LANGUAGE ENFORCEMENT - ENGLISH'), 'Must have mandatory English enforcement');
-  assert.ok(enSystemPrompt.includes('DILARANG KERAS merespons dalam Bahasa Indonesia'), 'Must strictly forbid Indonesian responses');
-  assert.ok(!enSystemPrompt.includes('PENYESUAIAN WAJIB GAYA BAHASA & DIALEK INDONESIA'), 'Must NOT include Indonesian dialect instructions when English is active');
+  assert.ok(enSystemPrompt.includes('STRICT OUTPUT LANGUAGE ENFORCEMENT - ENGLISH'), 'Must have mandatory English enforcement');
+  assert.ok(enSystemPrompt.includes('ABSOLUTELY FORBIDDEN to respond in Indonesian'), 'Must strictly forbid Indonesian responses');
+  assert.ok(enSystemPrompt.includes('FORMAL, POLITE, INTELLIGENT, AND PROFESSIONAL'), 'Must enforce formal Bre AI tone');
+  assert.ok(!enSystemPrompt.includes('KETENTUAN BAHASA & GAYA BAHASA: INDONESIA GAUL'), 'Must NOT include Indonesian gaul instructions when English is active');
   assert.ok(enSystemPrompt.includes('Amirun Rayan Ariandi'), 'Bre AI ownership must remain intact');
-  console.log('   ✅ English prompt enforces 100% English and suppresses Indonesian dialect override.');
+  console.log('   ✅ English prompt enforces 100% English and Formal Bre AI tone.');
 
   // 4b. When Japanese is selected:
   const jaSystemPrompt = buildBreAISystemPrompt({ language: 'ja', style: 'jakarta' });
-  assert.ok(jaSystemPrompt.includes('MANDATORY LANGUAGE ENFORCEMENT - JAPANESE'), 'Must have mandatory Japanese enforcement');
-  assert.ok(jaSystemPrompt.includes('DILARANG KERAS merespons dalam Bahasa Indonesia'), 'Must strictly forbid Indonesian responses');
-  assert.ok(!jaSystemPrompt.includes('PENYESUAIAN WAJIB GAYA BAHASA & DIALEK INDONESIA'), 'Must NOT include Indonesian dialect instructions when Japanese is active');
+  assert.ok(jaSystemPrompt.includes('STRICT OUTPUT LANGUAGE ENFORCEMENT - JAPANESE'), 'Must have mandatory Japanese enforcement');
+  assert.ok(jaSystemPrompt.includes('ABSOLUTELY FORBIDDEN to respond in Indonesian'), 'Must strictly forbid Indonesian responses');
+  assert.ok(jaSystemPrompt.includes('FORMAL, POLITE, INTELLIGENT, AND PROFESSIONAL'), 'Must enforce formal Bre AI tone');
+  assert.ok(jaSystemPrompt.includes('丁寧語'), 'Must include native Japanese polite/formal instructions');
+  assert.ok(!jaSystemPrompt.includes('KETENTUAN BAHASA & GAYA BAHASA: INDONESIA GAUL'), 'Must NOT include Indonesian gaul instructions when Japanese is active');
   assert.ok(jaSystemPrompt.includes('Amirun Rayan Ariandi'), 'Bre AI ownership must remain intact');
-  console.log('   ✅ Japanese prompt enforces 100% Japanese and suppresses Indonesian dialect override.');
+  console.log('   ✅ Japanese prompt enforces 100% Japanese with native polite instructions and Formal Bre AI tone.');
 
-  // 4c. When Indonesian is selected:
-  const idSystemPrompt = buildBreAISystemPrompt({ language: 'id', style: 'jakarta' });
-  assert.ok(idSystemPrompt.includes('GAYA BAHASA & DIALEK (🗣️ Jakarta / Gaul (Gue-Lu))'), 'Must include Indonesian dialect instructions when Indonesian is active');
-  assert.ok(idSystemPrompt.includes('Bahasa Utama: Bahasa Indonesia'), 'Must confirm Indonesian as main language');
+  // 4c. When Chinese is selected:
+  const zhSystemPrompt = buildBreAISystemPrompt({ language: 'zh' });
+  assert.ok(zhSystemPrompt.includes('STRICT OUTPUT LANGUAGE ENFORCEMENT - CHINESE'), 'Must have mandatory Chinese enforcement');
+  assert.ok(zhSystemPrompt.includes('FORMAL, POLITE, INTELLIGENT, AND PROFESSIONAL'), 'Must enforce formal Bre AI tone');
+  assert.ok(zhSystemPrompt.includes('专业且中文') || zhSystemPrompt.includes('得体且专业') || zhSystemPrompt.includes('所有回复必须100%'), 'Must include native Chinese instructions');
+  console.log('   ✅ Chinese prompt enforces 100% Chinese and Formal Bre AI tone.');
+
+  // 4d. When Arabic is selected:
+  const arSystemPrompt = buildBreAISystemPrompt({ language: 'ar' });
+  assert.ok(arSystemPrompt.includes('STRICT OUTPUT LANGUAGE ENFORCEMENT - ARABIC'), 'Must have mandatory Arabic enforcement');
+  assert.ok(arSystemPrompt.includes('اللغة العربية الفصحى'), 'Must include native Arabic instructions');
+  console.log('   ✅ Arabic prompt enforces 100% Arabic and Formal Bre AI tone.');
+
+  // 4e. When Indonesian is selected:
+  const idSystemPrompt = buildBreAISystemPrompt({ language: 'id' });
+  assert.ok(idSystemPrompt.includes('INDONESIA GAUL'), 'Must enforce Indonesian GAUL tone by default for Indonesian');
+  assert.ok(idSystemPrompt.includes('GAYA BAHASA: INDONESIA GAUL'), 'Must confirm Indonesian gaul tone');
   assert.ok(idSystemPrompt.includes('Amirun Rayan Ariandi'), 'Bre AI ownership must remain intact');
-  console.log('   ✅ Indonesian prompt cleanly restores Jakarta/Gaul dialect when language is "id".');
+  console.log('   ✅ Indonesian prompt cleanly enforces GAUL & SANTAI style as requested.');
 
   // Restore mock
   mockApi.sendTelegramMessage = originalSend;

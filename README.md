@@ -115,22 +115,25 @@ Bre AI tidak hanya terpaku pada teks, melainkan mengenali dan menghasilkan berag
   - `[TELEGRAM_CONTACT: ...]`: Membagikan kartu nama / nomor kontak.
   - `[TELEGRAM_PHOTO: ...]`: Mengirim foto langsung dari URL eksternal.
 
-### Sistem Bahasa & 9 Dialek Nusantara
-Bre AI mendukung personalisasi bahasa dan gaya tutur per-pengguna yang dapat diatur lewat menu atau perintah chat:
-- **Pilihan Bahasa Internasional**:
-  - 🇮🇩 Bahasa Indonesia
-  - 🇺🇸 English
-  - 🇯🇵 日本語 (Japanese)
-  - 🇨🇳 中文 (Chinese)
-  - 🇪🇸 Español (Spanish)
-  - 🇸🇦 العربية (Arabic)
-  - 🇩🇪 Deutsch (German)
-  - 🇫🇷 Français (French)
-  - 🇷🇺 Русский (Russian)
-  - 🇰🇷 한국어 (Korean)
-- **9 Gaya Bahasa & Dialek Nusantara**:
-  1. `santai`: Hangat, akrab, ramah, dan santai (*default*).
-  2. `jakarta`: Bahasa gaul Jakarta (*gue-lu*, *bgt*, *santai abis*).
+### Sistem Bahasa & Multi-Bahasa Per-Akun Telegram
+Bre AI mendukung personalisasi bahasa dan gaya tutur yang **terisolasi penuh untuk masing-masing akun pengguna Telegram** (`fromUser.id` & `chatId`) serta tersimpan permanen di `config.json`:
+- **Pilihan Bahasa Internasional (10 Bahasa Dunia)**:
+  - 🇮🇩 **Bahasa Indonesia**: Otomatis menggunakan gaya **Gaul & Santai** khas anak muda Jakarta (akrab, luwes, asik, tidak kaku). Pengguna juga dapat memilih dialek lokal Nusantara lainnya.
+  - 🇺🇸 **English**: Menggunakan gaya **Formal Bre AI** (cerdas, santun, terstruktur, profesional).
+  - 🇯🇵 **日本語 (Japanese)**: Menggunakan gaya **Formal Bre AI** (polite Keigo/Desu-Masu, cerdas & santun).
+  - 🇨🇳 **中文 (Chinese)**: Menggunakan gaya **Formal Bre AI** (Standard Chinese formal & profesional).
+  - 🇪🇸 **Español (Spanish)**: Menggunakan gaya **Formal Bre AI** (formal, jelas & akurat).
+  - 🇸🇦 **العربية (Arabic)**: Menggunakan gaya **Formal Bre AI** (Fusha formal & sopan).
+  - 🇩🇪 **Deutsch (German)**: Menggunakan gaya **Formal Bre AI** (formal & terstruktur rapi).
+  - 🇫🇷 **Français (French)**: Menggunakan gaya **Formal Bre AI** (formal & elegan).
+  - 🇷🇺 **Русский (Russian)**: Menggunakan gaya **Formal Bre AI** (formal & akurat).
+  - 🇰🇷 **한국어 (Korean)**: Menggunakan gaya **Formal Bre AI** (Jon-daet-mal formal & sopan).
+- **Anti-Tabrakan Cache & Isolasi Prompt Murni**:
+  - Generator cache router (`api/chat.js`) membedakan cache berdasarkan bahasa dan gaya (`requestedLang` + `requestedStyle`). Kueri singkat seperti *"Halo"* atau *"Siapa kamu"* tidak akan pernah salah mengembalikan bahasa lain dari cache.
+  - Untuk bahasa asing, seluruh instruksi Bahasa Indonesia dihilangkan total dari system prompt guna mencegah bias token model AI.
+- **9 Pilihan Gaya & Dialek Lokal untuk Bahasa Indonesia**:
+  1. `santai`: Hangat, akrab, ramah, dan santai.
+  2. `jakarta`: Bahasa gaul Jakarta (*gue-lu*, *bgt*, *santai abis*, *default* Bahasa Indonesia).
   3. `jawa_halus`: Bahasa Jawa Kromo Inggil (penuh rasa hormat, sopan, tata krama luhur).
   4. `jawa_kasar`: Bahasa Jawa Ngoko akrab (*cak/bro*, lugas, ceplas-ceplos).
   5. `sunda`: Bahasa Sunda akrab nan ramah (*euy*, *atuh*, *teh*, sopan dan ceria).

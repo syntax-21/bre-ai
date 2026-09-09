@@ -91,6 +91,12 @@ server.listen(PORT, () => {
   console.log('  🌐 Buka: http://localhost:' + PORT);
   console.log('');
 
+  // Clear in-memory response cache on server startup to prevent language bleeding
+  try {
+    const { clearResponseCache } = require('./api/_shared');
+    clearResponseCache();
+  } catch (e) {}
+
   // Start Telegram bot background service if enabled
   try {
     const telegramBot = require('./services/telegramBot');

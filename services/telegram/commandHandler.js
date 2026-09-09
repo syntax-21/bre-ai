@@ -1321,7 +1321,11 @@ async function handleSlashCommand({
     if (rawArg) {
       const resolvedCode = resolveLanguageCode(rawArg);
       if (resolvedCode && LANGUAGE_OPTIONS[resolvedCode]) {
-        saveUserLanguage(chatId, resolvedCode);
+        const userAccountId = fromUser?.id || chatId;
+        saveUserLanguage(userAccountId, resolvedCode);
+        if (chatId && String(chatId) !== String(userAccountId)) {
+          saveUserLanguage(chatId, resolvedCode);
+        }
         const opt = LANGUAGE_OPTIONS[resolvedCode];
         await api.sendTelegramMessage(
           chatId,
@@ -1349,7 +1353,8 @@ async function handleSlashCommand({
     }
 
     // 2. Interactive inline keyboard menu
-    const currentLang = getUserLanguage(chatId);
+    const userAccountId = fromUser?.id || chatId;
+    const currentLang = getUserLanguage(userAccountId) || getUserLanguage(chatId);
     const entries = Object.entries(LANGUAGE_OPTIONS);
     const langRows = [];
 

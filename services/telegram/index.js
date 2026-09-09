@@ -187,6 +187,9 @@ class TelegramBotService {
 
       if (LANGUAGE_OPTIONS[langCode]) {
         saveUserLanguage(targetChatId, langCode);
+        if (cq.from?.id && String(cq.from.id) !== String(targetChatId)) {
+          saveUserLanguage(cq.from.id, langCode);
+        }
         const selectedLabel = LANGUAGE_OPTIONS[langCode].label;
         await answerCallback(cq.id, `✅ Bahasa diubah ke: ${selectedLabel}`, true, token);
 
