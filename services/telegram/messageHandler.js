@@ -51,6 +51,10 @@ const {
   buildHistoryUserSnippet
 } = require('./sessionManager');
 
+const {
+  extractDocumentContent
+} = require('./documentParser');
+
 /**
  * Query internal Bre AI router (works seamlessly on Localhost, Serverless, and VPS)
  * @param {string|Array} userContent - Text prompt or vision payload
@@ -249,23 +253,78 @@ async function handleMessage(msg, botService, ctx = null) {
     const sizeStr = sizeBytes > 1048576 ? `${(sizeBytes / 1048576).toFixed(2)} MB` : `${(sizeBytes / 1024).toFixed(1)} KB`;
     const mime = doc.mime_type || 'application/octet-stream';
 
-    // If file is within text-read limit (up to 1MB), attempt to read content
-    if (sizeBytes <= 1048576 && (category === 'code_or_text' || ext === '' || !ext)) {
+    // 1. If document is an image file (PNG/JPG/WEBP/GIF sent as uncompressed document)
+    if (category === 'image_file' && sizeBytes <= 5242880) {
       try {
         const buf = await api.downloadTelegramFile(doc.file_id, token);
-        const isText = !buf.slice(0, 1000).includes(0);
-        if (isText) {
-          const content = buf.toString('utf-8');
-          const snippet = content.length > 16000 ? content.slice(0, 16000) + '\n... [dipotong karena terlalu panjang]' : content;
-          userQueryPrompt = `${replyPrefix}${forwardPrefix}[Pengguna melampirkan berkas teks/kode: "${fileName}" (Ukuran: ${sizeStr}, Format: .${ext || 'txt'})]:\n\`\`\`${ext || 'text'}\n${snippet}\n\`\`\`\n\nInstruksi/Pertanyaan dari pengguna:\n${caption || 'Analisis dan jelaskan isi berkas ini secara rinci, periksa kualitas/logika/strukturnya, dan berikan evaluasi atau solusi terbaik sebagai Bre AI.'}${forwardGuidance ? '\n' + forwardGuidance : ''}`;
-          historyDisplaySnippet = forwardInfo
-            ? `[Berkas Terusan dari ${forwardInfo.sourceName}]: ${fileName} (${sizeStr})`
-            : `[Berkas ${fileName} (${sizeStr})]: ${caption || 'Analisis Berkas'}`;
+        const base64Image = buf.toString('base64');
+        const dataUrl = `data:${mime || 'image/jpeg'};base64,${base64Image}`;
+        const questionText = `${replyPrefix}${forwardPrefix}${caption ? `Keterangan/Instruksi: "${caption}"\n\n` : ''}Deskripsikan, analisis, dan jelaskan isi gambar/dokumen "${fileName}" ini secara lengkap, rinci, dan terstruktur sebagai Bre AI.${forwardGuidance ? '\n' + forwardGuidance : ''}`;
+        visionPayload = [
+          { type: 'text', text: questionText },
+          { type: 'image_url', image_url: { url: dataUrl } }
+        ];
+        historyDisplaySnippet = forwardInfo
+          ? `[Foto Terusan dari ${forwardInfo.sourceName}]: ${fileName} (${sizeStr})`
+          : `[Foto Dokumen ${fileName}]: ${caption || 'Analisis Gambar'}`;
+      } catch (err) {
+        userQueryPrompt = `${replyPrefix}${forwardPrefix}[Pengguna melampirkan gambar dokumen: "${fileName}" (${sizeStr}) dengan instruksi: "${caption || 'Mohon analisis gambar ini'}"]`;
+        historyDisplaySnippet = `[Foto Dokumen: ${fileName}]`;
+      }
+    }
+    // 2. Download and extract document content (Spreadsheets, Word, PDF, Text, Code up to 10MB)
+    else if (sizeBytes <= 10485760) {
+      try {
+        const buf = await api.downloadTelegramFile(doc.file_id, token);
+        const parsedDoc = await extractDocumentContent(buf, fileName, mime);
+
+        if (parsedDoc.success && parsedDoc.text) {
+          const rawContent = parsedDoc.text;
+          const snippet = rawContent.length > 15000
+            ? rawContent.slice(0, 15000) + '\n... [Data dipangkas untuk optimasi respons instan]'
+            : rawContent;
+
+          if (parsedDoc.type === 'spreadsheet') {
+            userQueryPrompt = `${replyPrefix}${forwardPrefix}[Pengguna melampirkan berkas spreadsheet Excel/Tabel: "${fileName}" (Ukuran: ${sizeStr})]:\n=== DATA TABEL SPREADSHEET ===\n${snippet}\n=== AKHIR DATA TABEL ===\n\nInstruksi/Pertanyaan dari pengguna:\n${caption || 'Analisis seluruh data tabel di atas secara rinci, buatkan ringkasan eksekutif, evaluasi angka/kategori/tren, buatkan pivot/formula jika relevan, dan berikan wawasan cerdas sebagai Bre AI.'}${forwardGuidance ? '\n' + forwardGuidance : ''}`;
+            historyDisplaySnippet = forwardInfo
+              ? `[Excel Terusan dari ${forwardInfo.sourceName}]: ${fileName} (${sizeStr})`
+              : `[Excel ${fileName} (${sizeStr})]: ${caption || 'Analisis Spreadsheet'}`;
+          } else if (parsedDoc.type === 'word') {
+            userQueryPrompt = `${replyPrefix}${forwardPrefix}[Pengguna melampirkan dokumen Microsoft Word: "${fileName}" (Ukuran: ${sizeStr})]:\n=== ISI DOKUMEN WORD ===\n${snippet}\n=== AKHIR DOKUMEN ===\n\nInstruksi/Pertanyaan dari pengguna:\n${caption || 'Analisis dan jelaskan isi dokumen Word ini secara rinci, ringkas poin penting, dan berikan tanggapan komprehensif sebagai Bre AI.'}${forwardGuidance ? '\n' + forwardGuidance : ''}`;
+            historyDisplaySnippet = forwardInfo
+              ? `[Word Terusan dari ${forwardInfo.sourceName}]: ${fileName} (${sizeStr})`
+              : `[Word ${fileName} (${sizeStr})]: ${caption || 'Analisis Dokumen'}`;
+          } else if (parsedDoc.type === 'pdf') {
+            userQueryPrompt = `${replyPrefix}${forwardPrefix}[Pengguna melampirkan dokumen Adobe PDF: "${fileName}" (Ukuran: ${sizeStr})]:\n=== ISI DOKUMEN PDF ===\n${snippet}\n=== AKHIR DOKUMEN ===\n\nInstruksi/Pertanyaan dari pengguna:\n${caption || 'Analisis dan jelaskan isi dokumen PDF ini secara rinci, ringkas poin penting, dan berikan tanggapan komprehensif sebagai Bre AI.'}${forwardGuidance ? '\n' + forwardGuidance : ''}`;
+            historyDisplaySnippet = forwardInfo
+              ? `[PDF Terusan dari ${forwardInfo.sourceName}]: ${fileName} (${sizeStr})`
+              : `[PDF ${fileName} (${sizeStr})]: ${caption || 'Analisis PDF'}`;
+          } else {
+            // Text or code file
+            userQueryPrompt = `${replyPrefix}${forwardPrefix}[Pengguna melampirkan berkas teks/kode: "${fileName}" (Ukuran: ${sizeStr}, Format: .${ext || 'txt'})]:\n\`\`\`${ext || 'text'}\n${snippet}\n\`\`\`\n\nInstruksi/Pertanyaan dari pengguna:\n${caption || 'Analisis dan jelaskan isi berkas ini secara rinci, periksa kualitas/logika/strukturnya, dan berikan evaluasi atau solusi terbaik sebagai Bre AI.'}${forwardGuidance ? '\n' + forwardGuidance : ''}`;
+            historyDisplaySnippet = forwardInfo
+              ? `[Berkas Terusan dari ${forwardInfo.sourceName}]: ${fileName} (${sizeStr})`
+              : `[Berkas ${fileName} (${sizeStr})]: ${caption || 'Analisis Berkas'}`;
+          }
         } else {
-          userQueryPrompt = `${replyPrefix}${forwardPrefix}[Pengguna melampirkan berkas biner: "${fileName}" (Kategori: ${category}, Ukuran: ${sizeStr}, MIME: ${mime}) dengan catatan: "${caption || 'Mohon berikan panduan terkait berkas ini.'}"]. Berikan panduan teknis, jelaskan fungsi/struktur berkas tersebut, dan berikan saran atau evaluasi komprehensif sebagai Bre AI.${forwardGuidance ? '\n' + forwardGuidance : ''}`;
+          // Binary or non-textual file (e.g. zip, apk, exe)
+          const catDescriptions = {
+            pdf_document: 'Dokumen Adobe PDF',
+            word_document: 'Dokumen Microsoft Word / Dokumen Teks',
+            spreadsheet: 'Dokumen Spreadsheet / Excel / Data Tabel',
+            presentation: 'Dokumen Presentasi PowerPoint / Slide',
+            archive: 'Arsip Terkompresi (ZIP/RAR/7Z/TAR/GZ)',
+            executable_or_package: 'Paket Aplikasi / Installer / Eksekusi Biner (APK/EXE/DEB/DMG)',
+            audio_file: 'Berkas Rekaman Audio / Musik',
+            video_file: 'Berkas Rekaman Video / Animasi',
+            image_file: 'Berkas Desain / Grafis / Gambar Resolusi Tinggi',
+            general_file: 'Berkas Data / Dokumen Umum'
+          };
+          const catLabel = catDescriptions[category] || 'Berkas Dokumen';
+          userQueryPrompt = `${replyPrefix}${forwardPrefix}[Pengguna melampirkan berkas: "${fileName}" (Jenis: ${catLabel}, Format: .${ext || 'file'}, Ukuran: ${sizeStr}, MIME: ${mime}) dengan catatan: "${caption || 'Mohon berikan panduan terkait berkas ini.'}"]. Berikan panduan teknis, jelaskan fungsi/struktur berkas tersebut, dan berikan saran atau evaluasi komprehensif sebagai Bre AI.${forwardGuidance ? '\n' + forwardGuidance : ''}`;
           historyDisplaySnippet = forwardInfo
-            ? `[Berkas Terusan dari ${forwardInfo.sourceName}]: ${fileName} (${sizeStr})`
-            : `[Berkas ${fileName} (${sizeStr})]: ${caption || 'Panduan Berkas'}`;
+            ? `[${catLabel} Terusan dari ${forwardInfo.sourceName}]: ${fileName} (${sizeStr})`
+            : `[${catLabel}: ${fileName} (${sizeStr})]: ${caption || 'Panduan Berkas'}`;
         }
       } catch (err) {
         userQueryPrompt = `${replyPrefix}${forwardPrefix}[Pengguna melampirkan berkas: "${fileName}" (Kategori: ${category}, Ukuran: ${sizeStr}, MIME: ${mime})]. Instruksi pengguna: "${caption || 'Bahas berkas ini.'}". Responlah secara profesional, cerdas, dan solutif sebagai Bre AI.${forwardGuidance ? '\n' + forwardGuidance : ''}`;
@@ -287,8 +346,7 @@ async function handleMessage(msg, botService, ctx = null) {
         general_file: 'Berkas Data / Dokumen Umum'
       };
       const catLabel = catDescriptions[category] || 'Berkas Dokumen';
-
-      userQueryPrompt = `${replyPrefix}${forwardPrefix}[Pengguna melampirkan berkas: "${fileName}" (Jenis: ${catLabel}, Format: .${ext || 'file'}, Ukuran: ${sizeStr}, MIME: ${mime}) dengan catatan: "${caption || 'Mohon berikan analisis, panduan, atau informasi teknis terkait berkas ini.'}"]. Berikan tanggapan cerdas, jelaskan fungsi dan cara penanganan berkas tersebut, berikan panduan langkah demi langkah, dan tawarkan bantuan lanjutan sebagai Bre AI.${forwardGuidance ? '\n' + forwardGuidance : ''}`;
+      userQueryPrompt = `${replyPrefix}${forwardPrefix}[Pengguna melampirkan berkas berukuran besar: "${fileName}" (Jenis: ${catLabel}, Format: .${ext || 'file'}, Ukuran: ${sizeStr}, MIME: ${mime}) dengan catatan: "${caption || 'Mohon berikan panduan terkait berkas ini.'}"]. Berikan tanggapan cerdas dan panduan terkait penanganan berkas berukuran besar tersebut sebagai Bre AI.${forwardGuidance ? '\n' + forwardGuidance : ''}`;
       historyDisplaySnippet = forwardInfo
         ? `[${catLabel} Terusan dari ${forwardInfo.sourceName}]: ${fileName} (${sizeStr})`
         : `[${catLabel}: ${fileName} (${sizeStr})]: ${caption || 'Panduan Berkas'}`;
