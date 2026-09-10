@@ -609,6 +609,45 @@
   }
   .fchip button:hover { color: var(--danger); }
   
+  /* Attached Files in User Chat Message */
+  .user-attached-files {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  .user-file-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    color: #fff;
+    max-width: 100%;
+  }
+  .user-file-badge .ufb-icon {
+    font-size: 14px;
+    line-height: 1;
+  }
+  .user-file-badge .ufb-name {
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 220px;
+  }
+  .user-file-badge .ufb-meta {
+    font-size: 10px;
+    color: var(--text-muted, #cbd5e1);
+    background: rgba(0, 0, 0, 0.25);
+    padding: 2px 5px;
+    border-radius: 4px;
+    margin-left: 2px;
+  }
+  
   /* Typing Indicator */
   .typing-indicator {
     display: inline-flex;

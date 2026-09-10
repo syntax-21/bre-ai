@@ -584,15 +584,15 @@ async function handleFiles(list) {
           const loadingTask = pdfjsLib.getDocument({ data: typedArray });
           const pdf = await loadingTask.promise;
           let fullText = '';
-          const maxPages = Math.min(pdf.numPages, 30);
+          const maxPages = Math.min(pdf.numPages, 20);
 
           for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
             const page = await pdf.getPage(pageNum);
             const textContent = await page.getTextContent();
             const pageText = textContent.items.map(item => item.str).join(' ');
             fullText += `\n\n[Page ${pageNum}]:\n` + pageText;
-            if (fullText.length > 25000) {
-              fullText = fullText.slice(0, 25000) + '\n... [Dipangkas agar respons instan]';
+            if (fullText.length > 12000) {
+              fullText = fullText.slice(0, 12000) + '\n... [Teks dipotong agar respons cepat]';
               break;
             }
           }
@@ -601,6 +601,8 @@ async function handleFiles(list) {
             name: f.name,
             type: 'text',
             isPdf: true,
+            badgeIcon: '📑',
+            badgeMeta: `${pdf.numPages} hal`,
             pageCount: pdf.numPages,
             content: `--- BEGIN PDF ATTACHMENT: ${f.name} (${pdf.numPages} pages) ---\n${fullText.trim()}\n--- END PDF ATTACHMENT ---`,
             data: ''
@@ -626,13 +628,15 @@ async function handleFiles(list) {
           }
           const result = await mammoth.extractRawText({ arrayBuffer: e.target.result });
           let rawText = (result.value || '').trim();
-          if (rawText.length > 25000) {
-            rawText = rawText.slice(0, 25000) + '\n... [Dipangkas agar respons instan]';
+          if (rawText.length > 12000) {
+            rawText = rawText.slice(0, 12000) + '\n... [Teks dipotong agar respons cepat]';
           }
           files.push({
             name: f.name,
             type: 'text',
             isDocx: true,
+            badgeIcon: '📝',
+            badgeMeta: 'Word Doc',
             content: `--- BEGIN WORD DOCUMENT: ${f.name} ---\n${rawText}\n--- END WORD DOCUMENT ---`,
             data: ''
           });
@@ -656,26 +660,39 @@ async function handleFiles(list) {
             throw new Error('SheetJS parser is loading. Please try again.');
           }
           const workbook = XLSX.read(e.target.result, { type: 'array' });
-          let combinedCsv = '';
-          workbook.SheetNames.forEach(name => {
+          let combinedContent = '';
+          const sheetCount = workbook.SheetNames.length;
+
+          workbook.SheetNames.forEach((name, sIdx) => {
             const sheet = workbook.Sheets[name];
-            const csv = XLSX.utils.sheet_to_csv(sheet);
-            if (csv && csv.trim()) {
-              combinedCsv += `\n[Sheet: ${name}]\n` + csv.trim() + '\n';
-            }
+            const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+            if (!rows || !rows.length) return;
+
+            const totalRows = rows.length;
+            const headers = rows[0] || [];
+            const maxSampleRows = Math.min(totalRows, 50);
+            const sampleRows = rows.slice(0, maxSampleRows);
+
+            const csvSample = sampleRows.map(r => Array.isArray(r) ? r.map(c => String(c).replace(/[\n\r,]+/g, ' ').trim()).join(', ') : '').join('\n');
+
+            combinedContent += `\n[Sheet ${sIdx + 1}/${sheetCount}: "${name}"] (Total Rows: ${totalRows}, Columns: ${headers.length})\n[Headers]: ${headers.join(', ')}\n[Data Sample (First ${maxSampleRows} rows)]:\n${csvSample}\n`;
           });
-          if (combinedCsv.length > 25000) {
-            combinedCsv = combinedCsv.slice(0, 25000) + '\n... [Dipangkas agar respons instan]';
+
+          if (combinedContent.length > 12000) {
+            combinedContent = combinedContent.slice(0, 12000) + '\n... [Data dipangkas untuk optimasi respons instan]';
           }
+
           files.push({
             name: f.name,
             type: 'text',
             isExcel: true,
-            content: `--- BEGIN SPREADSHEET DATA: ${f.name} (${workbook.SheetNames.length} sheets) ---\n${combinedCsv.trim()}\n--- END SPREADSHEET DATA ---`,
+            badgeIcon: '📊',
+            badgeMeta: `${sheetCount} sheet${sheetCount > 1 ? 's' : ''}`,
+            content: `--- BEGIN SPREADSHEET DATA: ${f.name} (${sheetCount} sheets) ---\n${combinedContent.trim()}\n--- END SPREADSHEET DATA ---`,
             data: ''
           });
           renderAttachBar();
-          toast(`✅ Extracted spreadsheet: ${f.name} (${workbook.SheetNames.length} sheets)`, 'ok');
+          toast(`✅ Extracted spreadsheet: ${f.name} (${sheetCount} sheets)`, 'ok');
         } catch(err) {
           console.error('Excel extraction failed:', err);
           toast('Excel extraction failed: ' + err.message, 'err');
@@ -689,13 +706,16 @@ async function handleFiles(list) {
       const reader = new FileReader();
       reader.onload = e => {
         let textContent = String(e.target.result || '');
-        if (textContent.length > 25000) {
-          textContent = textContent.slice(0, 25000) + '\n... [Dipangkas agar respons instan]';
+        if (textContent.length > 12000) {
+          textContent = textContent.slice(0, 12000) + '\n... [Teks dipangkas agar respons instan]';
         }
+        const ext = f.name.split('.').pop().toUpperCase() || 'TXT';
         files.push({
           name: f.name,
           type: 'text',
-          content: textContent,
+          badgeIcon: '📄',
+          badgeMeta: ext,
+          content: `--- BEGIN FILE: ${f.name} ---\n${textContent}\n--- END FILE ---`,
           data: ''
         });
         renderAttachBar();
@@ -709,6 +729,8 @@ async function handleFiles(list) {
       files.push({
         name: f.name,
         type: 'binary',
+        badgeIcon: '📦',
+        badgeMeta: sizeStr,
         content: `[Lampiran Berkas: "${f.name}" (Ukuran: ${sizeStr}, Tipe: ${f.type || 'file'})]`,
         data: ''
       });
@@ -1137,9 +1159,21 @@ function renderMessages() {
         </div>`;
       }
 
+      const fileBadgesHtml = Array.isArray(m.attachments) && m.attachments.length ? `
+        <div class="user-attached-files">
+          ${m.attachments.filter(a => !a.isImage).map(att => `
+            <div class="user-file-badge">
+              <span class="ufb-icon">${att.icon || '📎'}</span>
+              <span class="ufb-name" title="${esc(att.name)}">${esc(att.name)}</span>
+              <span class="ufb-meta">${esc(att.meta || 'File')}</span>
+            </div>
+          `).join('')}
+        </div>
+      ` : '';
+
       return `<div class="mrow user">
         <div class="mwrap">
-          <div class="mbubble" id="b${i}">${renderContent(m.content, true)}</div>
+          <div class="mbubble" id="b${i}">${fileBadgesHtml}${renderContent(m.content, true)}</div>
           <div class="user-actions">
             <button onclick="startEditUserMsg(${i})" title="Edit Message">✏️ Edit</button>
             <button onclick="copyMsg(${i})" title="Copy">📋 Copy</button>
@@ -1697,13 +1731,21 @@ async function sendOrStop() {
   
   let userPrompt = text;
   if (textFiles.length) {
-    userPrompt += '\n\n[ATTACHED DOCUMENTS]:\n' + textFiles.map(f => `--- ${f.name} ---\n${f.content}\n---`).join('\n');
+    userPrompt += '\n\n[ATTACHED DOCUMENTS]:\n' + textFiles.map(f => `${f.content}`).join('\n\n');
   }
   
-  let displayContent = userPrompt;
+  // UI Display: show only user's typed prompt text + images (document text is sent to LLM cleanly without clogging UI)
+  let displayContent = text || '';
   if (imageFiles.length) {
     displayContent = imageFiles.map(img => `![${esc(img.name)}](${img.data || img.content})\n\n`).join('') + displayContent;
   }
+  
+  const attachedBadges = currentFiles.map(f => ({
+    name: f.name,
+    icon: f.badgeIcon || (f.type === 'image' ? '🖼️' : '📎'),
+    meta: f.badgeMeta || (f.type === 'image' ? 'Image' : 'File'),
+    isImage: f.type === 'image' || (typeof f.content === 'string' && f.content.startsWith('data:image/'))
+  }));
   
   let apiContent;
   if (imageFiles.length) {
@@ -1732,7 +1774,8 @@ async function sendOrStop() {
     role: 'user',
     content: displayContent,
     rawUserText: text,
-    apiContent: apiContent
+    apiContent: apiContent,
+    attachments: attachedBadges
   });
   activeChat.ts = Date.now();
   saveChats();
