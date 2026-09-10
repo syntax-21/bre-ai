@@ -288,7 +288,7 @@ async function initModelSelect() {
   const sel = document.getElementById('modelSelect');
   if (!sel) return;
 
-  sel.innerHTML = '<option value="auto">✨ Bre AI (Auto Smart Router)</option>';
+  sel.innerHTML = '<option value="auto">✨ Bre AI</option>';
   sel.value = 'auto';
   selectedProvider = 'auto';
   selectedModel = 'auto';
@@ -472,10 +472,10 @@ function setupDrop() {
 }
 
 
-async function compressImage(file, maxDimension = 1280, quality = 0.82) {
+async function compressImage(file, maxDimension = 1024, quality = 0.75) {
   return new Promise((resolve) => {
     if (!file) return resolve(null);
-    if (file.type === 'image/svg+xml' || file.size < 200 * 1024) {
+    if (file.type === 'image/svg+xml') {
       const reader = new FileReader();
       reader.onload = e => resolve(e.target.result);
       reader.onerror = () => resolve(null);
@@ -549,7 +549,7 @@ async function handleFiles(list) {
     const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
     const isDocx = /\.docx$/i.test(f.name) || f.type.includes('wordprocessingml');
     const isExcel = /\.(xlsx|xls)$/i.test(f.name) || f.type.includes('spreadsheet') || f.type.includes('excel');
-    const isText = f.type.startsWith('text/') || /\.(js|ts|py|html|css|json|md|c|cpp|java|go|rs|sql|sh|txt|prd|csv)$/i.test(f.name);
+    const isText = f.type.startsWith('text/') || /\.(js|ts|jsx|tsx|py|html|htm|css|scss|json|md|c|cpp|h|hpp|java|kt|rs|go|sql|sh|bash|txt|prd|csv|xml|yaml|yml|env|ini|cfg|toml)$/i.test(f.name);
 
     if (isImg) {
       toast(`🖼️ Mengoptimalkan gambar: ${f.name}...`, 'info');
@@ -584,13 +584,17 @@ async function handleFiles(list) {
           const loadingTask = pdfjsLib.getDocument({ data: typedArray });
           const pdf = await loadingTask.promise;
           let fullText = '';
-          const maxPages = Math.min(pdf.numPages, 50);
+          const maxPages = Math.min(pdf.numPages, 30);
 
           for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
             const page = await pdf.getPage(pageNum);
             const textContent = await page.getTextContent();
             const pageText = textContent.items.map(item => item.str).join(' ');
             fullText += `\n\n[Page ${pageNum}]:\n` + pageText;
+            if (fullText.length > 25000) {
+              fullText = fullText.slice(0, 25000) + '\n... [Dipangkas agar respons instan]';
+              break;
+            }
           }
 
           files.push({
@@ -621,11 +625,15 @@ async function handleFiles(list) {
             throw new Error('Mammoth.js parser is loading. Please try again.');
           }
           const result = await mammoth.extractRawText({ arrayBuffer: e.target.result });
+          let rawText = (result.value || '').trim();
+          if (rawText.length > 25000) {
+            rawText = rawText.slice(0, 25000) + '\n... [Dipangkas agar respons instan]';
+          }
           files.push({
             name: f.name,
             type: 'text',
             isDocx: true,
-            content: `--- BEGIN WORD DOCUMENT: ${f.name} ---\n${(result.value || '').trim()}\n--- END WORD DOCUMENT ---`,
+            content: `--- BEGIN WORD DOCUMENT: ${f.name} ---\n${rawText}\n--- END WORD DOCUMENT ---`,
             data: ''
           });
           renderAttachBar();
@@ -656,6 +664,9 @@ async function handleFiles(list) {
               combinedCsv += `\n[Sheet: ${name}]\n` + csv.trim() + '\n';
             }
           });
+          if (combinedCsv.length > 25000) {
+            combinedCsv = combinedCsv.slice(0, 25000) + '\n... [Dipangkas agar respons instan]';
+          }
           files.push({
             name: f.name,
             type: 'text',
@@ -674,19 +685,36 @@ async function handleFiles(list) {
       continue;
     }
 
-    const reader = new FileReader();
-    reader.onload = e => {
+    if (isText) {
+      const reader = new FileReader();
+      reader.onload = e => {
+        let textContent = String(e.target.result || '');
+        if (textContent.length > 25000) {
+          textContent = textContent.slice(0, 25000) + '\n... [Dipangkas agar respons instan]';
+        }
+        files.push({
+          name: f.name,
+          type: 'text',
+          content: textContent,
+          data: ''
+        });
+        renderAttachBar();
+        toast(`✅ Berkas teks terlampir: ${f.name}`, 'ok');
+      };
+      reader.readAsText(f);
+    } else {
+      // General binary file (ZIP, RAR, EXE, BIN, dll) — Avoid dumping base64 into prompt!
+      const sizeBytes = f.size || 0;
+      const sizeStr = sizeBytes > 1048576 ? `${(sizeBytes / 1048576).toFixed(2)} MB` : `${(sizeBytes / 1024).toFixed(1)} KB`;
       files.push({
         name: f.name,
-        type: isText ? 'text' : 'binary',
-        content: e.target.result,
-        data: e.target.result
+        type: 'binary',
+        content: `[Lampiran Berkas: "${f.name}" (Ukuran: ${sizeStr}, Tipe: ${f.type || 'file'})]`,
+        data: ''
       });
       renderAttachBar();
-    };
-
-    if (isText) reader.readAsText(f);
-    else reader.readAsDataURL(f);
+      toast(`✅ Berkas terlampir: ${f.name} (${sizeStr})`, 'ok');
+    }
   }
 }
 
@@ -1772,7 +1800,7 @@ async function executeBotGeneration(targetBotIdx = null, searchResults = []) {
       headers: {
         'Content-Type': 'application/json',
         'x-custom-provider': selectedProvider,
-        'x-custom-model': selectedProvider,
+        'x-custom-model': selectedModel,
         'x-custom-style': currentStyle,
         'x-custom-language': currentLang
       },
@@ -1783,7 +1811,7 @@ async function executeBotGeneration(targetBotIdx = null, searchResults = []) {
         language: currentLang,
         stream: true,
         provider: selectedProvider,
-        model: selectedProvider,
+        model: selectedModel,
         temperature: temperature,
         max_tokens: maxTokens
       }),

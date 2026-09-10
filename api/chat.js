@@ -115,6 +115,27 @@ function isVisionCapableModel(modelName) {
   return KNOWN_VISION_PATTERNS.some(pat => m.includes(pat));
 }
 
+function prepareMessagesForModel(messages, modelName) {
+  const isVision = isVisionCapableModel(modelName);
+  if (isVision) return messages;
+
+  return messages.map(m => {
+    if (Array.isArray(m.content)) {
+      const textPart = m.content
+        .filter(c => c && c.type === 'text')
+        .map(c => c.text)
+        .join('\n');
+      const imgCount = m.content.filter(c => c && (c.type === 'image_url' || c.type === 'image')).length;
+      const note = imgCount > 0 ? `\n\n[Lampiran Foto/Gambar: Pengguna menyertakan ${imgCount} foto/gambar terkait pertanyaan ini]` : '';
+      return {
+        role: m.role,
+        content: (textPart || 'Mohon analisis berkas/gambar ini.') + note
+      };
+    }
+    return m;
+  });
+}
+
 function normalizeChatUrl(rawUrl) {
   let u = (rawUrl || '').trim();
   if (!u) return '';
@@ -300,13 +321,14 @@ function normalizeChatUrl(rawUrl) {
         const key = currKeys[idx];
         const auth = key.startsWith('Bearer ') ? key : `Bearer ${key}`;
 
-        const payload = { model: currModel, messages: formattedMessages, max_tokens: maxTokens, temperature, stream };
+        const targetMessages = prepareMessagesForModel(formattedMessages, currModel);
+        const payload = { model: currModel, messages: targetMessages, max_tokens: maxTokens, temperature, stream };
         if (cfg.topP !== undefined) payload.top_p = cfg.topP;
         if (cfg.reasoningEffort && cfg.reasoningEffort !== 'none') payload.reasoning_effort = cfg.reasoningEffort;
 
         try {
           const ctrl = new AbortController();
-          const timeoutMs = isFailover ? 30000 : 60000;
+          const timeoutMs = isFailover ? 18000 : 25000;
           const timer = setTimeout(() => ctrl.abort(), timeoutMs);
           let disconnected = false;
           const onClose = () => { disconnected = true; ctrl.abort(); };
