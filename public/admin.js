@@ -1415,7 +1415,7 @@ function renderTopologyGraph() {
   ctx.fillStyle = '#ffffff';
   ctx.font = `bold ${Math.max(10, 13 * topologyZoom)}px 'Inter', sans-serif`;
   ctx.textAlign = 'center';
-  ctx.fillText('⚡ 9Router', cx, cy + 4 * topologyZoom);
+  ctx.fillText('⚡ Bre Router', cx, cy + 4 * topologyZoom);
 
   // 3. Draw Satellite Provider Nodes
   providerNodes.forEach(node => {
