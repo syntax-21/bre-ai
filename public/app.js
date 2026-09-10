@@ -1376,6 +1376,119 @@ function switchBotVersion(i, delta) {
 }
 
 
+// ========================================================
+// KaTeX Math & LaTeX High-Fidelity Preprocessor
+// ========================================================
+function renderLatexAndMarkdown(text) {
+  if (!text) return '';
+  let str = String(text);
+
+  // 1. Protect existing codeblocks (```...``` and `...`) so math tokens inside code aren't mangled
+  const codeBlocks = [];
+  str = str.replace(/```[\s\S]*?```|`[^`\n]+`/g, (match) => {
+    const placeholder = `__BRE_CODE_SLOT_${codeBlocks.length}__`;
+    codeBlocks.push(match);
+    return placeholder;
+  });
+
+  // 2. Normalize and standardize display math from various LLM formats:
+  // a) \[ ... \]
+  str = str.replace(/(?:^|\n)\s*\\\[\s*([\s\S]*?)\s*\\\]\s*(?=\n|$)/g, '\n\n$$$$\n$1\n$$$$\n\n');
+  
+  // b) Standalone brackets with LaTeX formulas: e.g.
+  // [
+  // a_s=\frac{v^2}{r}
+  // ]
+  str = str.replace(/(?:^|\n)\s*\[\s*(\n*[\s\S]*?(?:\\frac|\\vec|\\hat|\\Delta|\\boxed|\\alpha|\\beta|\\gamma|\\theta|\\pi|\\sqrt|\\sum|\\int|\\partial|\\approx|\\cdot|\\times|\\neq|\\leq|\\geq|\\text|\\left|\\right|\\qquad|\\quad|\^[0-9a-zA-Z\{]|\_[0-9a-zA-Z\{]|\\omega|\\tau|\\lambda|\\mu|\\sigma|\\nabla)[\s\S]*?)\s*\]\s*(?=\n|$)/g, '\n\n$$$$\n$1\n$$$$\n\n');
+
+  // c) LaTeX math environments
+  str = str.replace(/\\begin\{(equation|align|aligned|gather|matrix|pmatrix|bmatrix|cases)\*?\}[\s\S]*?\\end\{\1\*?\}/g, (match) => {
+    return `\n\n$$$$\n${match}\n$$$$\n\n`;
+  });
+
+  // d) \( ... \) inline math
+  str = str.replace(/\\\(\s*([\s\S]*?)\s*\\\)/g, '$$$1$$');
+
+  // 3. Extract all math blocks ($$...$$) and inline math ($...$) and render with KaTeX or protect slots
+  const mathSlots = [];
+
+  // Match Display Math: $$ ... $$
+  str = str.replace(/\$\$([\s\S]*?)\$\$/g, (match, formula) => {
+    const trimmed = formula.trim();
+    if (!trimmed) return '';
+    let rendered = '';
+    if (window.katex && typeof window.katex.renderToString === 'function') {
+      try {
+        rendered = window.katex.renderToString(trimmed, { displayMode: true, throwOnError: false });
+      } catch (e) {
+        rendered = `<div class="katex-display-fallback">$$\n${esc(trimmed)}\n$$</div>`;
+      }
+    } else {
+      rendered = `<div class="katex-display-fallback">$$\n${esc(trimmed)}\n$$</div>`;
+    }
+    const slotKey = `__BRE_MATH_DISPLAY_${mathSlots.length}__`;
+    mathSlots.push(`<div class="bre-math-block">${rendered}</div>`);
+    return `\n\n${slotKey}\n\n`;
+  });
+
+  // Match Inline Math: $...$ (avoiding currency like $10 or $100)
+  str = str.replace(/(^|[^\\])\$([^\$\n]+?)\$/g, (match, prefix, formula) => {
+    const trimmed = formula.trim();
+    if (/^\d+(?:[.,]\d+)?\s*(?:USD|IDR|k|m|b|rb|jt)?$/i.test(trimmed)) {
+      return match;
+    }
+    let rendered = '';
+    if (window.katex && typeof window.katex.renderToString === 'function') {
+      try {
+        rendered = window.katex.renderToString(trimmed, { displayMode: false, throwOnError: false });
+      } catch (e) {
+        rendered = `<span class="katex-inline-fallback">$${esc(trimmed)}$</span>`;
+      }
+    } else {
+      rendered = `<span class="katex-inline-fallback">$${esc(trimmed)}$</span>`;
+    }
+    const slotKey = `__BRE_MATH_INLINE_${mathSlots.length}__`;
+    mathSlots.push(rendered);
+    return `${prefix}${slotKey}`;
+  });
+
+  // 4. Parse markdown with marked
+  let html = '';
+  if (window.marked && typeof window.marked.parse === 'function') {
+    try {
+      html = window.marked.parse(str);
+    } catch (e) {
+      html = esc(str).replace(/\n/g, '<br>');
+    }
+  } else {
+    html = esc(str).replace(/\n/g, '<br>');
+  }
+
+  // 5. Restore Math Slots (both bare and wrapped in <p>)
+  mathSlots.forEach((mathHtml, idx) => {
+    const displaySlot = `__BRE_MATH_DISPLAY_${idx}__`;
+    const inlineSlot = `__BRE_MATH_INLINE_${idx}__`;
+    html = html.split(`<p>${displaySlot}</p>`).join(mathHtml);
+    html = html.split(displaySlot).join(mathHtml);
+    html = html.split(inlineSlot).join(mathHtml);
+  });
+
+  // 6. Restore Code Slots
+  codeBlocks.forEach((codeSnippet, idx) => {
+    const codeSlot = `__BRE_CODE_SLOT_${idx}__`;
+    let parsedCode = '';
+    if (window.marked && typeof window.marked.parse === 'function') {
+      try { parsedCode = window.marked.parse(codeSnippet); } catch(e) { parsedCode = `<pre><code>${esc(codeSnippet)}</code></pre>`; }
+    } else {
+      parsedCode = `<pre><code>${esc(codeSnippet)}</code></pre>`;
+    }
+    html = html.split(`<p>${codeSlot}</p>`).join(parsedCode);
+    html = html.split(codeSlot).join(parsedCode);
+  });
+
+  return html;
+}
+
 function renderContent(raw, isUser) {
   if (isUser) {
     if (typeof raw === 'string' && raw.includes('![')) {
@@ -1429,9 +1542,8 @@ function renderContent(raw, isUser) {
     } catch(e) { return ''; }
   });
 
-  let html = text;
-  if (window.marked && text) { try { html = marked.parse(text); } catch(e){ html = esc(text).replace(/\n/g,'<br>'); } }
-  return thHtml + html;
+  const bodyHtml = renderLatexAndMarkdown(text);
+  return thHtml + bodyHtml;
 }
 
 function afterRender(container) {
@@ -1441,8 +1553,10 @@ function afterRender(container) {
         delimiters: [
           {left:'$$',right:'$$',display:true},
           {left:'$',right:'$',display:false},
-          {left:'\\[',right:'\\]',display:true}
-        ]
+          {left:'\\[',right:'\\]',display:true},
+          {left:'\\(',right:'\\)',display:false}
+        ],
+        throwOnError: false
       });
     } catch(e){}
   }

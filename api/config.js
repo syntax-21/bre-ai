@@ -11,6 +11,8 @@ const {
   getMetrics,
   getLogs,
   clearLogs,
+  getRouterOverview,
+  getRouterDetails,
   fetchAvailableModels,
   testSingleModel
 } = require('./_shared');
@@ -61,6 +63,30 @@ module.exports = async (req, res) => {
 
     if (!isAdmin) {
       return res.status(401).json({ error: 'Unauthorized: Admin authentication required.' });
+    }
+
+    // 9Router Overview (KPI, Topology, Usage breakdown, Recent requests)
+    if (body.action === 'get_router_overview') {
+      const data = getRouterOverview({
+        timeRange: body.timeRange || 'today',
+        provider: body.provider || 'all',
+        model: body.model || 'all'
+      });
+      return res.json({ ok: true, ...data });
+    }
+
+    // 9Router Details (Filtered Request Logs table)
+    if (body.action === 'get_router_details') {
+      const data = getRouterDetails({
+        provider: body.provider || 'all',
+        model: body.model || 'all',
+        startDate: body.startDate || '',
+        endDate: body.endDate || '',
+        search: body.search || '',
+        page: body.page || 1,
+        limit: body.limit || 50
+      });
+      return res.json({ ok: true, ...data });
     }
 
     if (body.action === 'get_metrics') {

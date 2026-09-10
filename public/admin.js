@@ -77,13 +77,15 @@ const PROMPT_PRESETS = {
 function switchTab(tabId, btn) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
-  btn.classList.add('active');
+  if (btn) btn.classList.add('active');
   const target = document.getElementById(tabId);
   if (target) target.style.display = 'block';
   
+  if (tabId === 'tab9Router') load9RouterData();
+  if (tabId === 'tabDetails') load9RouterDetails();
+  if (tabId === 'tabAnalytics') load9RouterData();
+  if (tabId === 'tabLogs') load9RouterDetails();
   if (tabId === 'tabTester') updateTestModelDropdown();
-  if (tabId === 'tabAnalytics') loadMetrics();
-  if (tabId === 'tabLogs') loadLogs();
   if (tabId === 'tabTelegram') loadTelegramStatus();
   if (tabId === 'tabCloud') loadCloudStorageStatus();
 }
@@ -103,8 +105,8 @@ async function doLogin() {
       document.getElementById('loginOverlay').style.display = 'none';
       document.getElementById('appContainer').style.display = 'flex';
       await loadConfig();
-      loadMetrics();
-      loadLogs();
+      load9RouterData();
+      load9RouterDetails();
       loadCloudStorageStatus();
       initTimers();
       toast('Login berhasil! Selamat datang di Bre AI Settings.', 'ok');
@@ -134,12 +136,7 @@ function doLogout() {
 }
 
 function initTimers() {
-  if (document.getElementById('autoRefreshMetrics')?.checked) {
-    if (!metricsTimer) metricsTimer = setInterval(loadMetrics, 5000);
-  }
-  if (document.getElementById('autoRefreshLogs')?.checked) {
-    if (!logsTimer) logsTimer = setInterval(loadLogs, 5000);
-  }
+  if (!metricsTimer) metricsTimer = setInterval(load9RouterData, 10000);
 }
 
 function parseNum(val, def = 0) {
@@ -863,178 +860,812 @@ async function runBatchLatencyTest() {
   }
 }
 
-async function loadMetrics() {
+// ========================================================
+// 9ROUTER TELEMETRY & OBSERVABILITY CONTROLLER (Image 2 & 3)
+// ========================================================
+
+let routerOverviewData = null;
+let routerTimeRange = 'today';
+let routerChartUnit = 'tokens'; // 'tokens' | 'cost'
+let routerBreakdownUnit = 'costs'; // 'costs' | 'tokens'
+let routerDetailsData = [];
+let detailCurrentPage = 1;
+const detailPageSize = 10;
+
+// Topology Visualizer State
+let topologyZoom = 1;
+let topologyPan = { x: 0, y: 0 };
+let isDraggingTopology = false;
+let dragStart = { x: 0, y: 0 };
+let topologyAnimFrame = null;
+let topologyPulseOffset = 0;
+let isTopologyInitialized = false;
+
+function set9RouterTimeRange(range, btn) {
+  routerTimeRange = range;
+  const bar = document.getElementById('timeFilterBar');
+  if (bar) {
+    bar.querySelectorAll('.time-pill-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+  }
+  load9RouterData();
+}
+
+async function load9RouterData() {
   if (!adminToken) return;
   try {
     const r = await fetch('/api/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
-      body: JSON.stringify({ action: 'get_metrics' })
+      body: JSON.stringify({ action: 'get_router_overview', range: routerTimeRange })
     });
     if (!r.ok) return;
     const data = await r.json();
-    const m = data.metrics || {};
+    routerOverviewData = data.overview || {};
 
-    const totalReq = m.totalRequests || 0;
-    const successReq = m.successfulRequests || 0;
-    const failReq = m.failedRequests || 0;
+    const o = routerOverviewData;
+    const totalReq = o.totalRequests || 0;
+    const successReq = o.successfulRequests || 0;
+    const failReq = o.failedRequests || 0;
 
-    const elTotal = document.getElementById('metricTotalReq');
+    // 1. Populate 5 KPI Cards
+    const elTotal = document.getElementById('kpiTotalReq');
     if (elTotal) elTotal.textContent = totalReq.toLocaleString();
 
-    const elSuccessFail = document.getElementById('metricSuccessFail');
-    if (elSuccessFail) elSuccessFail.textContent = `${successReq.toLocaleString()} sukses · ${failReq.toLocaleString()} gagal`;
+    const elSuccessFail = document.getElementById('kpiSuccessFail');
+    if (elSuccessFail) elSuccessFail.textContent = `${successReq.toLocaleString()} ok · ${failReq.toLocaleString()} errors`;
 
-    const elTokens = document.getElementById('metricTotalTokens');
-    if (elTokens) elTokens.textContent = (m.totalTokens || 0).toLocaleString();
+    const elInput = document.getElementById('kpiTotalInput');
+    if (elInput) elInput.textContent = (o.totalInputTokens || 0).toLocaleString();
 
-    const elErrRate = document.getElementById('metricErrorRate');
-    if (elErrRate) elErrRate.textContent = m.errorRate || '0.0%';
+    const elCached = document.getElementById('kpiCachedTokens');
+    if (elCached) elCached.textContent = (o.totalCachedTokens || 0).toLocaleString();
 
-    const elFailed = document.getElementById('metricFailedReq');
-    if (elFailed) elFailed.textContent = `${failReq.toLocaleString()} error upstream`;
+    const elOutput = document.getElementById('kpiOutputTokens');
+    if (elOutput) elOutput.textContent = (o.totalOutputTokens || 0).toLocaleString();
 
-    const elAvgLat = document.getElementById('metricAvgLatency');
-    if (elAvgLat) elAvgLat.textContent = `${m.avgLatencyMs || 0} ms`;
+    const elCost = document.getElementById('kpiEstCost');
+    if (elCost) elCost.textContent = `~$${(o.estCost || 0).toFixed(4)}`;
 
-    const elCacheSize = document.getElementById('metricCacheSize');
-    if (elCacheSize) elCacheSize.textContent = `${m.cacheSize || 0} item`;
+    // 2. Render Recent Requests Feed
+    renderRecentRequests(o.recentRequests || []);
 
-    // Provider distribution
-    const provContainer = document.getElementById('providerDistributionList');
-    if (provContainer) {
-      const pEntries = Object.entries(m.providerHits || {});
-      if (pEntries.length === 0) {
-        provContainer.innerHTML = '<div style="color: #64748b; font-size: 13px; text-align: center; padding: 20px;">Belum ada trafik upstream terekam.</div>';
-      } else {
-        provContainer.innerHTML = pEntries.map(([prov, count]) => {
-          const pct = totalReq > 0 ? Math.round((count / totalReq) * 100) : 0;
-          return `
-            <div class="bar-row">
-              <div class="bar-label" title="${prov}">${prov}</div>
-              <div class="bar-track">
-                <div class="bar-fill" style="width: ${pct}%;"></div>
-              </div>
-              <div class="bar-val">${count} (${pct}%)</div>
-            </div>
-          `;
-        }).join('');
-      }
-    }
+    // 3. Render Historical Usage Trend Chart
+    renderUsageChart(o);
 
-    // Model distribution
-    const modelContainer = document.getElementById('modelDistributionList');
-    if (modelContainer) {
-      const mEntries = Object.entries(m.modelHits || {});
-      if (mEntries.length === 0) {
-        modelContainer.innerHTML = '<div style="color: #64748b; font-size: 13px; text-align: center; padding: 20px;">Belum ada query model terekam.</div>';
-      } else {
-        modelContainer.innerHTML = mEntries.map(([mod, count]) => {
-          const pct = totalReq > 0 ? Math.round((count / totalReq) * 100) : 0;
-          return `
-            <div class="bar-row">
-              <div class="bar-label" title="${mod}">${mod}</div>
-              <div class="bar-track">
-                <div class="bar-fill" style="width: ${pct}%; background: linear-gradient(90deg, #10b981, #06b6d4);"></div>
-              </div>
-              <div class="bar-val">${count} (${pct}%)</div>
-            </div>
-          `;
-        }).join('');
-      }
-    }
-  } catch(e) {
-    console.error('loadMetrics error:', e);
+    // 4. Render Breakdown Table
+    renderBreakdownTable();
+
+    // 5. Render Topology Graph
+    renderTopologyGraph();
+
+  } catch (e) {
+    console.error('load9RouterData error:', e);
   }
 }
 
-function toggleAutoRefreshMetrics(el) {
-  if (el.checked) {
-    if (!metricsTimer) metricsTimer = setInterval(loadMetrics, 5000);
-  } else {
-    clearInterval(metricsTimer);
-    metricsTimer = null;
-  }
-}
+function renderRecentRequests(requests) {
+  const container = document.getElementById('recentRequestsList');
+  if (!container) return;
 
-async function loadLogs() {
-  if (!adminToken) return;
-  try {
-    const r = await fetch('/api/config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
-      body: JSON.stringify({ action: 'get_logs' })
-    });
-    if (!r.ok) return;
-    const data = await r.json();
-    allLogs = Array.isArray(data.logs) ? data.logs : [];
-    filterLogs();
-  } catch(e) {
-    console.error('loadLogs error:', e);
-  }
-}
-
-function filterLogs() {
-  const query = (document.getElementById('logSearchInput')?.value || '').toLowerCase().trim();
-  const errorOnly = document.getElementById('logFilterErrorOnly')?.checked || false;
-
-  let filtered = allLogs;
-  if (errorOnly) {
-    filtered = filtered.filter(l => l.status >= 400);
-  }
-  if (query) {
-    filtered = filtered.filter(l => {
-      return (l.ip && l.ip.toLowerCase().includes(query)) ||
-             (l.provider && l.provider.toLowerCase().includes(query)) ||
-             (l.model && l.model.toLowerCase().includes(query)) ||
-             (l.error && l.error.toLowerCase().includes(query)) ||
-             String(l.status).includes(query);
-    });
-  }
-  renderLogsTable(filtered);
-}
-
-function renderLogsTable(logs) {
-  const tbody = document.getElementById('logsTableBody');
-  if (!tbody) return;
-  if (!logs || !logs.length) {
-    tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: #64748b; padding: 26px;">Tidak ada log yang sesuai dengan filter.</td></tr>`;
+  if (!requests || !requests.length) {
+    container.innerHTML = `
+      <div style="color: #64748b; font-size: 12px; text-align: center; padding: 40px 10px;">
+        Belum ada aktivitas request terekam.
+      </div>
+    `;
     return;
   }
 
-  tbody.innerHTML = logs.map(l => {
-    const d = new Date(l.timestamp);
-    const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' ' +
-                    d.toLocaleDateString([], { day: '2-digit', month: '2-digit' });
-    
-    let statusClass = 'ok';
-    if (l.status >= 500) statusClass = 'fail';
-    else if (l.status >= 400) statusClass = 'testing';
+  container.innerHTML = requests.map(req => {
+    const isOk = req.status >= 200 && req.status < 400;
+    const dotColor = isOk ? '#22c55e' : '#ef4444';
+    const timeAgo = formatTimeAgo(req.timestamp);
+    const inTokens = req.inputTokens || 0;
+    const outTokens = req.outputTokens || req.tokens || 0;
+    const promptSnippet = req.requestSummary || req.model || 'Chat completion request';
 
-    const cacheBadge = l.cached
-      ? `<span class="ping-badge ok" style="font-size: 11px;">⚡ RAM</span>`
-      : `<span style="color: #64748b;">-</span>`;
+    return `
+      <div class="recent-req-item" onclick="openRequestDetail('${req.id}')" title="Klik untuk inspeksi detail request">
+        <div class="recent-req-item-left">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span style="width: 7px; height: 7px; border-radius: 50%; background: ${dotColor}; box-shadow: 0 0 6px ${dotColor}; flex-shrink: 0;"></span>
+            <span class="recent-req-model">${req.model || 'model'}</span>
+            <span style="font-size: 10.5px; color: #64748b; background: #0c0f17; border: 1px solid #1e2536; padding: 1px 5px; border-radius: 4px;">${req.provider || 'proxy'}</span>
+          </div>
+          <div class="recent-req-prompt">${escapeHtml(promptSnippet)}</div>
+        </div>
+        <div class="recent-req-item-right">
+          <div class="recent-req-tokens">${inTokens} / ${outTokens}</div>
+          <div class="recent-req-time">${timeAgo}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
 
-    const errDetail = l.error
-      ? `<span style="color: #f87171; font-family: monospace; font-size: 11px;" title="${l.error}">${l.error.length > 50 ? l.error.slice(0, 50) + '...' : l.error}</span>`
-      : `<span style="color: #4ade80; font-size: 11px;">OK</span>`;
+function formatTimeAgo(timestamp) {
+  if (!timestamp) return '-';
+  const now = Date.now();
+  const t = new Date(timestamp).getTime();
+  const diffSec = Math.max(0, Math.floor((now - t) / 1000));
+  if (diffSec < 60) return `${diffSec}s ago`;
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  return new Date(timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function toggleChartUnit(unit, btn) {
+  routerChartUnit = unit;
+  const btnTokens = document.getElementById('btnChartTokens');
+  const btnCost = document.getElementById('btnChartCost');
+  if (btnTokens && btnCost) {
+    btnTokens.classList.toggle('active', unit === 'tokens');
+    btnCost.classList.toggle('active', unit === 'cost');
+  }
+  if (routerOverviewData) renderUsageChart(routerOverviewData);
+}
+
+function renderUsageChart(overview) {
+  const canvas = document.getElementById('usageTimelineCanvas');
+  const noDataNotice = document.getElementById('chartNoDataNotice');
+  const periodLabel = document.getElementById('chartPeriodLabel');
+  if (!canvas || !noDataNotice) return;
+
+  if (periodLabel) {
+    periodLabel.textContent = `Activity for ${routerTimeRange.toUpperCase()} (${routerChartUnit === 'tokens' ? 'Tokens' : 'USD Cost'})`;
+  }
+
+  const timeline = overview?.timeline || [];
+  const hasData = timeline.some(p => p.tokens > 0 || p.cost > 0 || p.requests > 0);
+
+  if (!hasData) {
+    canvas.style.display = 'none';
+    noDataNotice.style.display = 'block';
+    return;
+  }
+
+  canvas.style.display = 'block';
+  noDataNotice.style.display = 'none';
+
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.scale(dpr, dpr);
+
+  const w = rect.width;
+  const h = rect.height;
+  const padding = { top: 20, right: 20, bottom: 30, left: 50 };
+  const chartW = w - padding.left - padding.right;
+  const chartH = h - padding.top - padding.bottom;
+
+  ctx.clearRect(0, 0, w, h);
+
+  // Determine Max Value for Y Axis
+  const isCost = routerChartUnit === 'cost';
+  const values = timeline.map(p => isCost ? (p.cost || 0) : (p.tokens || 0));
+  const maxVal = Math.max(...values, isCost ? 0.001 : 100);
+
+  // Draw Horizontal Gridlines
+  const gridSteps = 3;
+  ctx.strokeStyle = '#1e2536';
+  ctx.fillStyle = '#64748b';
+  ctx.font = '11px "JetBrains Mono", monospace';
+  ctx.textAlign = 'right';
+
+  for (let i = 0; i <= gridSteps; i++) {
+    const yVal = (maxVal / gridSteps) * (gridSteps - i);
+    const y = padding.top + (chartH / gridSteps) * i;
+    ctx.beginPath();
+    ctx.moveTo(padding.left, y);
+    ctx.lineTo(w - padding.right, y);
+    ctx.stroke();
+
+    const label = isCost ? `$${yVal.toFixed(4)}` : (yVal >= 1000 ? `${(yVal/1000).toFixed(1)}k` : `${Math.round(yVal)}`);
+    ctx.fillText(label, padding.left - 8, y + 4);
+  }
+
+  // Draw Time Axis Labels
+  const stepX = chartW / Math.max(1, timeline.length - 1);
+  ctx.textAlign = 'center';
+  timeline.forEach((p, i) => {
+    if (timeline.length > 8 && i % Math.ceil(timeline.length / 6) !== 0 && i !== timeline.length - 1) return;
+    const x = padding.left + i * stepX;
+    ctx.fillText(p.label || '', x, h - 10);
+  });
+
+  // Draw Smooth Gradient Area & Line
+  const gradient = ctx.createLinearGradient(0, padding.top, 0, h - padding.bottom);
+  if (isCost) {
+    gradient.addColorStop(0, 'rgba(234, 179, 8, 0.35)');
+    gradient.addColorStop(1, 'rgba(234, 179, 8, 0.0)');
+    ctx.strokeStyle = '#eab308';
+  } else {
+    gradient.addColorStop(0, 'rgba(56, 189, 248, 0.35)');
+    gradient.addColorStop(1, 'rgba(56, 189, 248, 0.0)');
+    ctx.strokeStyle = '#38bdf8';
+  }
+
+  ctx.beginPath();
+  timeline.forEach((p, i) => {
+    const val = isCost ? (p.cost || 0) : (p.tokens || 0);
+    const x = padding.left + i * stepX;
+    const y = padding.top + chartH - (val / maxVal) * chartH;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+
+  // Area fill
+  ctx.lineTo(padding.left + (timeline.length - 1) * stepX, padding.top + chartH);
+  ctx.lineTo(padding.left, padding.top + chartH);
+  ctx.closePath();
+  ctx.fillStyle = gradient;
+  ctx.fill();
+
+  // Line stroke
+  ctx.beginPath();
+  ctx.lineWidth = 2;
+  timeline.forEach((p, i) => {
+    const val = isCost ? (p.cost || 0) : (p.tokens || 0);
+    const x = padding.left + i * stepX;
+    const y = padding.top + chartH - (val / maxVal) * chartH;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  // Draw Glowing Nodes
+  timeline.forEach((p, i) => {
+    const val = isCost ? (p.cost || 0) : (p.tokens || 0);
+    if (val === 0) return;
+    const x = padding.left + i * stepX;
+    const y = padding.top + chartH - (val / maxVal) * chartH;
+    ctx.beginPath();
+    ctx.arc(x, y, 4, 0, Math.PI * 2);
+    ctx.fillStyle = isCost ? '#eab308' : '#38bdf8';
+    ctx.fill();
+    ctx.strokeStyle = '#090c12';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  });
+}
+
+function toggleBreakdownUnit(unit, btn) {
+  routerBreakdownUnit = unit;
+  const btnCost = document.getElementById('btnBreakdownCost');
+  const btnTokens = document.getElementById('btnBreakdownTokens');
+  if (btnCost && btnTokens) {
+    btnCost.classList.toggle('active', unit === 'costs');
+    btnTokens.classList.toggle('active', unit === 'tokens');
+  }
+  renderBreakdownTable();
+}
+
+function renderBreakdownTable() {
+  const tbody = document.getElementById('breakdownTableBody');
+  const thead = document.getElementById('breakdownTableHeader');
+  const typeSelect = document.getElementById('breakdownTypeSelect');
+  if (!tbody || !thead) return;
+
+  const type = typeSelect?.value || 'model';
+  const isCost = routerBreakdownUnit === 'costs';
+  const breakdown = routerOverviewData?.breakdown || {};
+  const items = (type === 'model' ? breakdown.byModel : breakdown.byProvider) || [];
+
+  // Update Header Labels
+  if (type === 'model') {
+    thead.innerHTML = `
+      <th>MODEL ↑</th>
+      <th>PROVIDER ↕</th>
+      <th>REQUESTS ↕</th>
+      <th>LAST USED ↕</th>
+      <th>${isCost ? 'INPUT COST' : 'INPUT TOKENS'} ↕</th>
+      <th>${isCost ? 'CACHED COST' : 'CACHED TOKENS'} ↕</th>
+      <th>${isCost ? 'OUTPUT COST' : 'OUTPUT TOKENS'} ↕</th>
+      <th>${isCost ? 'TOTAL COST' : 'TOTAL TOKENS'} ↕</th>
+    `;
+  } else {
+    thead.innerHTML = `
+      <th>PROVIDER ↑</th>
+      <th>MODELS ↕</th>
+      <th>REQUESTS ↕</th>
+      <th>LAST USED ↕</th>
+      <th>${isCost ? 'INPUT COST' : 'INPUT TOKENS'} ↕</th>
+      <th>${isCost ? 'CACHED COST' : 'CACHED TOKENS'} ↕</th>
+      <th>${isCost ? 'OUTPUT COST' : 'OUTPUT TOKENS'} ↕</th>
+      <th>${isCost ? 'TOTAL COST' : 'TOTAL TOKENS'} ↕</th>
+    `;
+  }
+
+  if (!items.length) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" style="text-align: center; color: #64748b; padding: 30px;">
+          No usage recorded for this period.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = items.map(item => {
+    const lastUsedStr = item.lastUsed ? formatTimeAgo(item.lastUsed) : '-';
+    const inVal = isCost ? `$${(item.inputCost || 0).toFixed(4)}` : (item.inputTokens || 0).toLocaleString();
+    const cachedVal = isCost ? `$${(item.cachedCost || 0).toFixed(4)}` : (item.cachedTokens || 0).toLocaleString();
+    const outVal = isCost ? `$${(item.outputCost || 0).toFixed(4)}` : (item.outputTokens || 0).toLocaleString();
+    const totalVal = isCost ? `$${(item.totalCost || 0).toFixed(4)}` : (item.totalTokens || 0).toLocaleString();
 
     return `
       <tr>
-        <td style="font-size: 11px; color: #94a3b8; font-family: monospace; white-space: nowrap;">${timeStr}</td>
-        <td style="font-family: monospace; font-size: 12px; color: #cbd5e1;">${l.ip || '127.0.0.1'}</td>
-        <td style="font-weight: 600; color: #38bdf8;">${l.provider || '-'}</td>
-        <td style="font-size: 12px; color: #e2e8f0;">${l.model || '-'}</td>
-        <td><span class="ping-badge ${statusClass}">${l.status}</span></td>
-        <td style="font-family: monospace; font-size: 12px;">${l.latencyMs || 0}ms</td>
-        <td style="font-family: monospace; font-size: 12px;">${l.tokens || 0}</td>
-        <td>${cacheBadge}</td>
-        <td>${errDetail}</td>
+        <td style="font-weight: 600; color: #f1f5f9;">
+          <code style="background: #060911; padding: 2px 7px; border-radius: 5px; color: #38bdf8; font-size: 12px;">${item.name || '-'}</code>
+        </td>
+        <td style="color: #94a3b8; font-size: 12px;">${item.secondary || '-'}</td>
+        <td style="font-family: monospace; color: #e2e8f0; font-size: 12.5px;">${(item.requests || 0).toLocaleString()}</td>
+        <td style="color: #94a3b8; font-size: 12px;">${lastUsedStr}</td>
+        <td style="font-family: monospace; color: #fb923c; font-size: 12.5px;">${inVal}</td>
+        <td style="font-family: monospace; color: #38bdf8; font-size: 12.5px;">${cachedVal}</td>
+        <td style="font-family: monospace; color: #4ade80; font-size: 12.5px;">${outVal}</td>
+        <td style="font-family: monospace; font-weight: 700; color: ${isCost ? '#facc15' : '#ffffff'}; font-size: 13px;">${totalVal}</td>
       </tr>
     `;
   }).join('');
 }
 
+// ========================================================
+// INTERACTIVE TOPOLOGY MESH VISUALIZER (HTML5 Canvas)
+// ========================================================
+
+function initTopologyVisualizer() {
+  if (isTopologyInitialized) return;
+  const canvas = document.getElementById('topologyCanvas');
+  const container = document.getElementById('topologyContainer');
+  if (!canvas || !container) return;
+
+  canvas.addEventListener('mousedown', (e) => {
+    isDraggingTopology = true;
+    dragStart = { x: e.clientX - topologyPan.x, y: e.clientY - topologyPan.y };
+    canvas.style.cursor = 'grabbing';
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (!isDraggingTopology) return;
+    topologyPan.x = e.clientX - dragStart.x;
+    topologyPan.y = e.clientY - dragStart.y;
+    renderTopologyGraph();
+  });
+
+  window.addEventListener('mouseup', () => {
+    if (isDraggingTopology) {
+      isDraggingTopology = false;
+      canvas.style.cursor = 'grab';
+    }
+  });
+
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+    topologyZoom = Math.min(2.5, Math.max(0.4, topologyZoom * zoomFactor));
+    renderTopologyGraph();
+  }, { passive: false });
+
+  isTopologyInitialized = true;
+  startTopologyAnimation();
+}
+
+function startTopologyAnimation() {
+  if (topologyAnimFrame) cancelAnimationFrame(topologyAnimFrame);
+  function loop() {
+    topologyPulseOffset = (topologyPulseOffset + 0.008) % 1;
+    renderTopologyGraph();
+    topologyAnimFrame = requestAnimationFrame(loop);
+  }
+  loop();
+}
+
+function zoomTopology(delta) {
+  topologyZoom = Math.min(2.5, Math.max(0.4, topologyZoom + delta));
+  renderTopologyGraph();
+}
+
+function resetTopology() {
+  topologyZoom = 1;
+  topologyPan = { x: 0, y: 0 };
+  renderTopologyGraph();
+}
+
+function toggleTopologyFullscreen() {
+  const container = document.getElementById('topologyContainer');
+  if (!container) return;
+  if (!document.fullscreenElement) {
+    container.requestFullscreen().catch(() => {});
+  } else {
+    document.exitFullscreen().catch(() => {});
+  }
+}
+
+function renderTopologyGraph() {
+  const canvas = document.getElementById('topologyCanvas');
+  if (!canvas) return;
+  initTopologyVisualizer();
+
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) return;
+
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.scale(dpr, dpr);
+
+  const w = rect.width;
+  const h = rect.height;
+
+  ctx.clearRect(0, 0, w, h);
+
+  // Background subtle grid
+  ctx.strokeStyle = 'rgba(30, 41, 59, 0.4)';
+  ctx.lineWidth = 1;
+  const gridSize = 24 * topologyZoom;
+  const offsetX = (topologyPan.x % gridSize);
+  const offsetY = (topologyPan.y % gridSize);
+  for (let x = offsetX; x < w; x += gridSize) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+  }
+  for (let y = offsetY; y < h; y += gridSize) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+  }
+
+  // Center coordinate with pan & zoom applied
+  const cx = w / 2 + topologyPan.x;
+  const cy = h / 2 + topologyPan.y;
+
+  // Collect Providers (Fall back to default presets if none configured)
+  let activeProviders = endpoints && endpoints.length ? endpoints : [
+    { name: 'Inception Labs', models: ['mercury-2'], status: true },
+    { name: 'OpenAI Upstream', models: ['gpt-4o'], status: true },
+    { name: 'Groq Cloud', models: ['llama-3.3-70b'], status: true }
+  ];
+
+  const count = activeProviders.length;
+  const radius = Math.min(w, h) * 0.36 * topologyZoom;
+
+  // Calculate Provider Node Positions
+  const providerNodes = activeProviders.map((prov, i) => {
+    const angle = (i / count) * Math.PI * 2 - Math.PI / 2;
+    return {
+      name: prov.name || `Provider #${i + 1}`,
+      models: prov.models || ['mercury-2'],
+      status: prov.status !== false,
+      x: cx + Math.cos(angle) * radius,
+      y: cy + Math.sin(angle) * radius,
+      angle: angle
+    };
+  });
+
+  // 1. Draw Curved Connecting Links & Flow Pulses
+  providerNodes.forEach((node, i) => {
+    const isActive = node.status;
+    const strokeColor = isActive ? 'rgba(56, 189, 248, 0.3)' : 'rgba(100, 116, 139, 0.2)';
+
+    // Bezier control point
+    const midX = (cx + node.x) / 2;
+    const midY = (cy + node.y) / 2;
+
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.quadraticCurveTo(midX, midY, node.x, node.y);
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = 2 * topologyZoom;
+    ctx.stroke();
+
+    // Moving Pulses
+    if (isActive) {
+      const pulseT = (topologyPulseOffset + (i / count)) % 1;
+      const px = (1 - pulseT) * (1 - pulseT) * cx + 2 * (1 - pulseT) * pulseT * midX + pulseT * pulseT * node.x;
+      const py = (1 - pulseT) * (1 - pulseT) * cy + 2 * (1 - pulseT) * pulseT * midY + pulseT * pulseT * node.y;
+
+      ctx.beginPath();
+      ctx.arc(px, py, 4 * topologyZoom, 0, Math.PI * 2);
+      ctx.fillStyle = '#38bdf8';
+      ctx.shadowColor = '#38bdf8';
+      ctx.shadowBlur = 10;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+  });
+
+  // 2. Draw Center Hub Node (9Router Core)
+  const centerRadius = 32 * topologyZoom;
+  // Pulsing Outer Ring
+  const ringScale = 1 + (topologyPulseOffset * 0.3);
+  ctx.beginPath();
+  ctx.arc(cx, cy, centerRadius * ringScale, 0, Math.PI * 2);
+  ctx.strokeStyle = `rgba(56, 189, 248, ${0.4 * (1 - topologyPulseOffset)})`;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Core Solid Circle
+  ctx.beginPath();
+  ctx.arc(cx, cy, centerRadius, 0, Math.PI * 2);
+  const coreGrad = ctx.createRadialGradient(cx, cy, 5, cx, cy, centerRadius);
+  coreGrad.addColorStop(0, '#0284c7');
+  coreGrad.addColorStop(1, '#091e3a');
+  ctx.fillStyle = coreGrad;
+  ctx.fill();
+  ctx.strokeStyle = '#38bdf8';
+  ctx.lineWidth = 3 * topologyZoom;
+  ctx.stroke();
+
+  // Core Label
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `bold ${Math.max(10, 13 * topologyZoom)}px 'Inter', sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.fillText('⚡ 9Router', cx, cy + 4 * topologyZoom);
+
+  // 3. Draw Satellite Provider Nodes
+  providerNodes.forEach(node => {
+    const nodeW = 120 * topologyZoom;
+    const nodeH = 46 * topologyZoom;
+    const nx = node.x - nodeW / 2;
+    const ny = node.y - nodeH / 2;
+    const r = 8 * topologyZoom;
+
+    // Node Box Background
+    ctx.beginPath();
+    ctx.roundRect(nx, ny, nodeW, nodeH, r);
+    ctx.fillStyle = node.status ? '#0f172a' : '#090d16';
+    ctx.fill();
+    ctx.strokeStyle = node.status ? '#38bdf8' : '#334155';
+    ctx.lineWidth = 1.5 * topologyZoom;
+    ctx.stroke();
+
+    // Status Indicator Dot
+    ctx.beginPath();
+    ctx.arc(nx + 14 * topologyZoom, ny + 15 * topologyZoom, 4 * topologyZoom, 0, Math.PI * 2);
+    ctx.fillStyle = node.status ? '#22c55e' : '#ef4444';
+    ctx.shadowColor = node.status ? '#22c55e' : '#ef4444';
+    ctx.shadowBlur = 6;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Provider Name Text
+    ctx.fillStyle = '#f1f5f9';
+    ctx.font = `600 ${Math.max(9, 11.5 * topologyZoom)}px 'Inter', sans-serif`;
+    ctx.textAlign = 'left';
+    const nameToDraw = node.name.length > 12 ? node.name.slice(0, 11) + '..' : node.name;
+    ctx.fillText(nameToDraw, nx + 24 * topologyZoom, ny + 18 * topologyZoom);
+
+    // Primary Model Badge Text
+    ctx.fillStyle = '#38bdf8';
+    ctx.font = `500 ${Math.max(8, 9.5 * topologyZoom)}px 'JetBrains Mono', monospace`;
+    const primaryModel = node.models[0] || 'default';
+    const modelToDraw = primaryModel.length > 15 ? primaryModel.slice(0, 14) + '..' : primaryModel;
+    ctx.fillText(modelToDraw, nx + 12 * topologyZoom, ny + 34 * topologyZoom);
+  });
+}
+
+// ========================================================
+// 9ROUTER REQUEST DETAILS & LOG INSPECTOR (Image 3)
+// ========================================================
+
+async function load9RouterDetails() {
+  if (!adminToken) return;
+  try {
+    const r = await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
+      body: JSON.stringify({ action: 'get_router_details' })
+    });
+    if (!r.ok) return;
+    const data = await r.json();
+    routerDetailsData = Array.isArray(data.requests) ? data.requests : [];
+    allLogs = routerDetailsData;
+
+    // Populate Provider Dropdown Options
+    populateDetailProviderDropdown();
+
+    // Render Filtered Table
+    filterAndRenderDetailsTable();
+  } catch (e) {
+    console.error('load9RouterDetails error:', e);
+  }
+}
+
+function populateDetailProviderDropdown() {
+  const sel = document.getElementById('detailProviderSelect');
+  if (!sel) return;
+  const currentVal = sel.value;
+
+  const providers = new Set();
+  routerDetailsData.forEach(req => {
+    if (req.provider) providers.add(req.provider);
+  });
+  if (endpoints && endpoints.length) {
+    endpoints.forEach(ep => { if (ep.name) providers.add(ep.name); });
+  }
+
+  sel.innerHTML = '<option value="all">All Providers</option>' +
+    Array.from(providers).map(p => `<option value="${escapeHtml(p)}" ${p === currentVal ? 'selected' : ''}>${escapeHtml(p)}</option>`).join('');
+}
+
+function clearDetailFilters() {
+  const provSel = document.getElementById('detailProviderSelect');
+  if (provSel) provSel.value = 'all';
+  const startInp = document.getElementById('detailStartDate');
+  if (startInp) startInp.value = '';
+  const endInp = document.getElementById('detailEndDate');
+  if (endInp) endInp.value = '';
+  const searchInp = document.getElementById('detailSearchInput');
+  if (searchInp) searchInp.value = '';
+  detailCurrentPage = 1;
+  filterAndRenderDetailsTable();
+}
+
+function filterAndRenderDetailsTable() {
+  const tbody = document.getElementById('detailsTableBody');
+  const pageInfo = document.getElementById('detailPaginationInfo');
+  const btnPrev = document.getElementById('btnPrevPage');
+  const btnNext = document.getElementById('btnNextPage');
+  if (!tbody) return;
+
+  const provFilter = document.getElementById('detailProviderSelect')?.value || 'all';
+  const startFilter = document.getElementById('detailStartDate')?.value;
+  const endFilter = document.getElementById('detailEndDate')?.value;
+  const query = (document.getElementById('detailSearchInput')?.value || '').toLowerCase().trim();
+
+  let filtered = routerDetailsData;
+
+  if (provFilter !== 'all') {
+    filtered = filtered.filter(r => (r.provider || '').toLowerCase() === provFilter.toLowerCase());
+  }
+
+  if (startFilter) {
+    const startTime = new Date(startFilter).getTime();
+    filtered = filtered.filter(r => new Date(r.timestamp).getTime() >= startTime);
+  }
+
+  if (endFilter) {
+    const endTime = new Date(endFilter).getTime();
+    filtered = filtered.filter(r => new Date(r.timestamp).getTime() <= endTime);
+  }
+
+  if (query) {
+    filtered = filtered.filter(r => {
+      return (r.ip && r.ip.toLowerCase().includes(query)) ||
+             (r.provider && r.provider.toLowerCase().includes(query)) ||
+             (r.model && r.model.toLowerCase().includes(query)) ||
+             (r.requestSummary && r.requestSummary.toLowerCase().includes(query)) ||
+             (r.responseSummary && r.responseSummary.toLowerCase().includes(query)) ||
+             (r.error && r.error.toLowerCase().includes(query)) ||
+             String(r.status).includes(query);
+    });
+  }
+
+  const totalFiltered = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / detailPageSize));
+  if (detailCurrentPage > totalPages) detailCurrentPage = totalPages;
+  if (detailCurrentPage < 1) detailCurrentPage = 1;
+
+  const startIdx = (detailCurrentPage - 1) * detailPageSize;
+  const pageItems = filtered.slice(startIdx, startIdx + detailPageSize);
+
+  if (pageInfo) {
+    pageInfo.textContent = `Showing ${pageItems.length ? startIdx + 1 : 0}-${startIdx + pageItems.length} of ${totalFiltered} requests`;
+  }
+  if (btnPrev) btnPrev.disabled = detailCurrentPage <= 1;
+  if (btnNext) btnNext.disabled = detailCurrentPage >= totalPages;
+
+  if (!pageItems.length) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="9" style="text-align: center; color: #64748b; padding: 35px;">
+          Tidak ada request yang sesuai dengan filter.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = pageItems.map(req => {
+    const d = new Date(req.timestamp);
+    const dateStr = d.toLocaleDateString([], { month: '2-digit', day: '2-digit', year: '2-digit' }) + ', ' +
+                    d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+
+    const isOk = req.status >= 200 && req.status < 400;
+    const statusClass = isOk ? 'ok' : 'fail';
+    const cachedBadge = req.cached ? '<span class="ping-badge ok" style="font-size: 11px;">⚡ RAM</span>' : '<span style="color:#64748b;">-</span>';
+    const ttftStr = req.ttftMs ? ` (TTFT: ${req.ttftMs}ms)` : '';
+
+    return `
+      <tr>
+        <td style="font-size: 12px; color: #94a3b8; font-family: monospace; white-space: nowrap;">${dateStr}</td>
+        <td><code style="background: #060911; padding: 2px 7px; border-radius: 4px; color: #38bdf8; font-size: 12px;">${req.model || '-'}</code></td>
+        <td style="font-weight: 600; color: #f1f5f9;">${req.provider || '-'}</td>
+        <td style="font-family: monospace; color: #fb923c; font-size: 12.5px;">${(req.inputTokens || 0).toLocaleString()}</td>
+        <td>${cachedBadge}</td>
+        <td style="color: #64748b; font-size: 12px;">-</td>
+        <td style="font-family: monospace; color: #4ade80; font-size: 12.5px;">${(req.outputTokens || req.tokens || 0).toLocaleString()}</td>
+        <td style="font-family: monospace; font-size: 12.5px; color: #38bdf8;">${req.latencyMs || 0}ms<span style="font-size: 10px; color: #64748b;">${ttftStr}</span></td>
+        <td style="text-align: right;">
+          <button class="btn btn-outline" style="padding: 3px 10px; font-size: 12px; border-color: #1e293b;" onclick="openRequestDetail('${req.id}')">
+            Detail
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function changeDetailPage(delta) {
+  detailCurrentPage += delta;
+  filterAndRenderDetailsTable();
+}
+
+function openRequestDetail(id) {
+  const req = (routerDetailsData || []).find(r => r.id === id) ||
+              (routerOverviewData?.recentRequests || []).find(r => r.id === id) ||
+              (allLogs || []).find(r => r.id === id);
+
+  if (!req) return toast('Data request tidak ditemukan', 'err');
+
+  const modal = document.getElementById('requestDetailModal');
+  if (!modal) return;
+
+  const statusBadge = document.getElementById('modalReqStatusBadge');
+  if (statusBadge) {
+    const isOk = req.status >= 200 && req.status < 400;
+    statusBadge.className = isOk ? 'ping-badge ok' : 'ping-badge fail';
+    statusBadge.textContent = `${req.status || 200} ${isOk ? 'OK' : 'Error'}`;
+  }
+
+  const tsEl = document.getElementById('modalReqTimestamp');
+  if (tsEl) tsEl.textContent = `Timestamp: ${new Date(req.timestamp).toLocaleString()} (ID: ${req.id})`;
+
+  const provModelEl = document.getElementById('modalReqProvModel');
+  if (provModelEl) provModelEl.textContent = `${req.provider || 'Proxy'} · ${req.model || 'model'}`;
+
+  const latEl = document.getElementById('modalReqLatency');
+  if (latEl) latEl.textContent = `Total: ${req.latencyMs || 0}ms ${req.ttftMs ? `| TTFT: ${req.ttftMs}ms` : ''}`;
+
+  const tokEl = document.getElementById('modalReqTokens');
+  if (tokEl) tokEl.textContent = `In: ${req.inputTokens || 0} | Cached: ${req.cachedTokens || (req.cached ? req.inputTokens : 0)} | Out: ${req.outputTokens || req.tokens || 0}`;
+
+  const costIpEl = document.getElementById('modalReqCostIp');
+  if (costIpEl) costIpEl.textContent = `~$${(req.cost || 0).toFixed(5)} | IP: ${req.ip || '127.0.0.1'}`;
+
+  const promptEl = document.getElementById('modalReqPrompt');
+  if (promptEl) promptEl.textContent = req.requestSummary || '(Prompt tidak tersedia atau kosong)';
+
+  const resEl = document.getElementById('modalReqResponse');
+  if (resEl) resEl.textContent = req.responseSummary || req.error || '(Tidak ada response payload preview)';
+
+  modal.style.display = 'flex';
+}
+
+function closeRequestModal() {
+  const modal = document.getElementById('requestDetailModal');
+  if (modal) modal.style.display = 'none';
+}
+
+// Backward Compatibility Aliases for metrics & logs
+async function loadMetrics() { return load9RouterData(); }
+async function loadLogs() { return load9RouterDetails(); }
+function filterLogs() { return filterAndRenderDetailsTable(); }
 async function clearAdminLogs() {
   if (!confirm('Hapus seluruh riwayat log permintaan sekarang?')) return;
   try {
@@ -1044,21 +1675,14 @@ async function clearAdminLogs() {
       body: JSON.stringify({ action: 'clear_logs' })
     });
     if (r.ok) {
+      routerDetailsData = [];
       allLogs = [];
-      filterLogs();
+      filterAndRenderDetailsTable();
+      load9RouterData();
       toast('Semua log berhasil dibersihkan', 'ok');
     }
-  } catch(e) {
+  } catch (e) {
     toast('Gagal membersihkan log: ' + e.message, 'err');
-  }
-}
-
-function toggleAutoRefreshLogs(el) {
-  if (el.checked) {
-    if (!logsTimer) logsTimer = setInterval(loadLogs, 5000);
-  } else {
-    clearInterval(logsTimer);
-    logsTimer = null;
   }
 }
 

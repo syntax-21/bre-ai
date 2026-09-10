@@ -361,17 +361,9 @@ function normalizeChatUrl(rawUrl) {
           if (upstream.ok) {
             keyRotations.set(currApiUrl, (idx + 1) % totalKeys);
 
-            if (stream && upstream.body) {
-              logRequest({
-                ip,
-                provider: currentTarget.name,
-                model: currModel,
-                status: 200,
-                latencyMs,
-                tokens: Math.round(allUserText.length / 4) + 150,
-                failover: isFailover || mIdx > 0
-              });
+            const promptTokensEst = Math.max(1, Math.round(allUserText.length / 3.8));
 
+            if (stream && upstream.body) {
               res.writeHead(200, {
                 'Content-Type': 'text/event-stream; charset=utf-8',
                 'Cache-Control': 'no-cache, no-transform',
@@ -385,26 +377,68 @@ function normalizeChatUrl(rawUrl) {
               const dec = new TextDecoder('utf-8');
               let buf = '';
               let closed = false;
+              let firstChunkTime = null;
+              let accumulatedResponse = '';
+
               req.on('close', () => { closed = true; try { reader.cancel(); } catch {} });
 
               try {
                 while (!closed) {
                   const { done, value } = await reader.read();
                   if (done) break;
-                  buf += dec.decode(value, { stream: true });
+                  if (!firstChunkTime) firstChunkTime = Date.now();
+                  
+                  const chunkStr = dec.decode(value, { stream: true });
+                  buf += chunkStr;
                   const lines = buf.split('\n'); buf = lines.pop();
-                  for (const line of lines) res.write(sanitizeOutput(line) + '\n');
+                  for (const line of lines) {
+                    res.write(sanitizeOutput(line) + '\n');
+                    if (line.startsWith('data: ') && !line.includes('[DONE]')) {
+                      try {
+                        const parsed = JSON.parse(line.slice(6));
+                        const delta = parsed.choices?.[0]?.delta?.content || '';
+                        if (delta) accumulatedResponse += delta;
+                      } catch(e){}
+                    }
+                  }
                 }
-                if (buf) res.write(sanitizeOutput(buf) + '\n');
+                if (buf) {
+                  res.write(sanitizeOutput(buf) + '\n');
+                }
               } catch (e) {}
+
+              const endLatencyMs = Date.now() - reqStartTime;
+              const ttftMs = firstChunkTime ? (firstChunkTime - reqStartTime) : Math.round(endLatencyMs * 0.3);
+              const compTokensEst = Math.max(1, Math.round(accumulatedResponse.length / 3.8)) || 120;
+
+              logRequest({
+                ip,
+                provider: currentTarget.name,
+                model: currModel,
+                status: 200,
+                latencyMs: endLatencyMs,
+                ttftMs,
+                inputTokens: promptTokensEst,
+                outputTokens: compTokensEst,
+                cachedTokens: 0,
+                totalTokens: promptTokensEst + compTokensEst,
+                failover: isFailover || mIdx > 0,
+                requestSummary: allUserText.slice(0, 100),
+                responseSummary: accumulatedResponse.slice(0, 120)
+              });
+
               return res.end();
             } else {
+              const latencyMs = Date.now() - reqStartTime;
+              const ttftMs = Math.round(latencyMs * 0.75);
               const data = await upstream.json();
               if (data.choices?.[0]?.message) {
                 data.choices[0].message.content = sanitizeOutput(data.choices[0].message.content);
               }
 
-              const estTok = (data.usage?.total_tokens) || (Math.round((allUserText.length + (data.choices?.[0]?.message?.content?.length || 0)) / 4));
+              const promptTok = Number(data.usage?.prompt_tokens) || promptTokensEst;
+              const compTok = Number(data.usage?.completion_tokens) || Math.max(1, Math.round((data.choices?.[0]?.message?.content?.length || 0) / 3.8));
+              const cacheTok = Number(data.usage?.prompt_tokens_details?.cached_tokens || data.usage?.cached_tokens || 0);
 
               logRequest({
                 ip,
@@ -412,8 +446,14 @@ function normalizeChatUrl(rawUrl) {
                 model: currModel,
                 status: 200,
                 latencyMs,
-                tokens: estTok,
-                failover: isFailover || mIdx > 0
+                ttftMs,
+                inputTokens: promptTok,
+                outputTokens: compTok,
+                cachedTokens: cacheTok,
+                totalTokens: promptTok + compTok,
+                failover: isFailover || mIdx > 0,
+                requestSummary: allUserText.slice(0, 100),
+                responseSummary: (data.choices?.[0]?.message?.content || '').slice(0, 120)
               });
 
               if (cfg.cacheEnabled) {

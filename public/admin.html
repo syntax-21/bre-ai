@@ -603,8 +603,8 @@
     
     <!-- Tab Navigation -->
     <div class="tab-bar">
-      <button class="tab-btn active" onclick="switchTab('tabAnalytics', this)">📊 Analitik &amp; Metrik</button>
-      <button class="tab-btn" onclick="switchTab('tabLogs', this)">📜 Request &amp; Error Logs</button>
+      <button class="tab-btn active" id="tabBtn9Router" onclick="switchTab('tab9Router', this)">⚡ 9Router Overview</button>
+      <button class="tab-btn" id="tabBtnDetails" onclick="switchTab('tabDetails', this)">📜 Request Details</button>
       <button class="tab-btn" onclick="switchTab('tabProviders', this)">🔌 Endpoints &amp; Routing</button>
       <button class="tab-btn" onclick="switchTab('tabEngine', this)">⚙️ Global Engine</button>
       <button class="tab-btn" onclick="switchTab('tabTools', this)">🛠️ AI Tools &amp; Prompt Studio</button>
@@ -615,129 +615,207 @@
       <button class="tab-btn" onclick="switchTab('tabBackup', this)">📦 Backup &amp; Restore</button>
     </div>
 
-    <!-- TAB: ANALYTICS & METRICS -->
-    <div id="tabAnalytics" class="tab-content">
-      <div class="card">
-        <div class="card-header">
-          <div>
-            <div class="card-title">Real-Time Proxy Analytics & Performance</div>
-            <div class="card-subtitle">Metrik throughput token, rasio kegagalan upstream, dan latensi rata-rata.</div>
+    <!-- TAB 1: 9ROUTER OVERVIEW (Image 2) -->
+    <div id="tab9Router" class="tab-content">
+      
+      <!-- Sub-Nav & Time Filter Header -->
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; flex-wrap: wrap; gap: 12px;">
+        <div style="display: flex; gap: 4px; background: #0c0f17; border: 1px solid #1e2536; padding: 3px; border-radius: 8px;">
+          <button class="time-pill-btn active" onclick="switchTab('tab9Router', document.getElementById('tabBtn9Router'))">Overview</button>
+          <button class="time-pill-btn" onclick="switchTab('tabDetails', document.getElementById('tabBtnDetails'))">Details</button>
+        </div>
+
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <div class="time-filter-bar" id="timeFilterBar">
+            <button class="time-pill-btn active" onclick="set9RouterTimeRange('today', this)">Today</button>
+            <button class="time-pill-btn" onclick="set9RouterTimeRange('24h', this)">24h</button>
+            <button class="time-pill-btn" onclick="set9RouterTimeRange('7d', this)">7D</button>
+            <button class="time-pill-btn" onclick="set9RouterTimeRange('30d', this)">30D</button>
+            <button class="time-pill-btn" onclick="set9RouterTimeRange('60d', this)">60D</button>
           </div>
-          <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-            <label class="toggle-wrap" style="font-size: 13px; color: #94a3b8;">
-              <span class="toggle-switch">
-                <input type="checkbox" id="autoRefreshMetrics" checked onchange="toggleAutoRefreshMetrics(this)">
-                <span class="toggle-slider"></span>
-              </span>
-              Auto-Refresh (5s)
-            </label>
-            <button class="btn btn-outline" style="padding: 6px 12px; font-size: 13px;" onclick="loadMetrics()">🔄 Refresh</button>
+          <button class="btn btn-outline" style="padding: 6px 12px; font-size: 12px;" onclick="load9RouterData()">🔄 Refresh</button>
+        </div>
+      </div>
+
+      <!-- Top 5 KPI Metric Cards -->
+      <div class="router-kpi-grid">
+        <div class="router-kpi-card">
+          <div class="kpi-label">TOTAL REQUESTS</div>
+          <div class="kpi-value" id="kpiTotalReq">0</div>
+          <div class="kpi-sub" id="kpiSuccessFail">0 ok · 0 errors</div>
+        </div>
+        <div class="router-kpi-card">
+          <div class="kpi-label">TOTAL INPUT TOKENS</div>
+          <div class="kpi-value orange" id="kpiTotalInput">0</div>
+          <div class="kpi-sub">Prompt tokens</div>
+        </div>
+        <div class="router-kpi-card">
+          <div class="kpi-label">CACHED TOKENS</div>
+          <div class="kpi-value blue" id="kpiCachedTokens">0</div>
+          <div class="kpi-sub">Cache hit discount</div>
+        </div>
+        <div class="router-kpi-card">
+          <div class="kpi-label">OUTPUT TOKENS</div>
+          <div class="kpi-value green" id="kpiOutputTokens">0</div>
+          <div class="kpi-sub">Completion tokens</div>
+        </div>
+        <div class="router-kpi-card">
+          <div class="kpi-label">EST. COST</div>
+          <div class="kpi-value yellow" id="kpiEstCost">~$0.00</div>
+          <div class="kpi-sub">Estimated, not actual billing</div>
+        </div>
+      </div>
+
+      <!-- Two-Column Section: Topology Visualizer + Recent Requests -->
+      <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 20px;">
+        <!-- Left: Interactive Topology Flow Diagram -->
+        <div class="topology-container" id="topologyContainer">
+          <canvas id="topologyCanvas" class="topology-canvas"></canvas>
+          <div class="topology-controls">
+            <button class="topo-ctrl-btn" onclick="zoomTopology(0.15)" title="Zoom in">+</button>
+            <button class="topo-ctrl-btn" onclick="zoomTopology(-0.15)" title="Zoom out">-</button>
+            <button class="topo-ctrl-btn" onclick="resetTopology()" title="Reset view">⟲</button>
+            <button class="topo-ctrl-btn" onclick="toggleTopologyFullscreen()" title="Fullscreen">⛶</button>
+          </div>
+          <div style="position: absolute; top: 12px; left: 14px; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; pointer-events: none;">
+            🌐 9Router Mesh Topology
           </div>
         </div>
 
-        <div class="stat-grid">
-          <div class="stat-card">
-            <span class="stat-label">Total Permintaan</span>
-            <span class="stat-val" id="metricTotalReq">0</span>
-            <span class="stat-sub" id="metricSuccessFail">0 sukses · 0 gagal</span>
-          </div>
-          <div class="stat-card stat-ok">
-            <span class="stat-label">Total Token Diproses</span>
-            <span class="stat-val" id="metricTotalTokens">0</span>
-            <span class="stat-sub">Prompt & Completion</span>
-          </div>
-          <div class="stat-card stat-err">
-            <span class="stat-label">Error Rate</span>
-            <span class="stat-val" id="metricErrorRate">0.0%</span>
-            <span class="stat-sub" id="metricFailedReq">0 error upstream</span>
-          </div>
-          <div class="stat-card stat-warn">
-            <span class="stat-label">Rata-Rata Latensi</span>
-            <span class="stat-val" id="metricAvgLatency">0 ms</span>
-            <span class="stat-sub">Responsivitas server</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-label">In-Memory Cache</span>
-            <span class="stat-val" id="metricCacheSize">0 item</span>
-            <span class="stat-sub">Respon instan 0ms</span>
-          </div>
-        </div>
-
-        <div class="grid-2">
-          <div style="background: #090b10; border: 1px solid #1e2433; border-radius: 8px; padding: 18px;">
-            <div style="font-size: 14px; font-weight: 600; color: #f1f5f9; margin-bottom: 14px; display: flex; justify-content: space-between;">
-              <span>Distribusi Trafik Provider</span>
-              <span style="font-size: 12px; color: #64748b;">Upstream Hits</span>
-            </div>
-            <div id="providerDistributionList">
-              <div style="color: #64748b; font-size: 13px; text-align: center; padding: 20px;">Belum ada trafik terekam.</div>
+        <!-- Right: Recent Requests Sidebar -->
+        <div class="recent-req-panel">
+          <div class="recent-req-header">
+            <span>RECENT REQUESTS</span>
+            <div style="display: flex; gap: 16px; font-size: 10px; color: #64748b;">
+              <span>In / Out</span>
+              <span>When</span>
             </div>
           </div>
-
-          <div style="background: #090b10; border: 1px solid #1e2433; border-radius: 8px; padding: 18px;">
-            <div style="font-size: 14px; font-weight: 600; color: #f1f5f9; margin-bottom: 14px; display: flex; justify-content: space-between;">
-              <span>Model Terpopuler</span>
-              <span style="font-size: 12px; color: #64748b;">Query Hits</span>
-            </div>
-            <div id="modelDistributionList">
-              <div style="color: #64748b; font-size: 13px; text-align: center; padding: 20px;">Belum ada model query terekam.</div>
+          <div class="recent-req-list" id="recentRequestsList">
+            <div style="color: #64748b; font-size: 12px; text-align: center; padding: 40px 10px;">
+              Belum ada aktivitas request terekam.
             </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- TAB: REQUEST & ERROR LOGS -->
-    <div id="tabLogs" class="tab-content" style="display: none;">
-      <div class="card">
-        <div class="card-header">
-          <div>
-            <div class="card-title">Live Request & Error Logs Viewer</div>
-            <div class="card-subtitle">Pemantauan 150 request terakhir secara real-time termasuk status HTTP, latensi, dan token.</div>
+      <!-- Historical Usage & Trend Chart Card -->
+      <div class="card" style="margin-bottom: 20px; padding: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+          <div class="seg-btn-group">
+            <button class="seg-btn active primary" id="btnChartTokens" onclick="toggleChartUnit('tokens', this)">Tokens</button>
+            <button class="seg-btn" id="btnChartCost" onclick="toggleChartUnit('cost', this)">Cost</button>
           </div>
-          <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-            <label class="toggle-wrap" style="font-size: 13px; color: #94a3b8;">
-              <span class="toggle-switch">
-                <input type="checkbox" id="autoRefreshLogs" checked onchange="toggleAutoRefreshLogs(this)">
-                <span class="toggle-slider"></span>
-              </span>
-              Auto-Refresh (5s)
-            </label>
-            <button class="btn btn-outline" style="padding: 6px 12px; font-size: 13px;" onclick="loadLogs()">🔄 Refresh</button>
-            <button class="btn btn-danger" style="padding: 6px 12px; font-size: 13px;" onclick="clearAdminLogs()">🗑️ Bersihkan Log</button>
-          </div>
+          <div style="font-size: 12px; color: #64748b;" id="chartPeriodLabel">Activity for selected period</div>
         </div>
+        <div style="height: 180px; position: relative; display: flex; align-items: center; justify-content: center; background: #090c12; border: 1px solid #1a2230; border-radius: 8px;">
+          <canvas id="usageTimelineCanvas" style="width: 100%; height: 100%; display: none;"></canvas>
+          <div id="chartNoDataNotice" style="color: #64748b; font-size: 13px;">No data for this period</div>
+        </div>
+      </div>
 
-        <div style="display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; align-items: center;">
-          <input type="text" id="logSearchInput" class="input-text" style="flex: 1; min-width: 200px;" placeholder="🔍 Cari IP, Provider, Model, atau Error..." oninput="filterLogs()">
-          <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #cbd5e1; cursor: pointer; user-select: none;">
-            <input type="checkbox" id="logFilterErrorOnly" onchange="filterLogs()">
-            <span>⚠️ Tampilkan Error Saja (Status &ge; 400)</span>
-          </label>
+      <!-- Usage Breakdown Table Card (Usage by Model / Provider) -->
+      <div class="card" style="padding: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <select id="breakdownTypeSelect" class="input-select" style="width: auto; padding: 6px 12px; font-size: 13px;" onchange="renderBreakdownTable()">
+              <option value="model">Usage by Model</option>
+              <option value="provider">Usage by Provider</option>
+            </select>
+          </div>
+          <div class="seg-btn-group">
+            <button class="seg-btn active" id="btnBreakdownCost" onclick="toggleBreakdownUnit('costs', this)">Costs</button>
+            <button class="seg-btn" id="btnBreakdownTokens" onclick="toggleBreakdownUnit('tokens', this)">Tokens</button>
+          </div>
         </div>
 
         <div class="table-responsive">
-          <table class="data-table" id="logsTable">
+          <table class="data-table" id="breakdownTable">
             <thead>
-              <tr>
-                <th>Waktu</th>
-                <th>Client IP</th>
-                <th>Provider</th>
-                <th>Model</th>
-                <th>Status</th>
-                <th>Latensi</th>
-                <th>Tokens</th>
-                <th>Cache</th>
-                <th>Detail / Error</th>
+              <tr id="breakdownTableHeader">
+                <th>MODEL ↑</th>
+                <th>PROVIDER ↕</th>
+                <th>REQUESTS ↕</th>
+                <th>LAST USED ↕</th>
+                <th>INPUT COST ↕</th>
+                <th>CACHED COST ↕</th>
+                <th>OUTPUT COST ↕</th>
+                <th>TOTAL COST ↕</th>
               </tr>
             </thead>
-            <tbody id="logsTableBody">
+            <tbody id="breakdownTableBody">
               <tr>
-                <td colspan="9" style="text-align: center; color: #64748b; padding: 30px;">Memuat log server...</td>
+                <td colspan="8" style="text-align: center; color: #64748b; padding: 30px;">No usage recorded yet.</td>
               </tr>
             </tbody>
           </table>
         </div>
+      </div>
+
+    </div>
+
+    <!-- TAB 2: REQUEST DETAILS (Image 3) -->
+    <div id="tabDetails" class="tab-content" style="display: none;">
+      <div class="card">
+        
+        <!-- Filter Controls Bar -->
+        <div style="display: grid; grid-template-columns: 200px 220px 220px 1fr auto; gap: 12px; margin-bottom: 20px; align-items: flex-end; flex-wrap: wrap;">
+          <div>
+            <label class="form-label">Provider</label>
+            <select id="detailProviderSelect" class="input-select" onchange="load9RouterDetails()">
+              <option value="all">All Providers</option>
+            </select>
+          </div>
+          <div>
+            <label class="form-label">Start Date</label>
+            <input type="datetime-local" id="detailStartDate" class="input-text" onchange="load9RouterDetails()">
+          </div>
+          <div>
+            <label class="form-label">End Date</label>
+            <input type="datetime-local" id="detailEndDate" class="input-text" onchange="load9RouterDetails()">
+          </div>
+          <div>
+            <label class="form-label">Search</label>
+            <input type="text" id="detailSearchInput" class="input-text" placeholder="Search IP, model, error..." oninput="load9RouterDetails()">
+          </div>
+          <div>
+            <button class="btn btn-outline" style="padding: 10px 14px; font-size: 13px;" onclick="clearDetailFilters()">Clear Filters</button>
+          </div>
+        </div>
+
+        <!-- Detailed Requests Table matching Image 3 -->
+        <div class="table-responsive">
+          <table class="data-table" id="detailsTable">
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Model</th>
+                <th>Provider</th>
+                <th>Input Tokens</th>
+                <th>Cached</th>
+                <th>Cache Creation</th>
+                <th>Output Tokens</th>
+                <th>Latency</th>
+                <th style="text-align: right;">Action</th>
+              </tr>
+            </thead>
+            <tbody id="detailsTableBody">
+              <tr>
+                <td colspan="9" style="text-align: center; color: #64748b; padding: 35px;">Memuat detail request 9Router...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination Bar -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; font-size: 13px; color: #94a3b8;">
+          <span id="detailPaginationInfo">Showing 0 of 0 requests</span>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-outline" id="btnPrevPage" style="padding: 5px 12px; font-size: 12px;" onclick="changeDetailPage(-1)" disabled>&lt; Previous</button>
+            <button class="btn btn-outline" id="btnNextPage" style="padding: 5px 12px; font-size: 12px;" onclick="changeDetailPage(1)" disabled>Next &gt;</button>
+          </div>
+        </div>
+
       </div>
     </div>
 
@@ -1452,6 +1530,58 @@
 
 
   </main>
+</div>
+
+<!-- Request Detail Inspector Modal (9Router) -->
+<div class="login-overlay" id="requestDetailModal" style="display: none; z-index: 10001;">
+  <div class="card" style="width: 100%; max-width: 720px; max-height: 90vh; overflow-y: auto; margin: 0; background: #0f131c; border-color: #232d40; box-shadow: 0 25px 50px rgba(0,0,0,0.8);">
+    <div class="card-header" style="border-bottom: 1px solid #1e2536; padding-bottom: 14px; margin-bottom: 16px;">
+      <div>
+        <div class="card-title" id="modalReqTitle" style="font-size: 16px; display: flex; align-items: center; gap: 8px;">
+          <span>🔍 Request Inspector</span>
+          <span id="modalReqStatusBadge" class="ping-badge ok">200 OK</span>
+        </div>
+        <div class="card-subtitle" id="modalReqTimestamp">Timestamp: -</div>
+      </div>
+      <button class="btn btn-outline" style="padding: 4px 10px; font-size: 14px;" onclick="closeRequestModal()">✕</button>
+    </div>
+
+    <!-- Metadata Grid -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; font-size: 13px;">
+      <div style="background: #090c12; padding: 10px 14px; border-radius: 8px; border: 1px solid #1e2536;">
+        <div style="color: #64748b; font-size: 11px; text-transform: uppercase;">Provider & Model</div>
+        <div style="color: #f1f5f9; font-weight: 600; margin-top: 2px;" id="modalReqProvModel">-</div>
+      </div>
+      <div style="background: #090c12; padding: 10px 14px; border-radius: 8px; border: 1px solid #1e2536;">
+        <div style="color: #64748b; font-size: 11px; text-transform: uppercase;">Latency & TTFT</div>
+        <div style="color: #38bdf8; font-family: monospace; font-weight: 600; margin-top: 2px;" id="modalReqLatency">-</div>
+      </div>
+      <div style="background: #090c12; padding: 10px 14px; border-radius: 8px; border: 1px solid #1e2536;">
+        <div style="color: #64748b; font-size: 11px; text-transform: uppercase;">Tokens (Input / Cached / Output)</div>
+        <div style="color: #22c55e; font-family: monospace; font-weight: 600; margin-top: 2px;" id="modalReqTokens">-</div>
+      </div>
+      <div style="background: #090c12; padding: 10px 14px; border-radius: 8px; border: 1px solid #1e2536;">
+        <div style="color: #64748b; font-size: 11px; text-transform: uppercase;">Est. Cost & Client IP</div>
+        <div style="color: #eab308; font-family: monospace; font-weight: 600; margin-top: 2px;" id="modalReqCostIp">-</div>
+      </div>
+    </div>
+
+    <!-- Request Preview -->
+    <div class="form-group">
+      <label class="form-label">User Prompt / Request Summary</label>
+      <div id="modalReqPrompt" class="input-textarea" style="max-height: 120px; overflow-y: auto; white-space: pre-wrap; color: #cbd5e1; background: #06080d;"></div>
+    </div>
+
+    <!-- Response Preview -->
+    <div class="form-group">
+      <label class="form-label">Model Completion / Response Preview</label>
+      <div id="modalReqResponse" class="input-textarea" style="max-height: 140px; overflow-y: auto; white-space: pre-wrap; color: #86efac; background: #06080d;"></div>
+    </div>
+
+    <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px;">
+      <button class="btn btn-outline" onclick="closeRequestModal()">Tutup</button>
+    </div>
+  </div>
 </div>
 
 <!-- Toast Hub -->
