@@ -45,6 +45,12 @@ const {
   handleBroadcastCommand
 } = require('./commandHandler');
 
+const {
+  pruneConversationHistory,
+  sanitizeMessagesForLLM,
+  buildHistoryUserSnippet
+} = require('./sessionManager');
+
 /**
  * Query internal Bre AI router (works seamlessly on Localhost, Serverless, and VPS)
  * @param {string|Array} userContent - Text prompt or vision payload
@@ -85,6 +91,8 @@ function queryBreAIRouter(userContent, history = [], senderInfo = '', langCode =
 5. Contact: [TELEGRAM_CONTACT: {"phone_number": "+62812345", "first_name": "Name"}]
 6. Photo: [TELEGRAM_PHOTO: {"url": "https://...", "caption": "Caption"}]`;
 
+      const cleanHistory = sanitizeMessagesForLLM(history);
+
       const EventEmitter = require('events');
       const mockReq = Object.assign(new EventEmitter(), {
         method: 'POST',
@@ -98,7 +106,7 @@ function queryBreAIRouter(userContent, history = [], senderInfo = '', langCode =
           model: model,
           style: effectiveStyle,
           language: effectiveLang,
-          messages: [...history, lastUserMessage],
+          messages: [...cleanHistory, lastUserMessage],
           stream: false,
           customSystemPrompt
         },
@@ -388,15 +396,17 @@ async function handleMessage(msg, botService, ctx = null) {
   } catch (e) {}
 
   try {
-    let history = botService.conversations.get(chatId) || [];
+    const cfg = getConfig();
+    const maxHistoryLimit = botService.MAX_HISTORY || cfg.telegramMaxHistory || 30;
 
-    if (history.length >= botService.MAX_HISTORY) {
-      history = history.slice(-(botService.MAX_HISTORY - 1));
-    }
+    let history = typeof botService.getChatHistory === 'function'
+      ? botService.getChatHistory(chatId)
+      : (botService.conversations?.get ? (botService.conversations.get(chatId) || []) : []);
+
+    history = pruneConversationHistory(history, maxHistoryLimit);
 
     // Use 'auto' language — AI detects and mirrors user's language automatically.
     // Style is from global config only (set by owner via /style command).
-    const cfg = getConfig();
     const chatStyle = cfg.telegramStyle || cfg.defaultStyle || 'jakarta';
     const contentToSend = visionPayload || userQueryPrompt;
 
@@ -415,10 +425,16 @@ async function handleMessage(msg, botService, ctx = null) {
 
     clearInterval(typingInterval);
 
-    // Record user interaction snippet and assistant response in conversation history
-    history.push({ role: 'user', content: historyDisplaySnippet || userQueryPrompt });
+    // Record rich user interaction snippet and assistant response in conversation memory
+    const userMemorySnippet = buildHistoryUserSnippet(msg, userQueryPrompt, text);
+    history.push({ role: 'user', content: userMemorySnippet });
     history.push({ role: 'assistant', content: answer });
-    botService.conversations.set(chatId, history);
+
+    if (typeof botService.saveChatHistory === 'function') {
+      botService.saveChatHistory(chatId, history);
+    } else if (botService.conversations?.set) {
+      botService.conversations.set(chatId, history);
+    }
 
     // Deliver text & all interactive rich media outbound elements (guaranteed file creation)
     await processAndSendOutboundMedia(chatId, answer, token, loadingMsgId, userQueryPrompt || text);

@@ -54,18 +54,69 @@ const {
   getUserStyle
 } = require('./constants');
 
+const {
+  conversationsMap,
+  DEFAULT_MAX_HISTORY,
+  getChatHistory,
+  saveChatHistory,
+  clearChatHistory,
+  clearAllHistories,
+  getActiveConversationsCount,
+  pruneConversationHistory,
+  sanitizeMessagesForLLM,
+  buildHistoryUserSnippet
+} = require('./sessionManager');
+
 class TelegramBotService {
   constructor() {
     this.isRunning = false;
     this.botInfo = null;
     this.lastError = null;
     this.currentOffset = 0;
-    this.conversations = new Map(); // chatId -> Array<{ role, content }>
     this.recentUsers = recentUsers;   // shared reference to Map
-    this.MAX_HISTORY = 12;
+    this.MAX_HISTORY = 30;
     this.activeToken = null;
     this.activeOwnerId = null;
     this.activeAccessMode = null;
+
+    // Backward-compatible persistent conversation store interface
+    this.conversations = {
+      get: (chatId) => getChatHistory(chatId),
+      set: (chatId, history) => { saveChatHistory(chatId, history); return this.conversations; },
+      delete: (chatId) => clearChatHistory(chatId),
+      clear: () => clearAllHistories(),
+      has: (chatId) => Boolean(getChatHistory(chatId).length > 0),
+      get size() { return getActiveConversationsCount(); },
+      entries: () => conversationsMap.entries(),
+      keys: () => conversationsMap.keys(),
+      values: () => conversationsMap.values(),
+      [Symbol.iterator]: () => conversationsMap[Symbol.iterator]()
+    };
+  }
+
+  // Session & Memory Management
+  getChatHistory(chatId) {
+    return getChatHistory(chatId);
+  }
+
+  saveChatHistory(chatId, history) {
+    return saveChatHistory(chatId, history);
+  }
+
+  clearChatHistory(chatId) {
+    return clearChatHistory(chatId);
+  }
+
+  clearAllHistories() {
+    return clearAllHistories();
+  }
+
+  pruneConversationHistory(history, maxLimit = null) {
+    return pruneConversationHistory(history, maxLimit || this.MAX_HISTORY);
+  }
+
+  getActiveConversationsCount() {
+    return getActiveConversationsCount();
   }
 
   // Delegated API Calls

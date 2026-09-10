@@ -51,9 +51,41 @@ module.exports = async (req, res) => {
   const requestedProvider = (req.headers['x-custom-provider'] || body.provider || '').trim();
   const requestedModel = (req.headers['x-custom-model'] || body.model || body.customModel || cfg.model || '').trim();
 
-  // 4. Build and check User Messages
-  const userMessages = Array.isArray(body.messages) ? body.messages.filter(m => m.role !== 'system') : [];
-  const allUserText = userMessages.map(m => typeof m.content === 'string' ? m.content : JSON.stringify(m.content)).join(' ');
+  // 4. Build and sanitize dialogue messages
+  let rawMessages = Array.isArray(body.messages) ? body.messages : [];
+  let dialogueTurns = rawMessages
+    .filter(m => m && m.role && m.role !== 'system')
+    .map(m => ({ role: m.role, content: m.content }));
+
+  // Sanitize dialogue sequence so it complies with all LLM provider requirements:
+  // 1. First message must always be 'user' (strip leading 'assistant' if any)
+  while (dialogueTurns.length > 0 && dialogueTurns[0].role !== 'user') {
+    dialogueTurns.shift();
+  }
+
+  // 2. Merge consecutive duplicate roles if any
+  const userMessages = [];
+  for (const turn of dialogueTurns) {
+    const prev = userMessages[userMessages.length - 1];
+    if (prev && prev.role === turn.role) {
+      if (typeof prev.content === 'string' && typeof turn.content === 'string') {
+        prev.content = `${prev.content}\n\n${turn.content}`;
+      } else {
+        userMessages.push(turn);
+      }
+    } else {
+      userMessages.push(turn);
+    }
+  }
+
+  if (userMessages.length === 0) {
+    userMessages.push({ role: 'user', content: 'Halo' });
+  }
+
+  const allUserText = userMessages
+    .filter(m => m.role === 'user')
+    .map(m => typeof m.content === 'string' ? m.content : JSON.stringify(m.content))
+    .join(' ');
 
   // Content Moderation & Keyword Blacklist
   if (cfg.blacklist && cfg.blacklist.length > 0) {
@@ -203,7 +235,8 @@ function normalizeChatUrl(rawUrl) {
   }
 
   // 7. Response Caching check (only for non-stream requests)
-  const cacheKey = `${primaryTarget.name}:${targetModelName}:${requestedLang}:${requestedStyle}:${allUserText.trim()}`;
+  const dialogueDigest = userMessages.map(m => `${m.role}:${typeof m.content === 'string' ? m.content : JSON.stringify(m.content)}`).join('|');
+  const cacheKey = `${primaryTarget.name}:${targetModelName}:${requestedLang}:${requestedStyle}:${dialogueDigest}`;
 
   if (cfg.cacheEnabled && !stream && allUserText.trim()) {
     const cachedData = getCachedResponse(cacheKey);

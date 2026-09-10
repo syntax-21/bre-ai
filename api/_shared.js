@@ -52,6 +52,7 @@ const DEFAULT_CONFIG = {
   telegramLanguage: 'id',
   telegramOwnerId: '',
   telegramAccessMode: 'public',
+  telegramMaxHistory: 30,
   telegramDomain: '',
   telegramUsers: [],
   // Cloud Persistence Engine (Vercel & GitHub Deployments)
