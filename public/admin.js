@@ -74,12 +74,47 @@ const PROMPT_PRESETS = {
 - Jawablah setiap pertanyaan secara padat, akurat, ringkas, dan to the point tanpa basa-basi yang tidak perlu.`
 };
 
+const TAB_TITLES = {
+  'tab9Router': '📊 Overview &amp; Telemetry',
+  'tabDetails': '📜 Request Inspector &amp; Logs',
+  'tabProviders': '🔌 Endpoints &amp; Routing Strategy',
+  'tabEngine': '⚙️ Global AI Engine &amp; Fallback',
+  'tabTools': '🛠️ AI Tools &amp; Prompt Studio',
+  'tabSecurity': '🛡️ Keamanan, Rate Limit &amp; Access',
+  'tabTelegram': '🤖 Telegram Bot Controller',
+  'tabCloud': '☁️ Cloud Storage Database',
+  'tabTester': '🧪 Live Model Tester &amp; Benchmark',
+  'tabBackup': '📦 Backup, Export &amp; Restore'
+};
+
 function switchTab(tabId, btn) {
+  document.querySelectorAll('.sidebar-nav-item').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
-  if (btn) btn.classList.add('active');
+  
+  if (btn) {
+    btn.classList.add('active');
+  } else {
+    const matchingItem = document.querySelector(`.sidebar-nav-item[data-tab="${tabId}"]`);
+    if (matchingItem) matchingItem.classList.add('active');
+  }
+
   const target = document.getElementById(tabId);
   if (target) target.style.display = 'block';
+
+  // Update Breadcrumb Title in Topbar
+  const titleEl = document.getElementById('activeViewTitle');
+  if (titleEl && TAB_TITLES[tabId]) {
+    titleEl.innerHTML = TAB_TITLES[tabId];
+  }
+
+  // Close Mobile Sidebar Drawer if open
+  const sidebar = document.getElementById('adminSidebar');
+  const backdrop = document.getElementById('sidebarBackdrop');
+  if (sidebar && sidebar.classList.contains('mobile-open')) {
+    sidebar.classList.remove('mobile-open');
+    if (backdrop) backdrop.classList.remove('active');
+  }
   
   if (tabId === 'tab9Router') load9RouterData();
   if (tabId === 'tabDetails') load9RouterDetails();
@@ -88,6 +123,75 @@ function switchTab(tabId, btn) {
   if (tabId === 'tabTester') updateTestModelDropdown();
   if (tabId === 'tabTelegram') loadTelegramStatus();
   if (tabId === 'tabCloud') loadCloudStorageStatus();
+}
+
+function toggleSidebar() {
+  const sidebar = document.getElementById('adminSidebar');
+  const mainWrapper = document.getElementById('adminMainWrapper');
+  if (!sidebar) return;
+  sidebar.classList.toggle('sidebar-collapsed');
+  if (mainWrapper) mainWrapper.classList.toggle('sidebar-collapsed');
+  const isCollapsed = sidebar.classList.contains('sidebar-collapsed');
+  const toggleBtn = sidebar.querySelector('.sidebar-toggle-btn');
+  if (toggleBtn) toggleBtn.textContent = isCollapsed ? '›' : '‹';
+  try { localStorage.setItem('bre_sidebar_collapsed', isCollapsed ? '1' : '0'); } catch(e){}
+}
+
+function toggleMobileSidebar() {
+  const sidebar = document.getElementById('adminSidebar');
+  const backdrop = document.getElementById('sidebarBackdrop');
+  if (!sidebar) return;
+  sidebar.classList.toggle('mobile-open');
+  if (backdrop) backdrop.classList.toggle('active');
+}
+
+function filterSidebarNav(query) {
+  const q = (query || '').toLowerCase().trim();
+  const items = document.querySelectorAll('.sidebar-nav-item');
+  items.forEach(item => {
+    const text = item.textContent.toLowerCase();
+    if (!q || text.includes(q)) {
+      item.style.display = 'flex';
+    } else {
+      item.style.display = 'none';
+    }
+  });
+}
+
+function updateTopActiveEndpointsCount() {
+  const countEl = document.getElementById('topActiveEpsCount');
+  if (!countEl) return;
+  const list = Array.isArray(endpoints) ? endpoints : [];
+  const activeCount = list.filter(e => e && e.status !== false && e.enabled !== false).length;
+  countEl.textContent = `${activeCount}/${list.length}`;
+}
+
+// Restore sidebar state from localStorage & bind shortcuts
+if (typeof document !== 'undefined') {
+  document.addEventListener('DOMContentLoaded', () => {
+    try {
+      const isCollapsed = localStorage.getItem('bre_sidebar_collapsed') === '1';
+      if (isCollapsed) {
+        const sidebar = document.getElementById('adminSidebar');
+        const mainWrapper = document.getElementById('adminMainWrapper');
+        if (sidebar) sidebar.classList.add('sidebar-collapsed');
+        if (mainWrapper) mainWrapper.classList.add('sidebar-collapsed');
+        const toggleBtn = sidebar?.querySelector('.sidebar-toggle-btn');
+        if (toggleBtn) toggleBtn.textContent = '›';
+      }
+    } catch(e){}
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      const searchInput = document.getElementById('sidebarSearchInput');
+      if (searchInput) {
+        searchInput.focus();
+        searchInput.select();
+      }
+    }
+  });
 }
 
 async function doLogin() {
@@ -426,6 +530,7 @@ function renderProviders() {
       </div>
     </div>
   `).join('');
+  updateTopActiveEndpointsCount();
 }
 
 function toggleKeyMask(i) {
