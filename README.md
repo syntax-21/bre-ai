@@ -345,7 +345,7 @@ Aplikasi ini 100% siap dideploy ke Vercel:
 
 - **Karya Cipta & Kepemilikan Penuh**: **Amirun Rayan Ariandi**
 - **Nama Produk**: **Bre AI (Universal AI Assistant & Multi-Provider Router)**
-- **Versi**: 3.0.0
+- **Versi**: 1.0.0
 - **Tahun**: 2026
 
 Seluruh hak cipta dilindungi. Penggunaan, pengembangan, dan integrasi ditujukan untuk menghadirkan asisten kecerdasan buatan terbaik, mandiri, dan berkinerja tinggi.
