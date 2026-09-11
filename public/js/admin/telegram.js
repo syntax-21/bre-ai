@@ -14,12 +14,24 @@ function toggleTelegramTokenMask() {
 function updateTelegramModelDropdown(selectedModel) {
   const sel = document.getElementById('cfgTelegramModel');
   if (!sel) return;
-  const allModels = new Set();
-  endpoints.forEach(ep => { if(ep.name) allModels.add(ep.name.trim()); });
-  if (!allModels.size) allModels.add('Default Provider');
-  allModels.delete('auto');
-sel.innerHTML = '<option value="auto">🌐 Otomatis ikuti Router AI (Rotasi)</option>' +
-    Array.from(allModels).map(m => `<option value="${escapeHtml(m)}" ${m === selectedModel ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('');
+  const modelOptions = new Map();
+  endpoints.forEach(ep => {
+    if (!Array.isArray(ep.models) || !ep.models.length) return;
+    ep.models.forEach(m => {
+      const key = String(m).trim();
+      if (!key) return;
+      if (!modelOptions.has(key)) modelOptions.set(key, new Set());
+      if (ep.name) modelOptions.get(key).add(String(ep.name).trim());
+    });
+  });
+  if (!modelOptions.size) modelOptions.set('auto', new Set());
+  modelOptions.delete('auto');
+  sel.innerHTML = '<option value="auto">🌐 Otomatis ikuti Router AI (Auto)</option>' +
+    Array.from(modelOptions.entries()).map(([m, provs]) => {
+      const selAttr = m === selectedModel ? 'selected' : '';
+      const label = provs.size ? `${m} (${Array.from(provs).join(', ')})` : m;
+      return `<option value="${escapeHtml(m)}" ${selAttr}>${escapeHtml(label)}</option>`;
+    }).join('');
 }
 
 async function loadTelegramStatus() {

@@ -37,7 +37,7 @@ async function handle(cq, botService) {
   else if (range === '30d') rangeLabel = '30 Hari Terakhir';
   else if (range === '60d') rangeLabel = 'Semua Waktu (60 Hari)';
 
-  let text = `📊 *Real-Time Telemetry & Performance*\n` +
+  let text = `📊 *Overview — Real-Time Telemetry & Performance*\n` +
     `📅 *Periode:* *${rangeLabel}*\n\n` +
     `• *Total Permintaan:* \`${totalReq} req\` (${successReq} ok · ${failedReq} error)\n` +
     `• *Input Tokens:* \`${inTokens} token\`\n` +

@@ -52,16 +52,14 @@ async function saveAllConfig() {
     autoFailover: getCheck('cfgAutoFailover'),
     cacheEnabled: getCheck('cfgCacheEnabled'),
     cacheTTL: parseInt(getVal('cfgCacheTTL')) || 3600,
-    blacklist: getVal('cfgBlacklist').split('\n').map(w => w.trim()).filter(Boolean),
-    clientKeys,
+blacklist: getVal('cfgBlacklist').split('\n').map(w => w.trim()).filter(Boolean),
     systemPrompt: getVal('cfgPrompt'),
     temperature: parseNum(getVal('cfgTemp'), 0.7),
     topP: parseNum(getVal('cfgTopP'), 1.0),
     frequencyPenalty: parseNum(getVal('cfgFreqPenalty'), 0.0),
     presencePenalty: parseNum(getVal('cfgPresPenalty'), 0.0),
     maxTokens: parseInt(getVal('cfgMaxTokens')) || 16384,
-    defaultStyle: getVal('cfgDefaultStyle') || 'santai',
-    clientApiKey: getVal('cfgClientKey').trim(),
+defaultStyle: getVal('cfgDefaultStyle') || 'santai',
     rateLimitMax: parseInt(getVal('cfgRateMax')) || 5,
     rateLimitWindow: parseInt(getVal('cfgRateWin')) || 30,
     telegramEnabled: getCheck('cfgTelegramEnabled'),
@@ -135,7 +133,7 @@ function importConfigFile(e) {
 
 async function resetToFactoryDefault() {
   if (!confirm('Reset seluruh konfigurasi ke pengaturan awal?')) return;
-  const def = { endpoints: [{ name: "Inception Labs", url: "https://api.inceptionlabs.ai/v1/chat/completions", keys: ["sk_5a39b7fd486bf03ef255b475595bd7c9"], models: ["mercury-2"] }], temperature: 0.7, topP: 1.0, maxTokens: 16384, rateLimitMax: 5, rateLimitWindow: 30, autoFailover: true, cacheEnabled: false, cacheTTL: 3600, blacklist: [], clientKeys: [] };
+  const def = { endpoints: [{ name: "Inception Labs", url: "https://api.inceptionlabs.ai/v1/chat/completions", keys: ["sk_5a39b7fd486bf03ef255b475595bd7c9"], models: ["mercury-2"] }], temperature: 0.7, topP: 1.0, maxTokens: 16384, rateLimitMax: 5, rateLimitWindow: 30, autoFailover: true, cacheEnabled: false, cacheTTL: 3600, blacklist: [] };
   const r = await fetch('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken }, body: JSON.stringify(def) });
   if (r.ok) { toast('Pengaturan berhasil direset ke Default', 'ok'); loadConfig(); }
 }

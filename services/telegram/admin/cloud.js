@@ -45,14 +45,27 @@ async function handle(cq, botService, router = null) {
       ]
     };
     await editTelegramMessage(chatId, messageId, text, markup, token);
-    return;
+    return true;
   }
 
   if (data === 'adm_test_upstash') {
     await answerCallback(cq.id, '⏳ Menguji koneksi Upstash Redis...', false, token);
+    await editTelegramMessage(chatId, messageId, `⏳ *Sedang Menguji Koneksi Upstash / Vercel KV...*\nMohon tunggu beberapa detik...`, null, token);
     const res = await testUpstash(cfg.upstashRedisUrl, cfg.upstashRedisToken);
-    await answerCallback(cq.id, res.ok ? `✅ ${res.message}` : `❌ ${res.error}`, true, token);
-    return;
+    const resultText = `🔌 *Hasil Tes Koneksi Upstash / Vercel KV*\n\n` +
+      (res.ok
+        ? `✅ *TERHUBUNG:*\n${res.message || 'Koneksi ke Upstash Redis berhasil.'}`
+        : `❌ *GAGAL:*\n${res.error || 'Koneksi gagal. Periksa URL & token.'}`);
+    const markup = {
+      inline_keyboard: [
+        [
+          { text: '🔄 Tes Ulang', callback_data: 'adm_test_upstash' },
+          { text: '⬅️ Menu Cloud', callback_data: 'adm_cloud' }
+        ]
+      ]
+    };
+    await editTelegramMessage(chatId, messageId, resultText, markup, token);
+    return true;
   }
 
   // ----------------------------------------------------

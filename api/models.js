@@ -2,7 +2,7 @@
 // Bre AI - /v1/models Endpoint (OpenAI-Compatible)
 // Created by Amirun Rayan Ariandi
 // ========================================================
-const { getConfig, syncCloudConfig, validateClientKey } = require('./_shared');
+const { getConfig, syncCloudConfig } = require('./_shared');
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');

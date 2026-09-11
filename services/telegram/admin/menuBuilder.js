@@ -98,7 +98,7 @@ function buildMainMenuMarkup(cfg) {
   return {
     inline_keyboard: [
       [
-        { text: '📊 Telemetry & Statistik', callback_data: 'adm_telemetry_range:today' },
+        { text: '📊 Overview', callback_data: 'adm_telemetry_range:today' },
         { text: '📜 Log & Error', callback_data: 'adm_logs' }
       ],
       [
@@ -132,8 +132,7 @@ function getMainMenuText(senderName, conversationsCount = 0) {
   const activeStyle = STYLE_LABELS[cfg.telegramStyle || cfg.defaultStyle || 'santai'] || '✨ Santai & Friendly';
   const userCount = Array.isArray(cfg.telegramUsers) ? cfg.telegramUsers.length : 0;
   const endpointCount = Array.isArray(cfg.endpoints) ? cfg.endpoints.length : 0;
-  const activeEndpoints = Array.isArray(cfg.endpoints) ? cfg.endpoints.filter(e => e.status !== false).length : 0;
-  const clientKeyCount = Array.isArray(cfg.clientKeys) ? cfg.clientKeys.length : 0;
+const activeEndpoints = Array.isArray(cfg.endpoints) ? cfg.endpoints.filter(e => e.status !== false).length : 0;
   const m = getMetrics();
   const activeLang = LANGUAGE_LABELS[cfg.telegramLanguage || 'id'] || '🇮🇩 Indonesia';
   const storageInfo = getCloudStorageInfo();
@@ -145,8 +144,7 @@ function getMainMenuText(senderName, conversationsCount = 0) {
     `• *Gaya Bahasa (Tone):* ${activeStyle}\n` +
     `• *Bahasa Default:* ${activeLang}\n` +
     `• *Provider AI:* ${activeEndpoints}/${endpointCount} aktif (Failover: ${cfg.autoFailover !== false ? '🟢 ON' : '🔴 OFF'})\n` +
-    `• *Pengguna Terdaftar:* ${userCount} akun\n` +
-    `• *Client API Keys:* ${clientKeyCount} key\n` +
+`• *Pengguna Terdaftar:* ${userCount} akun\n` +
     `• *Penyimpanan Cloud:* ${storageLabel}\n` +
     `• *Total Permintaan:* ${m.totalRequests} req (${m.errorRate} err)\n` +
     `• *Sesi Chat Aktif:* ${conversationsCount} sesi\n\n` +

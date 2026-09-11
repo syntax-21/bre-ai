@@ -8,7 +8,6 @@ const {
   checkBlacklist,
   getCachedResponse,
   setCachedResponse,
-  validateClientKey,
   getNextRoundRobinIndex,
   buildBreAISystemPrompt,
   STYLE_PROMPTS
@@ -99,15 +98,6 @@ module.exports = async (req, res) => {
     }
   }
 
-  // API Key Authentication (when requireAuth is enabled)
-  if (cfg.requireAuth) {
-    const authResult = validateClientKey(req.headers?.authorization || body.apiKey, cfg);
-    if (!authResult.valid) {
-      logRequest({ ip, provider: 'AuthGate', model: requestedModel || 'n/a', status: 401, latencyMs: 1, error: authResult.error, clientKeyName: clientChannel });
-      return res.status(401).json({ error: authResult.error });
-    }
-  }
-
   // 5. Language & Style Resolution
   const requestedStyle = (req.headers['x-custom-style'] || body.style || cfg.defaultStyle || 'santai').trim();
   const requestedLang = (req.headers['x-custom-language'] || body.language || cfg.telegramLanguage || 'id').trim().toLowerCase();
@@ -127,8 +117,8 @@ function isVisionCapableModel(modelName) {
   return KNOWN_VISION_PATTERNS.some(pat => m.includes(pat));
 }
 
-function prepareMessagesForModel(messages, modelName) {
-  const isVision = isVisionCapableModel(modelName);
+function prepareMessagesForModel(messages, modelName, forceText = false) {
+  const isVision = !forceText && isVisionCapableModel(modelName);
   if (isVision) return messages;
 
   return messages.map(m => {
@@ -257,14 +247,17 @@ function normalizeChatUrl(rawUrl) {
 
   // If multimodal image is present, prioritize providers and models that support vision
   if (hasImageAttachment) {
-    candidates.sort((a, b) => {
-      const aHasVision = Array.isArray(a.models) && a.models.some(isVisionCapableModel);
-      const bHasVision = Array.isArray(b.models) && b.models.some(isVisionCapableModel);
-      if (aHasVision && !bHasVision) return -1;
-      if (!aHasVision && bHasVision) return 1;
-      return 0;
-    });
-    if (candidates.length > 0) primaryTarget = candidates[0];
+    const visionCandidates = candidates.filter(e => Array.isArray(e.models) && e.models.some(isVisionCapableModel));
+    if (visionCandidates.length > 0) {
+      candidates.sort((a, b) => {
+        const aHasVision = Array.isArray(a.models) && a.models.some(isVisionCapableModel);
+        const bHasVision = Array.isArray(b.models) && b.models.some(isVisionCapableModel);
+        if (aHasVision && !bHasVision) return -1;
+        if (!aHasVision && bHasVision) return 1;
+        return 0;
+      });
+      if (candidates.length > 0) primaryTarget = candidates[0];
+    }
   }
 
   // 7. Response Caching check (only for non-stream requests)
@@ -294,6 +287,7 @@ function normalizeChatUrl(rawUrl) {
   const formattedMessages = [{ role: 'system', content: masterSystemContent }, ...userMessages];
 
   let finalError = null;
+  const forceTextOnly = new Set();
 
   for (let cIdx = 0; cIdx < candidates.length; cIdx++) {
     const currentTarget = candidates[cIdx];
@@ -333,7 +327,7 @@ function normalizeChatUrl(rawUrl) {
         const key = currKeys[idx];
         const auth = key.startsWith('Bearer ') ? key : `Bearer ${key}`;
 
-        const targetMessages = prepareMessagesForModel(formattedMessages, currModel);
+        const targetMessages = prepareMessagesForModel(formattedMessages, currModel, forceTextOnly.has(currModel));
         const payload = { model: currModel, messages: targetMessages, max_tokens: maxTokens, temperature, stream };
         if (cfg.topP !== undefined) payload.top_p = cfg.topP;
         if (cfg.reasoningEffort && cfg.reasoningEffort !== 'none') payload.reasoning_effort = cfg.reasoningEffort;
@@ -482,10 +476,20 @@ function normalizeChatUrl(rawUrl) {
           } else {
             const errText = await upstream.text();
             finalError = `HTTP ${upstream.status} [${currentTarget.name}/${currModel}]: ${errText.slice(0, 200)}`;
+            if (hasImageAttachment && /does not support image|image input|cannot (read|process) image|image_url|vision|mulmodality|multimodal/i.test(errText)) {
+              forceTextOnly.add(currModel);
+              finalError = `Model [${currentTarget.name}/${currModel}] tidak mendukung analisis gambar; melanjutkan ke model teks.`;
+            }
           }
         } catch (e) {
           clearTimeout(timer);  // Clean up timer on error
-          finalError = e.name === 'AbortError' ? `Timeout [${currentTarget.name}/${currModel}]` : e.message;
+          const errMsg = e.name === 'AbortError' ? `Timeout [${currentTarget.name}/${currModel}]` : e.message;
+          if (hasImageAttachment && !errMsg.includes('AbortError') && /does not support image|image input|cannot (read|process) image|vision|mulmodality|multimodal/i.test(errMsg)) {
+            forceTextOnly.add(currModel);
+            finalError = `Model [${currentTarget.name}/${currModel}] tidak mendukung analisis gambar; melanjutkan ke model teks.`;
+          } else {
+            finalError = errMsg;
+          }
         }
       } // end key loop
     } // end model loop

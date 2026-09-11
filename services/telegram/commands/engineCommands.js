@@ -72,7 +72,7 @@ async function handle(ctx) {
 
     await api.sendTelegramMessage(
       chatId,
-      `📊 *Statistik & Telemetry Bre AI*\n` +
+      `📊 *Overview Bre AI*\n` +
       `📅 *Periode:* *${rangeLabel}*\n\n` +
       `• 📈 *Total Permintaan:* \`${totalReq} req\` (${successReq} sukses · ${failedReq} error)\n` +
       `• 📥 *Input Tokens:* \`${inTokens} token\`\n` +

@@ -8,6 +8,7 @@ const {
   testSingleModel,
   fetchAvailableModels,
   clearLogs,
+  saveConfig,
   STYLE_LABELS
 } = require('../../../api/_shared');
 const api = require('../api');
@@ -44,7 +45,52 @@ async function handle(cq, botService, router = null) {
       ]
     };
     await editTelegramMessage(chatId, messageId, text, markup, token);
-    return;
+    return true;
+  }
+
+  // Ganti Model Uji — list all configured models with per-model test buttons
+  if (data === 'adm_models') {
+    await answerCallback(cq.id, null, false, token);
+    const endpoints = Array.isArray(cfg.endpoints) ? cfg.endpoints : [];
+    if (!endpoints.length) {
+      await editTelegramMessage(chatId, messageId, '⚠️ Belum ada provider yang dikonfigurasi. Tambahkan dulu di menu ⚙️ Global Engine AI.', {
+        inline_keyboard: [[{ text: '⬅️ Menu Tester', callback_data: 'adm_tester' }]]
+      }, token);
+      return true;
+    }
+
+    let text = `🧪 *Pilih Model untuk Live Test:*\n\n`;
+    const rows = [];
+    endpoints.forEach((ep, idx) => {
+      const models = Array.isArray(ep.models) && ep.models.length ? ep.models : ['mercury-2'];
+      text += `• *${ep.name || `Provider #${idx+1}`}:* \`${models.join('`, `')}\`\n`;
+    });
+    text += `\n_Tekan tombol ⚡ di bawah untuk langsung menguji model tersebut. Klik "Aktifkan Model" pada hasil tes untuk menjadikannya model aktif bot._`;
+
+    endpoints.forEach((ep) => {
+      const models = Array.isArray(ep.models) ? ep.models : [];
+      if (!models.length) return;
+      models.slice(0, 8).forEach(m => {
+        rows.push([{ text: `⚡ Test: ${m}`, callback_data: `adm_run_test:${m}` }]);
+      });
+    });
+    rows.push([{ text: '⬅️ Menu Tester', callback_data: 'adm_tester' }]);
+
+    await editTelegramMessage(chatId, messageId, text, { inline_keyboard: rows }, token);
+    return true;
+  }
+
+  // Aktifkan model hasil tes sebagai model aktif bot
+  if (data.startsWith('adm_apply_model:')) {
+    const chosen = data.split(':')[1] || '';
+    if (!chosen) {
+      await answerCallback(cq.id, 'Model tidak valid', true, token);
+      return true;
+    }
+    saveConfig({ telegramModel: chosen });
+    await answerCallback(cq.id, `✅ Model aktif Telegram diubah ke: ${chosen}`, true, token);
+    cq.data = 'adm_tester';
+    return (router ? router(cq, botService) : handle(cq, botService, router));
   }
 
   if (data.startsWith('adm_run_test:')) {
@@ -57,8 +103,8 @@ async function handle(cq, botService, router = null) {
       const probePrompt = 'Hai Bre AI, perkenalkan dirimu secara singkat.';
       const queryRouter = (botService && typeof botService.queryBreAIRouter === 'function')
         ? botService.queryBreAIRouter.bind(botService)
-        : require('./messageHandler').queryBreAIRouter;
-      const answer = await queryRouter(probePrompt, [{ role: 'user', content: probePrompt }]);
+        : require('../messageHandler').queryBreAIRouter;
+      const answer = await queryRouter(probePrompt, [{ role: 'user', content: probePrompt }], 'Admin Tester', null, null, targetModel);
       const elapsed = Date.now() - startTime;
 
       const resultText = `✅ *Hasil Live Test Model:*\n\n` +
@@ -69,6 +115,9 @@ async function handle(cq, botService, router = null) {
 
       const markup = {
         inline_keyboard: [
+          [
+            { text: '✅ Aktifkan Model Ini', callback_data: `adm_apply_model:${targetModel}` }
+          ],
           [
             { text: '⚡ Uji Ulang', callback_data: `adm_run_test:${targetModel}` },
             { text: '⬅️ Menu Tester', callback_data: 'adm_tester' }
@@ -93,7 +142,7 @@ async function handle(cq, botService, router = null) {
       };
       await editTelegramMessage(chatId, messageId, failText, markup, token);
     }
-    return;
+    return true;
   }
 
   // ----------------------------------------------------
@@ -109,7 +158,7 @@ async function handle(cq, botService, router = null) {
       await editTelegramMessage(chatId, messageId, '⚠️ Tidak ada endpoint provider yang terkonfigurasi.', {
         inline_keyboard: [[{ text: '⬅️ Kembali', callback_data: 'adm_providers' }]]
       }, token);
-      return;
+      return true;
     }
 
     const results = await Promise.all(
@@ -148,7 +197,7 @@ async function handle(cq, botService, router = null) {
       ]
     };
     await editTelegramMessage(chatId, messageId, text, markup, token);
-    return;
+    return true;
   }
 
   if (data === 'adm_diag') {
@@ -178,7 +227,7 @@ async function handle(cq, botService, router = null) {
       ]
     };
     await editTelegramMessage(chatId, messageId, text, markup, token);
-    return;
+    return true;
   }
 
 

@@ -62,12 +62,13 @@ const {
  * @param {string} senderInfo - Sender identifier tag
  * @param {string|null} langCode - Language override code
  * @param {string|null} styleCode - Style/dialect override code
+ * @param {string|null} modelOverride - Explicit model to force (Live Model Tester)
  * @returns {Promise<string>} AI response text
  */
-async function queryBreAIRouter(userContent, history = [], senderInfo = '', langCode = null, styleCode = null) {
+async function queryBreAIRouter(userContent, history = [], senderInfo = '', langCode = null, styleCode = null, modelOverride = null) {
   const chatHandler = require('../../api/chat');
   const cfg = getConfig();
-  const model = cfg.telegramModel || cfg.model || 'mercury-2';
+  const model = modelOverride || cfg.telegramModel || cfg.model || 'mercury-2';
 
   const lastUserMessage = {
     role: 'user',
@@ -546,7 +547,10 @@ async function handleMessage(msg, botService, ctx = null) {
   } catch (err) {
     clearInterval(typingInterval);
     console.error('[TelegramBot] Error querying Bre AI:', err.message);
-    const errorMsg = `⚠️ *Gagal Memproses Permintaan*\n\nTerjadi kendala saat menghubungi engine AI: ${err.message}`;
+    const visionHint = /does not support image|image input|cannot (read|process) image|image_url|vision|mulmodality|multimodal/i.test(err.message);
+    const errorMsg = visionHint
+      ? `🖼️ *Gambar Tidak Didukung*\n\nModel AI yang sedang aktif saat ini tidak mendukung analisis gambar (vision). Silakan kirim deskripsi teks tentang gambar tersebut, atau hubungi admin untuk mengganti model ke yang mendukung gambar (contoh: GPT-4o, Gemini, Claude).`
+      : `⚠️ *Gagal Memproses Permintaan*\n\nTerjadi kendala saat menghubungi engine AI: ${err.message}`;
     await api.sendTelegramMessage(chatId, errorMsg, null, null, token, loadingMsgId);
   }
 }

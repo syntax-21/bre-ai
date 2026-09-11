@@ -101,8 +101,7 @@ async function handle(cq, botService, router = null) {
       maxTokens: 16384,
       autoFailover: true,
       cacheEnabled: false,
-      blacklist: [],
-      clientKeys: []
+      blacklist: []
     };
     saveConfig(defConfig);
     await answerCallback(cq.id, '🔄 Pengaturan berhasil direset ke Default Pabrik!', true, token);

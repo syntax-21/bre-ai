@@ -94,7 +94,7 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, () => {
   console.log('');
-  console.log('  ⚡ Bre AI v3.0 — Ciptaan Amirun Rayan Ariandi');
+  console.log('  ⚡ Bre AI v1.0 — Ciptaan Amirun Rayan Ariandi');
   console.log('  🌐 Buka: http://localhost:' + PORT);
   console.log('');
 

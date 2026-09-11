@@ -4,7 +4,6 @@
 
 let adminToken = '';
 let endpoints = [];
-let clientKeys = [];
 let telegramUsers = [];
 let allLogs = [];
 let metricsTimer = null;
@@ -136,9 +135,9 @@ function restoreFullConfigFromLocalStorage(c) {
     if (!raw) return c;
     const s = JSON.parse(raw);
     if (!s || typeof s !== 'object') return c;
-    const fields = ['systemPrompt','temperature','topP','frequencyPenalty','presencePenalty','maxTokens','forceStream','clientApiKey','upstashRedisUrl','upstashRedisToken','githubToken','githubRepo','githubBranch'];
+    const fields = ['systemPrompt','temperature','topP','frequencyPenalty','presencePenalty','maxTokens','forceStream','upstashRedisUrl','upstashRedisToken','githubToken','githubRepo','githubBranch'];
     fields.forEach(f => { if (s[f] !== undefined && s[f] !== null) c[f] = s[f]; });
-    ['endpoints','clientKeys','blacklist','telegramUsers'].forEach(f => {
+    ['endpoints','blacklist','telegramUsers'].forEach(f => {
       if ((!c[f] || !c[f].length) && s[f] && Array.isArray(s[f]) && s[f].length) c[f] = s[f];
     });
     const tgFields = ['telegramBotToken','telegramOwnerId','telegramDomain','telegramAccessMode','telegramModel','telegramStyle','defaultStyle'];
@@ -173,8 +172,7 @@ async function loadConfig() {
     setVal('cfgMaxTokens', c.maxTokens || 16384);
     const fsRaw = c.forceStream;
     setVal('cfgStream', (fsRaw === true || fsRaw === 'true') ? 'true' : ((fsRaw === false || fsRaw === 'false') ? 'false' : 'auto'));
-    setVal('cfgDefaultStyle', c.defaultStyle || 'santai');
-    setVal('cfgClientKey', c.clientKey || c.clientApiKey || '');
+setVal('cfgDefaultStyle', c.defaultStyle || 'santai');
     setVal('cfgRateMax', c.rateLimitMax || 5);
     setVal('cfgRateWin', c.rateLimitWindow || 30);
 
@@ -201,12 +199,10 @@ async function loadConfig() {
 
 if(data.cloudStorageInfo) updateStorageBadges(data.cloudStorageInfo);
 
-    clientKeys = Array.isArray(c.clientKeys) ? c.clientKeys : [];
-    endpoints = Array.isArray(c.endpoints) ? c.endpoints : [];
+endpoints = Array.isArray(c.endpoints) ? c.endpoints : [];
     renderProviders();
     updateTestModelDropdown();
     if (typeof updateTelegramModelDropdown === 'function') updateTelegramModelDropdown(c.telegramModel);
-    if (typeof renderClientKeys === 'function') renderClientKeys();
     loadTelegramStatus();
   } catch(e) { toast('Error load config: ' + e.message, 'err'); }
 }

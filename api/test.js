@@ -1,4 +1,4 @@
-const { syncCloudConfig, parseKeys, validateClientKey } = require('./_shared');
+const { syncCloudConfig, parseKeys } = require('./_shared');
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -19,12 +19,6 @@ module.exports = async (req, res) => {
   body = body || {};
 
   const cfg = await syncCloudConfig();
-  if (cfg.requireAuth) {
-    const authResult = validateClientKey(req.headers?.authorization || req.headers?.x_bre_auth, cfg);
-    if (!authResult.valid) {
-      return res.status(401).json({ error: 'Admin authentication required for provider testing.' });
-    }
-  }
 
   // BATCH TEST ALL PROVIDERS
   if (body.testAll) {

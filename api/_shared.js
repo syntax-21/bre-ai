@@ -44,8 +44,6 @@ const DEFAULT_CONFIG = {
   cacheEnabled: false,
   cacheTTL: 3600,
   blacklist: [],
-  clientKeys: [],
-  requireAuth: false,
   chatRateLimitMax: 30,
   chatRateLimitWindow: 60,
   webhookSecret: '',
@@ -808,28 +806,6 @@ function clearResponseCache() {
   responseCache.clear();
 }
 
-function validateClientKey(authHeader, cfg) {
-  if (!authHeader) return { valid: false, error: 'API Key tidak disertakan' };
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : authHeader.trim();
-  if (!token) return { valid: false, error: 'API Key kosong' };
-  
-  if (cfg.clientKey && token === cfg.clientKey.trim()) {
-    return { valid: true, name: 'Master Client Key' };
-  }
-  
-  if (Array.isArray(cfg.clientKeys)) {
-    const found = cfg.clientKeys.find(k => k.key === token);
-    if (found) {
-      if (found.active === false || found.enabled === false) {
-        return { valid: false, error: 'API Key dinonaktifkan (Revoked)' };
-      }
-      return { valid: true, name: found.label || found.name || 'Client Key' };
-    }
-  }
-  
-  return { valid: false, error: 'API Key tidak valid' };
-}
-
 function parseKeys(raw) {
   if (!raw) return [];
   if (Array.isArray(raw)) return raw.map(k => String(k).trim()).filter(Boolean);
@@ -909,17 +885,9 @@ function getConfig() {
     } catch (e) {}
   }
 
-  if (process.env.BRE_REQUIRE_AUTH === 'true' || process.env.BRE_REQUIRE_AUTH === '1') cfg.requireAuth = true;
   if (process.env.BRE_CHAT_RATE_MAX) cfg.chatRateLimitMax = parseInt(process.env.BRE_CHAT_RATE_MAX) || 30;
   if (process.env.BRE_CHAT_RATE_WINDOW) cfg.chatRateLimitWindow = parseInt(process.env.BRE_CHAT_RATE_WINDOW) || 60;
   if (process.env.BRE_WEBHOOK_SECRET) cfg.telegramWebhookSecret = process.env.BRE_WEBHOOK_SECRET.trim();
-  if (process.env.BRE_CLIENT_KEY) {
-    const ck = process.env.BRE_CLIENT_KEY.trim();
-    if (!cfg.clientKeys) cfg.clientKeys = [];
-    if (!cfg.clientKeys.some(k => k.key === ck)) {
-      cfg.clientKeys.push({ key: ck, label: 'Env Client Key', active: true, role: 'user' });
-    }
-  }
 
   memConfig = cfg;
   return cfg;
@@ -1027,10 +995,6 @@ async function saveConfig(updated) {
   if (updated.blacklist !== undefined) {
     merged.blacklist = Array.isArray(updated.blacklist) ? updated.blacklist : (typeof updated.blacklist === 'string' ? updated.blacklist.split(/[\n,]+/).map(w=>w.trim()).filter(Boolean) : []);
   }
-  if (updated.clientKeys !== undefined && Array.isArray(updated.clientKeys)) {
-    merged.clientKeys = updated.clientKeys;
-  }
-  if (updated.requireAuth !== undefined) merged.requireAuth = Boolean(updated.requireAuth);
   if (updated.chatRateLimitMax !== undefined) merged.chatRateLimitMax = parseInt(updated.chatRateLimitMax) || 30;
   if (updated.chatRateLimitWindow !== undefined) merged.chatRateLimitWindow = parseInt(updated.chatRateLimitWindow) || 60;
   if (updated.telegramWebhookSecret !== undefined) merged.telegramWebhookSecret = String(updated.telegramWebhookSecret).trim();
@@ -1534,7 +1498,6 @@ module.exports = {
   getCachedResponse,
   setCachedResponse,
   clearResponseCache,
-  validateClientKey,
   fetchAvailableModels,
   testSingleModel,
   getNextRoundRobinIndex,
