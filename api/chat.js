@@ -50,7 +50,8 @@ module.exports = async (req, res) => {
   consumeChatRate(ip);
 
   // 3. Extract Custom Provider and Model Routing
-  const requestedProvider = (req.headers['x-custom-provider'] || body.provider || '').trim();
+  const rawCustomProv = (req.headers['x-custom-provider'] || '').trim();
+  const requestedProvider = (rawCustomProv && rawCustomProv !== 'Telegram Bot' ? rawCustomProv : (body.provider || '')).trim();
   const requestedModel = (req.headers['x-custom-model'] || body.model || body.customModel || cfg.model || '').trim();
 
   // 4. Build and sanitize dialogue messages

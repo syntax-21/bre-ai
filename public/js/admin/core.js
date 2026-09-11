@@ -45,7 +45,10 @@ function switchTab(tabId, btn) {
   }
   if (tabId === 'tabDetails') load9RouterDetails();
   if (tabId === 'tabTester') updateTestModelDropdown();
-  if (tabId === 'tabTelegram') loadTelegramStatus();
+  if (tabId === 'tabTelegram') {
+    loadTelegramStatus();
+    if (typeof updateTelegramModelDropdown === 'function') updateTelegramModelDropdown(document.getElementById('cfgTelegramModel')?.value);
+  }
   if (tabId === 'tabCloud') loadCloudStorageStatus();
 }
 

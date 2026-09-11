@@ -68,7 +68,8 @@ const {
 async function queryBreAIRouter(userContent, history = [], senderInfo = '', langCode = null, styleCode = null, modelOverride = null) {
   const chatHandler = require('../../api/chat');
   const cfg = getConfig();
-  const model = modelOverride || cfg.telegramModel || cfg.model || 'mercury-2';
+  const targetProv = modelOverride ? '' : (cfg.telegramModel || '');
+  const model = modelOverride || cfg.telegramModel || cfg.model || 'auto';
 
   const lastUserMessage = {
     role: 'user',
@@ -101,11 +102,12 @@ async function queryBreAIRouter(userContent, history = [], senderInfo = '', lang
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      'x-custom-provider': 'Telegram Bot',
+      'x-client-channel': 'Telegram Bot',
       'x-custom-style': effectiveStyle,
       'x-custom-language': effectiveLang
     },
     body: {
+      provider: targetProv,
       model: model,
       style: effectiveStyle,
       language: effectiveLang,

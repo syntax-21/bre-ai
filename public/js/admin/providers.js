@@ -1,4 +1,4 @@
-﻿// ================================================================
+// ================================================================
 // admin/providers.js - Provider cards, ping, detect models
 // ================================================================
 
@@ -80,6 +80,7 @@ function renderProviders() {
     </div>
   `).join('');
   updateTopActiveEndpointsCount();
+  if (typeof updateTelegramModelDropdown === 'function') updateTelegramModelDropdown(document.getElementById('cfgTelegramModel')?.value);
 }
 
 function toggleKeyMask(i) {

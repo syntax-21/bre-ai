@@ -686,20 +686,20 @@
       <div class="card">
         <div class="card-header" style="margin-bottom: 12px;">
           <div>
-            <div class="card-title">🛡️ Mode Akses, Gaya Bahasa &amp; Bahasa Bot Telegram</div>
-            <div class="card-subtitle">Atur hak akses, gaya bahasa respons, dan bahasa default.</div>
+            <div class="card-title">🛡️ Mode Akses, Gaya Bahasa, Bahasa &amp; Provider Bot Telegram</div>
+            <div class="card-subtitle">Atur hak akses, gaya bahasa respons, bahasa default, dan provider AI default.</div>
           </div>
         </div>
 
         <div class="grid-2">
-          <div class="form-group">
+          <div class="form-group" style="margin-bottom: 0;">
             <label class="form-label">Mode Akses Bot Telegram</label>
             <select id="cfgTelegramAccessMode" class="input-select">
               <option value="public">🟢 Terbuka untuk Publik (Semua Pengguna Bisa Chat)</option>
               <option value="diizinkan">🔒 Khusus Pengguna Diizinkan (Akses Terbatas)</option>
             </select>
           </div>
-          <div class="form-group">
+          <div class="form-group" style="margin-bottom: 0;">
             <label class="form-label">🎭 Gaya Bahasa Respons Bot Telegram</label>
             <select id="cfgTelegramStyle" class="input-select">
               <option value="santai">✨ Santai &amp; Friendly (Hangat, Ceria, Ramah)</option>
@@ -713,29 +713,27 @@
               <option value="standar">🤖 Standar Bre AI (Netral)</option>
             </select>
           </div>
-        </div>
-
-        <div class="form-group" style="margin-top: 10px; margin-bottom: 0;">
-          <label class="form-label">🌐 Bahasa Default Respons Bot Telegram</label>
-          <select id="cfgTelegramLanguage" class="input-select">
-            <option value="id">🇮🇩 Bahasa Indonesia (Default)</option>
-            <option value="en">🇺🇸 English</option>
-            <option value="ja">🇯🇵 日本語 (Japanese)</option>
-            <option value="zh">🇨🇳 中文 (Chinese)</option>
-            <option value="es">🇪🇸 Español (Spanish)</option>
-            <option value="ar">🇸🇦 العربية (Arabic)</option>
-            <option value="de">🇩🇪 Deutsch (German)</option>
-            <option value="fr">🇫🇷 Français (French)</option>
-            <option value="ru">🇷🇺 Русский (Russian)</option>
-            <option value="ko">🇰🇷 한국어 (Korean)</option>
-          </select>
-        </div>
-
-        <div class="form-group" style="margin-top: 10px; margin-bottom: 0;">
-          <label class="form-label">🤖 Model AI Bot Telegram</label>
-          <select id="cfgTelegramModel" class="input" style="width:100%;">
-            <option value="">🌐 Otomatis ikuti Router AI</option>
-          </select>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label">🌐 Bahasa Default Respons Bot Telegram</label>
+            <select id="cfgTelegramLanguage" class="input-select">
+              <option value="id">🇮🇩 Bahasa Indonesia (Default)</option>
+              <option value="en">🇺🇸 English</option>
+              <option value="ja">🇯🇵 日本語 (Japanese)</option>
+              <option value="zh">🇨🇳 中文 (Chinese)</option>
+              <option value="es">🇪🇸 Español (Spanish)</option>
+              <option value="ar">🇸🇦 العربية (Arabic)</option>
+              <option value="de">🇩🇪 Deutsch (German)</option>
+              <option value="fr">🇫🇷 Français (French)</option>
+              <option value="ru">🇷🇺 Русский (Russian)</option>
+              <option value="ko">🇰🇷 한국어 (Korean)</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label">⚡ Provider AI Bot Telegram</label>
+            <select id="cfgTelegramModel" class="input-select">
+              <option value="auto">🌐 Otomatis ikuti Router AI (Auto)</option>
+            </select>
+          </div>
         </div>
       </div>
 

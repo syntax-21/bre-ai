@@ -1,4 +1,4 @@
-﻿// ================================================================
+// ================================================================
 // admin/telegram.js - Telegram Bot Controller
 // ================================================================
 
@@ -11,27 +11,45 @@ function toggleTelegramTokenMask() {
   btn.textContent = isPassword ? '🔒 Sembunyikan Token' : '👁️ Tampilkan Token';
 }
 
-function updateTelegramModelDropdown(selectedModel) {
+function updateTelegramModelDropdown(selectedVal) {
   const sel = document.getElementById('cfgTelegramModel');
   if (!sel) return;
-  const modelOptions = new Map();
-  endpoints.forEach(ep => {
-    if (!Array.isArray(ep.models) || !ep.models.length) return;
-    ep.models.forEach(m => {
-      const key = String(m).trim();
-      if (!key) return;
-      if (!modelOptions.has(key)) modelOptions.set(key, new Set());
-      if (ep.name) modelOptions.get(key).add(String(ep.name).trim());
+
+  const currentVal = (selectedVal !== undefined && selectedVal !== null) ? String(selectedVal).trim() : (sel.value || 'auto');
+  
+  const provList = [];
+  const seenNames = new Set();
+
+  (endpoints || []).forEach((ep, idx) => {
+    const rawName = (ep.name || '').trim() || `Provider #${idx + 1}`;
+    if (seenNames.has(rawName.toLowerCase())) return;
+    seenNames.add(rawName.toLowerCase());
+
+    const isInactive = ep.status === false || ep.enabled === false;
+    const isSelected = !!currentVal && (
+      currentVal.toLowerCase() === rawName.toLowerCase() ||
+      (Array.isArray(ep.models) && ep.models.some(m => String(m).trim().toLowerCase() === currentVal.toLowerCase()))
+    );
+
+    provList.push({
+      name: rawName,
+      isInactive,
+      isSelected
     });
   });
-  if (!modelOptions.size) modelOptions.set('auto', new Set());
-  modelOptions.delete('auto');
-  sel.innerHTML = '<option value="auto">🌐 Otomatis ikuti Router AI (Auto)</option>' +
-    Array.from(modelOptions.entries()).map(([m, provs]) => {
-      const selAttr = m === selectedModel ? 'selected' : '';
-      const label = provs.size ? `${m} (${Array.from(provs).join(', ')})` : m;
-      return `<option value="${escapeHtml(m)}" ${selAttr}>${escapeHtml(label)}</option>`;
-    }).join('');
+
+  const hasSelectedProv = provList.some(p => p.isSelected);
+  const isAutoSelected = !currentVal || currentVal === 'auto' || (!hasSelectedProv && currentVal === '');
+
+  let optionsHtml = `<option value="auto" ${isAutoSelected ? 'selected' : ''}>🌐 Otomatis ikuti Router AI (Auto)</option>`;
+
+  provList.forEach(p => {
+    const selAttr = (!isAutoSelected && p.isSelected) ? 'selected' : '';
+    const statusNote = p.isInactive ? ' (Nonaktif)' : '';
+    optionsHtml += `<option value="${escapeHtml(p.name)}" ${selAttr}>⚡ ${escapeHtml(p.name)}${statusNote}</option>`;
+  });
+
+  sel.innerHTML = optionsHtml;
 }
 
 async function loadTelegramStatus() {
@@ -58,6 +76,7 @@ function saveTelegramToLocalStorage() {
     const fields = { bre_tg_token: 'cfgTelegramToken', bre_tg_owner: 'cfgTelegramOwner', bre_tg_domain: 'cfgTelegramDomain', bre_tg_mode: 'cfgTelegramAccessMode', bre_tg_style: 'cfgTelegramStyle' };
     Object.entries(fields).forEach(([key, id]) => { const val = document.getElementById(id)?.value?.trim(); if(val) localStorage.setItem(key, val); });
     localStorage.setItem('bre_tg_lang', document.getElementById('cfgTelegramLanguage')?.value || 'id');
+    localStorage.setItem('bre_tg_provider', document.getElementById('cfgTelegramModel')?.value || 'auto');
   } catch(e){}
 }
 
@@ -74,6 +93,9 @@ function restoreTelegramFromLocalStorage() {
     const selLng = document.getElementById('cfgTelegramLanguage');
     const lng = localStorage.getItem('bre_tg_lang');
     if(selLng && lng) selLng.value = lng;
+    const prov = localStorage.getItem('bre_tg_provider');
+    const selProv = document.getElementById('cfgTelegramModel');
+    if(selProv && prov) selProv.value = prov;
   } catch(e){}
 }
 
