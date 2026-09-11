@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "node tests/verify_diagnostics.js && node tests/verify_all_updates.js && node tests/verify_forward_and_files.js && node tests/verify_language_switch.js && node tests/verify_telegram_memory.js && node tests/verify_telegram_modular.js && node tests/verify_telegram_excel_flow.js && node tests/verify_video_audio_telemetry.js"
+    "test": "node tests/verify_diagnostics.js && node tests/verify_all_updates.js && node tests/verify_forward_and_files.js && node tests/verify_language_switch.js && node tests/verify_telegram_memory.js && node tests/verify_telegram_modular.js && node tests/verify_telegram_excel_flow.js && node tests/test-9router-and-math.js && node tests/verify_api_integration.js"
   },
   "engines": {
     "node": ">=18.0.0"
