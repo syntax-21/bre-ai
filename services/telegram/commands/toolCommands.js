@@ -239,6 +239,10 @@ async function handle(ctx) {
       `🧠 \`/think [masalah]\` — Penalaran analitis mendalam (Deep Reasoning)\n` +
       `🌐 \`/translate [bahasa] [teks]\` — Terjemahan bahasa & perbaikan grammar\n` +
       `⚡ \`/health\` — Monitor latensi & kesehatan seluruh provider AI\n` +
+      `⏰ \`/remind\` — Atur pengingat otomatis\n` +
+      `📊 \`/mystats\` — Statistik penggunaan\n` +
+      `🎤 \`/tts\` — Konversi teks ke suara\n` +
+      `🖼️ \`/image\` — Generate gambar custom\n` +
       `📄 \`/file [nama_file.ext]\` — Buat berkas & unduhan fisik otomatis\n\n` +
       `_Contoh cepat:_\n` +
       `• \`/search harga saham nvidia hari ini\`\n` +
@@ -477,6 +481,154 @@ async function handle(ctx) {
       await api.sendTelegramMessage(chatId, answer, null, null, token);
     } catch (err) {
       await api.sendTelegramMessage(chatId, `⚠️ Gagal menerjemahkan: ${err.message}`, null, null, token);
+    }
+    return true;
+  }
+
+
+  // /remind [pesan] dalam X menit or /ingatkan [pesan] dalam X menit
+  if (lowerText.startsWith('/remind') || lowerText.startsWith('/ingatkan')) {
+    const reminderManager = require('../reminderManager');
+    const argParts = text.replace(/^\/remind\S*\s*/i, '').replace(/^\/ingatkan\S*\s*/i, '').trim();
+    const match = argParts.match(/(.+?)\s+(?:dalam|dalam waktu|in)\s+(\d+)\s*(menit|minute|m|jam|hour|h)\s*$/i);
+    if (!match) {
+      await api.sendTelegramMessage(chatId, `⏰ *Cara pakai:*\n\`/remind [pesan] dalam X menit\`\n\n*Contoh:*\n\`/remind Rapat tim dalam 30 menit\`\n\`/remind Check email dalam 2 jam\``, null, null, token);
+      return true;
+    }
+    const message = match[1].trim();
+    let delayMinutes = parseInt(match[2]) || 5;
+    const unit = match[3].toLowerCase();
+    if (unit === 'jam' || unit === 'hour' || unit === 'h') delayMinutes *= 60;
+    if (delayMinutes > 1440) delayMinutes = 1440;
+    const id = reminderManager.addReminder(chatId, message, delayMinutes, senderName);
+    await api.sendTelegramMessage(chatId, `✅ *Pengingat diaktifkan!*\n\n📝 *Pesan:* ${message}\n⏰ *Waktu:* dalam ${delayMinutes} menit\n🆔 ID: \`${id.replace('rem_', '')}\``, null, null, token);
+    return true;
+  }
+
+  // /listremind or /daftaringat
+  if (lowerText === '/listremind' || lowerText === '/daftaringat') {
+    const reminderManager = require('../reminderManager');
+    const list = reminderManager.getUserReminders(chatId);
+    if (list.length === 0) {
+      await api.sendTelegramMessage(chatId, '📭 Tidak ada pengingat aktif.', null, null, token);
+      return true;
+    }
+    const lines = list.map((r, i) => {
+      const minsLeft = Math.max(0, Math.ceil((r.dueAt - Date.now()) / 60000));
+      return `${i + 1}. ⏰ Dalam ${minsLeft}m — ${r.message.slice(0, 50)}${r.message.length > 50 ? '...' : ''}\n   ID: \`${r.id.replace('rem_', '')}\``;
+    });
+    await api.sendTelegramMessage(chatId, `📋 *Daftar Pengingat Aktif (${list.length}):*\n\n${lines.join('\n\n')}\n\n_Catatan: Ketik /cancelreminder [ID] untuk membatalkan._`, null, null, token);
+    return true;
+  }
+
+  // /cancelreminder [id] or /batalkan [id]
+  if (lowerText.startsWith('/cancelreminder') || lowerText.startsWith('/batalkan')) {
+    const reminderManager = require('../reminderManager');
+    const remId = text.replace(/^\/cancelreminder\S*\s*/i, '').replace(/^\/batalkan\S*\s*/i, '').trim();
+    if (!remId) {
+      await api.sendTelegramMessage(chatId, '❌ Ketik ID pengingat yang ingin dibatalkan. Lihat /listremind', null, null, token);
+      return true;
+    }
+    const fullId = 'rem_' + remId;
+    if (reminderManager.cancelReminder(fullId, chatId)) {
+      await api.sendTelegramMessage(chatId, '✅ Pengingat berhasil dibatalkan!', null, null, token);
+    } else {
+      await api.sendTelegramMessage(chatId, '❌ Pengingat tidak ditemukan atau sudah terkirim.', null, null, token);
+    }
+    return true;
+  }
+
+  // /mystats or /statistik
+  if (lowerText === '/mystats' || lowerText === '/statistik') {
+    const { getChatHistory } = require('../sessionManager');
+    const history = getChatHistory(chatId);
+    const totalMessages = history.length;
+    const userMessages = history.filter(m => m.role === 'user').length;
+    const assistantMessages = history.filter(m => m.role === 'assistant').length;
+    const reminderManager = require('../reminderManager');
+    const activeReminders = reminderManager.getUserReminders(chatId).length;
+
+    const statsText = `📊 *Statistik Bre AI Anda*\n\n` +
+      `💬 *Total Pesan:* ${totalMessages}\n` +
+      `👤 *Pesan dari Anda:* ${userMessages}\n` +
+      `🤖 *Balasan Bre AI:* ${assistantMessages}\n` +
+      `⏰ *Pengingat Aktif:* ${activeReminders}\n` +
+      `📅 *Session aktif sejak:* ${history.length > 0 ? 'Aktif' : 'Belum ada percakapan'}`;
+
+    await api.sendTelegramMessage(chatId, statsText, null, null, token);
+    return true;
+  }
+
+  // /tts [teks] or /suarakan [teks]
+  if (lowerText.startsWith('/tts') || lowerText.startsWith('/suarakan')) {
+    const ttsText = text.replace(/^\/tts\S*\s*/i, '').replace(/^\/suarakan\S*\s*/i, '').trim();
+    if (!ttsText) {
+      await api.sendTelegramMessage(chatId, '🎤 *Cara pakai:*\n\`/tts [teks yang ingin dijadikan suara]\`\n\n_Pastikan endpoint TTS sudah dikonfigurasi di admin panel._', null, null, token);
+      return true;
+    }
+    const cfg = getConfig();
+    if (cfg.ttsEndpoint && cfg.ttsKey) {
+      await api.sendTelegramMessage(chatId, '⏳ Menghasilkan suara...', null, null, token);
+      try {
+        const resp = await fetch(cfg.ttsEndpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cfg.ttsKey}` },
+          body: JSON.stringify({ model: cfg.ttsModel || 'tts-1', input: ttsText.slice(0, 4096), voice: 'alloy', response_format: 'mp3' }),
+          signal: AbortSignal.timeout(30000)
+        });
+        if (resp.ok) {
+          const buf = Buffer.from(await resp.arrayBuffer());
+          await api.sendTelegramDocument(chatId, 'speech.mp3', buf, '🎤 Hasil TTS', token);
+        } else {
+          await api.sendTelegramMessage(chatId, '❌ Gagal menghasilkan suara. Periksa konfigurasi TTS.', null, null, token);
+        }
+      } catch (e) {
+        await api.sendTelegramMessage(chatId, `❌ Error TTS: ${e.message}`, null, null, token);
+      }
+    } else {
+      await api.sendTelegramMessage(chatId, '⚙️ Fitur TTS belum dikonfigurasi.\n\nUntuk mengaktifkan, tambahkan `ttsEndpoint` dan `ttsKey` di config admin.', null, null, token);
+    }
+    return true;
+  }
+
+  // /image [prompt] or /gambar [prompt]
+  if (lowerText.startsWith('/image') || lowerText.startsWith('/gambar')) {
+    const prompt = text.replace(/^\/image\S*\s*/i, '').replace(/^\/gambar\S*\s*/i, '').trim();
+    if (!prompt) {
+      await api.sendTelegramMessage(chatId, '🖼️ *Cara pakai:*\n\`/image [deskripsi gambar]\`\n\n_Pastikan endpoint image generation sudah dikonfigurasi di admin._', null, null, token);
+      return true;
+    }
+    const cfg = getConfig();
+    if (cfg.imageEndpoint && cfg.imageKey) {
+      await api.sendTelegramMessage(chatId, '🎨 Sedang membuat gambar...', null, null, token);
+      try {
+        const resp = await fetch(cfg.imageEndpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cfg.imageKey}` },
+          body: JSON.stringify({ model: cfg.imageModel || 'dall-e-3', prompt: prompt.slice(0, 1000), n: 1, size: '1024x1024' }),
+          signal: AbortSignal.timeout(60000)
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          const imageUrl = data.data?.[0]?.url || data.data?.[0]?.b64_json;
+          if (imageUrl) {
+            if (imageUrl.startsWith('http')) {
+              await api.sendTelegramPhoto(chatId, imageUrl, `🖼️ *${prompt.slice(0, 100)}*`, token);
+            } else {
+              const imgBuf = Buffer.from(imageUrl, 'base64');
+              await api.sendTelegramDocument(chatId, 'generated_image.png', imgBuf, `🖼️ *${prompt.slice(0, 100)}*`, token);
+            }
+          } else {
+            await api.sendTelegramMessage(chatId, '❌ Tidak ada gambar yang dihasilkan.', null, null, token);
+          }
+        } else {
+          await api.sendTelegramMessage(chatId, '❌ Gagal membuat gambar. Periksa konfigurasi.', null, null, token);
+        }
+      } catch (e) {
+        await api.sendTelegramMessage(chatId, `❌ Error: ${e.message}`, null, null, token);
+      }
+    } else {
+      await api.sendTelegramMessage(chatId, '⚙️ Fitur Image Generation belum dikonfigurasi.\n\nUntuk mengaktifkan, tambahkan `imageEndpoint` dan `imageKey` di config admin.', null, null, token);
     }
     return true;
   }

@@ -45,10 +45,12 @@ function parseNum(val, def = 0) {
 
 function generateRandomKey() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let rand = 'sk-bre-';
-  for (let i = 0; i < 32; i++) rand += chars.charAt(Math.floor(Math.random() * chars.length));
+  let result = 'bre_';
+  for (let i = 0; i < 32; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
   const ckEl = document.getElementById('cfgClientKey');
-  if (ckEl) ckEl.value = rand;
+  if (ckEl) ckEl.value = result;
   toast('Master API Key baru di-generate!', 'ok');
 }
 
@@ -65,13 +67,4 @@ function renderClientKeys() {
       <span style="font-size:12px; color:#94a3b8;">${k.label || ('Key #' + (i+1))}</span>
     </div>
   `).join('');
-}
-
-function generateRandomKey() {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let rand = 'sk-bre-';
-  for (let i = 0; i < 32; i++) rand += chars.charAt(Math.floor(Math.random() * chars.length));
-  const ckEl = document.getElementById('cfgClientKey');
-  if (ckEl) ckEl.value = rand;
-  toast('Master API Key baru di-generate!', 'ok');
 }

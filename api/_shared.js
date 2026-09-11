@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
 
 const CONFIG_PATH = path.join(process.cwd(), 'config.json');
 const TMP_CONFIG_PATH = path.join(os.tmpdir(), 'bre_config.json');
@@ -8,6 +9,7 @@ let memConfig = null;
 let lastCloudSync = 0;
 const CLOUD_SYNC_TTL_MS = 15000; // 15 detik cache memori agar tidak spam API
 const loginAttempts = new Map();
+const chatRateBuckets = new Map();
 
 const DEFAULT_CONFIG = {
   endpoints: [
@@ -43,6 +45,10 @@ const DEFAULT_CONFIG = {
   cacheTTL: 3600,
   blacklist: [],
   clientKeys: [],
+  requireAuth: false,
+  chatRateLimitMax: 30,
+  chatRateLimitWindow: 60,
+  webhookSecret: '',
   defaultStyle: 'santai',
   telegramStyle: 'santai',
   telegramEnabled: false,
@@ -304,9 +310,10 @@ const MODEL_PRICING = {
 function calculateCost(modelName, inTok = 0, outTok = 0, cacheTok = 0) {
   const m = String(modelName || '').toLowerCase();
   let pricing = MODEL_PRICING['default'];
-  for (const [key, p] of Object.entries(MODEL_PRICING)) {
+  const sortedKeys = Object.keys(MODEL_PRICING).sort((a, b) => b.length - a.length);
+  for (const key of sortedKeys) {
     if (m.includes(key.toLowerCase())) {
-      pricing = p;
+      pricing = MODEL_PRICING[key];
       break;
     }
   }
@@ -787,6 +794,10 @@ function getCachedResponse(key) {
 }
 
 function setCachedResponse(key, data, ttlSeconds = 3600) {
+  if (responseCache.size > 500) {
+    const oldest = responseCache.keys().next().value;
+    responseCache.delete(oldest);
+  }
   responseCache.set(key, {
     data,
     expiresAt: Date.now() + (ttlSeconds * 1000)
@@ -801,10 +812,6 @@ function validateClientKey(authHeader, cfg) {
   if (!authHeader) return { valid: false, error: 'API Key tidak disertakan' };
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : authHeader.trim();
   if (!token) return { valid: false, error: 'API Key kosong' };
-  
-  if (cfg.adminPassword && token === cfg.adminPassword.trim()) {
-    return { valid: true, name: 'Admin Master' };
-  }
   
   if (cfg.clientKey && token === cfg.clientKey.trim()) {
     return { valid: true, name: 'Master Client Key' };
@@ -902,6 +909,18 @@ function getConfig() {
     } catch (e) {}
   }
 
+  if (process.env.BRE_REQUIRE_AUTH === 'true' || process.env.BRE_REQUIRE_AUTH === '1') cfg.requireAuth = true;
+  if (process.env.BRE_CHAT_RATE_MAX) cfg.chatRateLimitMax = parseInt(process.env.BRE_CHAT_RATE_MAX) || 30;
+  if (process.env.BRE_CHAT_RATE_WINDOW) cfg.chatRateLimitWindow = parseInt(process.env.BRE_CHAT_RATE_WINDOW) || 60;
+  if (process.env.BRE_WEBHOOK_SECRET) cfg.telegramWebhookSecret = process.env.BRE_WEBHOOK_SECRET.trim();
+  if (process.env.BRE_CLIENT_KEY) {
+    const ck = process.env.BRE_CLIENT_KEY.trim();
+    if (!cfg.clientKeys) cfg.clientKeys = [];
+    if (!cfg.clientKeys.some(k => k.key === ck)) {
+      cfg.clientKeys.push({ key: ck, label: 'Env Client Key', active: true, role: 'user' });
+    }
+  }
+
   memConfig = cfg;
   return cfg;
 }
@@ -996,7 +1015,10 @@ async function saveConfig(updated) {
   }
   
   if (updated.topP !== undefined) merged.topP = parseFloat(updated.topP);
-  if (updated.forceStream !== undefined) merged.forceStream = updated.forceStream;
+  if (updated.forceStream !== undefined) {
+    const fs = updated.forceStream;
+    merged.forceStream = (fs === true || fs === 'true' || fs === 'forced') ? true : (fs === false || fs === 'false' || fs === 'disabled') ? false : 'auto';
+  }
   if (updated.rateLimitMax !== undefined) merged.rateLimitMax = parseInt(updated.rateLimitMax) || 5;
   if (updated.rateLimitWindow !== undefined) merged.rateLimitWindow = parseInt(updated.rateLimitWindow) || 30;
   if (updated.autoFailover !== undefined) merged.autoFailover = Boolean(updated.autoFailover);
@@ -1008,6 +1030,10 @@ async function saveConfig(updated) {
   if (updated.clientKeys !== undefined && Array.isArray(updated.clientKeys)) {
     merged.clientKeys = updated.clientKeys;
   }
+  if (updated.requireAuth !== undefined) merged.requireAuth = Boolean(updated.requireAuth);
+  if (updated.chatRateLimitMax !== undefined) merged.chatRateLimitMax = parseInt(updated.chatRateLimitMax) || 30;
+  if (updated.chatRateLimitWindow !== undefined) merged.chatRateLimitWindow = parseInt(updated.chatRateLimitWindow) || 60;
+  if (updated.telegramWebhookSecret !== undefined) merged.telegramWebhookSecret = String(updated.telegramWebhookSecret).trim();
   
   if (updated.defaultStyle !== undefined) merged.defaultStyle = String(updated.defaultStyle).trim();
   if (updated.telegramStyle !== undefined) merged.telegramStyle = String(updated.telegramStyle).trim();
@@ -1254,6 +1280,26 @@ function recordFailedAttempt(ip) {
 
 function clearLoginAttempts(ip) { loginAttempts.delete(ip); }
 
+function checkChatRateLimit(ip) {
+  const now = Date.now();
+  const cfg = getConfig();
+  const max = cfg.chatRateLimitMax || 30;
+  const win = (cfg.chatRateLimitWindow || 60) * 1000;
+  const c = chatRateBuckets.get(ip) || { count: 0, resetAt: now + win };
+  if (now > c.resetAt) { c.count = 0; c.resetAt = now + win; }
+  if (c.count >= max) return { limited: true, retryAfter: Math.ceil((c.resetAt - now) / 1000) };
+  return { limited: false };
+}
+
+function consumeChatRate(ip) {
+  const now = Date.now();
+  const cfg = getConfig();
+  const win = (cfg.chatRateLimitWindow || 60) * 1000;
+  const c = chatRateBuckets.get(ip) || { count: 0, resetAt: now + win };
+  if (now > c.resetAt) { c.count = 1; c.resetAt = now + win; } else c.count++;
+  chatRateBuckets.set(ip, c);
+}
+
 function sanitizeOutput(text) {
   if (!text || typeof text !== 'string') return text;
   let t = text;
@@ -1475,6 +1521,8 @@ module.exports = {
   getCloudStorageInfo,
   parseKeys,
   sanitizeOutput,
+  checkChatRateLimit,
+  consumeChatRate,
   checkRateLimit,
   recordFailedAttempt,
   clearLoginAttempts,

@@ -1260,12 +1260,12 @@ function renderChatList() {
 function renderChatItem(c) {
   const isPinned = !!c.pinned;
   return `
-    <div class="citem ${activeChat?.id === c.id ? 'active' : ''} ${isPinned ? 'pinned' : ''}" onclick="switchChat('${c.id}')">
+    <div class="citem ${activeChat?.id === c.id ? 'active' : ''} ${isPinned ? 'pinned' : ''}" onclick="switchChat('${esc(c.id)}')">
       <span class="ctitle">${esc(c.title || 'Conversation')}</span>
       <div class="cactions">
-        <button class="pin-btn ${isPinned ? 'active' : ''}" onclick="togglePinChat('${c.id}', event)" title="${isPinned ? 'Unpin' : 'Pin'}">📌</button>
-        <button onclick="renameChat('${c.id}', event)" title="Rename">✎</button>
-        <button onclick="deleteChat('${c.id}', event)" title="Delete">×</button>
+        <button class="pin-btn ${isPinned ? 'active' : ''}" onclick="togglePinChat('${esc(c.id)}', event)" title="${isPinned ? 'Unpin' : 'Pin'}">📌</button>
+        <button onclick="renameChat('${esc(c.id)}', event)" title="Rename">✎</button>
+        <button onclick="deleteChat('${esc(c.id)}', event)" title="Delete">×</button>
       </div>
     </div>`;
 }
@@ -1686,7 +1686,7 @@ function renderLatexAndMarkdown(text) {
   let html = '';
   if (window.marked && typeof window.marked.parse === 'function') {
     try {
-      html = window.marked.parse(str);
+      html = window.DOMPurify ? DOMPurify.sanitize(window.marked.parse(str), { ADD_ATTR: ['target', 'class'] }) : window.marked.parse(str);
     } catch (e) {
       html = esc(str).replace(/\n/g, '<br>');
     }
@@ -1708,7 +1708,7 @@ function renderLatexAndMarkdown(text) {
     const codeSlot = `__BRE_CODE_SLOT_${idx}__`;
     let parsedCode = '';
     if (window.marked && typeof window.marked.parse === 'function') {
-      try { parsedCode = window.marked.parse(codeSnippet); } catch(e) { parsedCode = `<pre><code>${esc(codeSnippet)}</code></pre>`; }
+      try { parsedCode = window.DOMPurify ? DOMPurify.sanitize(window.marked.parse(codeSnippet)) : window.marked.parse(codeSnippet); } catch(e) { parsedCode = `<pre><code>${esc(codeSnippet)}</code></pre>`; }
     } else {
       parsedCode = `<pre><code>${esc(codeSnippet)}</code></pre>`;
     }
@@ -2247,7 +2247,7 @@ async function executeBotGeneration(targetBotIdx = null, searchResults = []) {
         buf += dec.decode(value, { stream: true });
         const lines = buf.split('\n');
         buf = lines.pop();
-        for (const line of lines) {
+for (const line of lines) {
           const t = line.trim();
           if (!t || t === 'data: [DONE]') continue;
           if (t.startsWith('data: ')) {
@@ -2257,11 +2257,35 @@ async function executeBotGeneration(targetBotIdx = null, searchResults = []) {
                 activeChat.msgs[botIdx].isTyping = false;
                 if (d.reasoning_content) {
                   const c = activeChat.msgs[botIdx].content;
-                  activeChat.msgs[botIdx].content = c.startsWith('<think>') ? c + d.reasoning_content : '<think>' + d.reasoning_content;
+                  activeChat.msgs[botIdx].content = c.startsWith(' thinking') ? c + d.reasoning_content : ' thinking' + d.reasoning_content;
                 }
                 if (d.content) {
                   const c = activeChat.msgs[botIdx].content;
-                  activeChat.msgs[botIdx].content += (c.startsWith('<think>') && !c.includes('</think>')) ? '</think>\n\n' + d.content : d.content;
+                  activeChat.msgs[botIdx].content += (c.startsWith(' thinking') && !c.includes(' response')) ? ' response\n\n' + d.content : d.content;
+                }
+                streamUpdate(botIdx);
+              }
+            } catch(e){}
+          }
+        }
+      }
+      if (buf && buf.trim()) {
+        const remainingLines = buf.split('\n');
+        for (const line of remainingLines) {
+          const t = line.trim();
+          if (!t || t === 'data: [DONE]') continue;
+          if (t.startsWith('data: ')) {
+            try {
+              const d = JSON.parse(t.slice(6))?.choices?.[0]?.delta;
+              if (d) {
+                activeChat.msgs[botIdx].isTyping = false;
+                if (d.reasoning_content) {
+                  const c = activeChat.msgs[botIdx].content;
+                  activeChat.msgs[botIdx].content = c.startsWith(' thinking') ? c + d.reasoning_content : ' thinking' + d.reasoning_content;
+                }
+                if (d.content) {
+                  const c = activeChat.msgs[botIdx].content;
+                  activeChat.msgs[botIdx].content += (c.startsWith(' thinking') && !c.includes(' response')) ? ' response\n\n' + d.content : d.content;
                 }
                 streamUpdate(botIdx);
               }
@@ -2447,7 +2471,7 @@ function toast(msg, type='info') {
   document.getElementById('toastHub').appendChild(t);
   setTimeout(() => { t.style.opacity = '0'; setTimeout(()=>t.remove(), 300); }, 3000);
 }
-function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'); }
 function gv(id) { return document.getElementById(id)?.value||''; }
 function sv(id, v) { if(document.getElementById(id)) document.getElementById(id).value=v; }
 
@@ -2533,6 +2557,7 @@ function importJSON(e) {
       data.forEach(c => {
         if (c && Array.isArray(c.msgs)) {
           const exists = chats.some(x => x.id === c.id);
+          c.id = String(c.id || '').replace(/[<>"'&]/g, '').slice(0, 50) || ('c' + Date.now());
           const newId = exists ? ('c' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)) : (c.id || ('c' + Date.now()));
           chats.unshift({
             ...c,

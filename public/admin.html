@@ -153,7 +153,7 @@
     <main class="admin-content" id="mainContent">
 
     <!-- TAB 1: OVERVIEW & TELEMETRY -->
-    <div id="tab9Router" class="tab-content">
+    <div id="tab9Router" class="tab-content" style="display: block;">
       
       <!-- Sub-Nav & Time Filter Header -->
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
@@ -600,6 +600,14 @@
         </div>
       </div>
 
+      <!-- Client API Key Configuration -->
+      <div class="card">
+        <div class="card-title">🔑 Client API Key</div>
+        <div class="card-subtitle" style="margin-bottom: 14px;">Master key untuk akses API dari klien eksternal.</div>
+        <input type="text" id="cfgClientKey" class="input" placeholder="Master Client API Key" style="width:100%;margin-bottom:8px;">
+        <div id="clientKeysList"></div>
+      </div>
+
       <!-- Content Moderation & Keyword Blacklist Card -->
       <div class="card">
         <div class="card-title">🛡️ Content Moderation &amp; Keyword Blacklist</div>
@@ -728,6 +736,13 @@
             <option value="fr">🇫🇷 Français (French)</option>
             <option value="ru">🇷🇺 Русский (Russian)</option>
             <option value="ko">🇰🇷 한국어 (Korean)</option>
+          </select>
+        </div>
+
+        <div class="form-group" style="margin-top: 10px; margin-bottom: 0;">
+          <label class="form-label">🤖 Model AI Bot Telegram</label>
+          <select id="cfgTelegramModel" class="input" style="width:100%;">
+            <option value="">🌐 Otomatis ikuti Router AI</option>
           </select>
         </div>
       </div>

@@ -1,4 +1,4 @@
-﻿// ================================================================
+// ================================================================
 // admin/telemetry.js - Router overview, Topology Canvas, chart, breakdown
 // ================================================================
 
@@ -142,7 +142,8 @@ function startTopologyAnimation() {
   function loop() {
     topologyPulseOffset = (topologyPulseOffset + 0.008) % 1;
     const tabOverview = document.getElementById('tab9Router');
-    if (tabOverview && tabOverview.style.display !== 'none') {
+    const container = document.getElementById('topologyContainer');
+    if (tabOverview && tabOverview.style.display !== 'none' && container && container.clientWidth > 0) {
       renderTopologyGraph();
     }
     topologyAnimFrame = requestAnimationFrame(loop);
@@ -151,7 +152,7 @@ function startTopologyAnimation() {
 }
 
 function zoomTopology(delta) {
-  topologyZoom = Math.max(0.5, Math.min(2.5, topologyZoom + delta));
+  topologyZoom = Math.max(0.6, Math.min(2.0, topologyZoom + delta));
   renderTopologyGraph();
 }
 
@@ -173,22 +174,28 @@ function toggleTopologyFullscreen() {
 
 function renderTopologyGraph() {
   const canvas = document.getElementById('topologyCanvas');
-  if (!canvas) return;
+  const container = document.getElementById('topologyContainer');
+  if (!canvas || !container) return;
   initTopologyVisualizer();
 
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
   const dpr = window.devicePixelRatio || 1;
-  const rect = canvas.getBoundingClientRect();
-  if (rect.width === 0 || rect.height === 0) return;
-
-  canvas.width = rect.width * dpr;
-  canvas.height = rect.height * dpr;
-  ctx.scale(dpr, dpr);
+  const rect = container.getBoundingClientRect();
+  if (!rect.width || !rect.height || rect.width < 50 || rect.height < 50) return;
 
   const w = rect.width;
   const h = rect.height;
+
+  const targetW = Math.round(w * dpr);
+  const targetH = Math.round(h * dpr);
+  if (canvas.width !== targetW || canvas.height !== targetH) {
+    canvas.width = targetW;
+    canvas.height = targetH;
+  }
+  ctx.resetTransform();
+  ctx.scale(dpr, dpr);
 
   try {
     ctx.clearRect(0, 0, w, h);
@@ -235,32 +242,56 @@ function renderTopologyGraph() {
     }
 
     const count = activeProviders.length;
-    const radius = Math.min(w, h) * 0.35 * topologyZoom;
+
+    // Dimensions of Center Router Card
+    const centerW = Math.max(120, 144 * topologyZoom);
+    const centerH = Math.max(42, 50 * topologyZoom);
+
+    // Dimensions of Satellite Provider Cards
+    const nodeW = Math.max(110, 136 * topologyZoom);
+    const nodeH = Math.max(36, 46 * topologyZoom);
+
+    // Spacious Elliptical Radii to avoid ANY overlapping
+    const rx = Math.max(180, Math.min(w * 0.38, (w / 2) - 85)) * topologyZoom;
+    const ry = Math.max(95, Math.min(h * 0.35, (h / 2) - 35)) * topologyZoom;
 
     // Calculate Satellite Provider Node Positions
     const providerNodes = activeProviders.map((prov, i) => {
-      let angle;
+      let x, y;
       if (count === 1) {
-        angle = 0;
+        x = cx + rx * 0.85;
+        y = cy;
       } else if (count === 2) {
-        angle = i === 0 ? -Math.PI / 2 : Math.PI / 2;
+        x = i === 0 ? cx - rx * 0.85 : cx + rx * 0.85;
+        y = cy;
+      } else if (count === 3) {
+        if (i === 0) { x = cx; y = cy - ry * 0.95; }
+        else if (i === 1) { x = cx + rx * 0.85; y = cy + ry * 0.72; }
+        else { x = cx - rx * 0.85; y = cy + ry * 0.72; }
+      } else if (count === 4) {
+        if (i === 0) { x = cx - rx * 0.85; y = cy - ry * 0.8; }
+        else if (i === 1) { x = cx + rx * 0.85; y = cy - ry * 0.8; }
+        else if (i === 2) { x = cx + rx * 0.85; y = cy + ry * 0.8; }
+        else { x = cx - rx * 0.85; y = cy + ry * 0.8; }
       } else {
-        angle = (i / count) * Math.PI * 2 - Math.PI / 2;
+        const angle = (i / count) * Math.PI * 2 - Math.PI / 2;
+        x = cx + Math.cos(angle) * rx;
+        y = cy + Math.sin(angle) * ry;
       }
+
       return {
         name: prov.name || `Provider #${i + 1}`,
         models: (Array.isArray(prov.models) && prov.models.length) ? prov.models : ['default'],
         status: prov.status !== false,
-        x: cx + Math.cos(angle) * radius,
-        y: cy + Math.sin(angle) * radius,
-        angle: angle
+        x,
+        y
       };
     });
 
     // 3. Draw Curved Connecting Links & Animated Flow Pulses
     providerNodes.forEach((node, i) => {
       const isActive = node.status;
-      const strokeColor = isActive ? 'rgba(56, 189, 248, 0.4)' : 'rgba(100, 116, 139, 0.25)';
+      const strokeColor = isActive ? 'rgba(56, 189, 248, 0.45)' : 'rgba(100, 116, 139, 0.25)';
 
       const midX = (cx + node.x) / 2;
       const midY = (cy + node.y) / 2;
@@ -269,7 +300,7 @@ function renderTopologyGraph() {
       ctx.moveTo(cx, cy);
       ctx.quadraticCurveTo(midX, midY, node.x, node.y);
       ctx.strokeStyle = strokeColor;
-      ctx.lineWidth = Math.max(1, 2 * topologyZoom);
+      ctx.lineWidth = Math.max(1.2, 1.8 * topologyZoom);
       ctx.stroke();
 
       // Animated Glowing Packets / Pulses
@@ -279,7 +310,7 @@ function renderTopologyGraph() {
         const py = (1 - pulseT) * (1 - pulseT) * cy + 2 * (1 - pulseT) * pulseT * midY + pulseT * pulseT * node.y;
 
         ctx.beginPath();
-        ctx.arc(px, py, Math.max(2, 4.5 * topologyZoom), 0, Math.PI * 2);
+        ctx.arc(px, py, Math.max(2.5, 4.5 * topologyZoom), 0, Math.PI * 2);
         ctx.fillStyle = '#38bdf8';
         ctx.shadowColor = '#38bdf8';
         ctx.shadowBlur = 10;
@@ -288,77 +319,95 @@ function renderTopologyGraph() {
       }
     });
 
-    // 4. Draw Center Hub Node (Router Core)
-    const centerRadius = Math.max(20, 32 * topologyZoom);
+    // 4. Draw Center Gateway Card (Router Core)
+    const centerLeft = cx - centerW / 2;
+    const centerTop = cy - centerH / 2;
 
     // Pulsing Outer Ripple
-    const ringScale = 1 + (topologyPulseOffset * 0.35);
-    ctx.beginPath();
-    ctx.arc(cx, cy, centerRadius * ringScale, 0, Math.PI * 2);
-    ctx.strokeStyle = `rgba(56, 189, 248, ${0.45 * (1 - topologyPulseOffset)})`;
-    ctx.lineWidth = 2;
+    const ripplePad = 6 + (topologyPulseOffset * 18 * topologyZoom);
+    drawSafeRoundRect(ctx, centerLeft - ripplePad, centerTop - ripplePad, centerW + 2 * ripplePad, centerH + 2 * ripplePad, 12);
+    ctx.strokeStyle = `rgba(56, 189, 248, ${0.4 * (1 - topologyPulseOffset)})`;
+    ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    // Center Solid Core Circle
-    ctx.beginPath();
-    ctx.arc(cx, cy, centerRadius, 0, Math.PI * 2);
-    const coreGrad = ctx.createRadialGradient(cx, cy, 4, cx, cy, centerRadius);
-    coreGrad.addColorStop(0, '#0284c7');
-    coreGrad.addColorStop(1, '#091e3a');
-    ctx.fillStyle = coreGrad;
+    // Center Card Box
+    drawSafeRoundRect(ctx, centerLeft, centerTop, centerW, centerH, 10);
+    const grad = ctx.createLinearGradient(centerLeft, centerTop, centerLeft + centerW, centerTop + centerH);
+    grad.addColorStop(0, '#0f1d32');
+    grad.addColorStop(1, '#08111e');
+    ctx.fillStyle = grad;
     ctx.fill();
-    ctx.strokeStyle = '#38bdf8';
-    ctx.lineWidth = Math.max(1.5, 3 * topologyZoom);
+    ctx.strokeStyle = '#0284c7';
+    ctx.lineWidth = Math.max(1.5, 2 * topologyZoom);
     ctx.stroke();
 
-    // Center Core Label
-    ctx.fillStyle = '#ffffff';
-    ctx.font = `bold ${Math.max(10, 13 * topologyZoom)}px 'Inter', sans-serif`;
+    // Center Card Header Text
+    ctx.fillStyle = '#f8fafc';
+    ctx.font = `bold ${Math.max(10, 12 * topologyZoom)}px 'Inter', sans-serif`;
     ctx.textAlign = 'center';
-    ctx.fillText('⚡ Bre Router', cx, cy + Math.max(3, 4.5 * topologyZoom));
+    ctx.fillText('⚡ Bre Gateway', cx, centerTop + Math.max(15, 18 * topologyZoom));
+
+    // Center Card Routing Mode Pill
+    const routingMode = document.getElementById('cfgRoutingStrategy')?.value || routerOverviewData?.routingStrategy || 'auto';
+    const badgeW = Math.max(56, 70 * topologyZoom);
+    const badgeH = Math.max(13, 16 * topologyZoom);
+    const badgeX = cx - badgeW / 2;
+    const badgeY = centerTop + centerH - badgeH - Math.max(6, 8 * topologyZoom);
+
+    drawSafeRoundRect(ctx, badgeX, badgeY, badgeW, badgeH, 4);
+    ctx.fillStyle = 'rgba(56, 189, 248, 0.16)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.4)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.fillStyle = '#38bdf8';
+    ctx.font = `600 ${Math.max(8.5, 9.5 * topologyZoom)}px 'JetBrains Mono', monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('🔄 ' + routingMode, cx, badgeY + badgeH - Math.max(3, 4 * topologyZoom));
 
     // 5. Draw Satellite Provider Nodes
     providerNodes.forEach(node => {
-      const nodeW = Math.max(80, 130 * topologyZoom);
-      const nodeH = Math.max(32, 48 * topologyZoom);
       const nx = node.x - nodeW / 2;
       const ny = node.y - nodeH / 2;
       const r = Math.max(4, 8 * topologyZoom);
 
       // Node Card Box
       drawSafeRoundRect(ctx, nx, ny, nodeW, nodeH, r);
-      ctx.fillStyle = node.status ? '#0f172a' : '#090d16';
+      ctx.fillStyle = node.status ? '#0b1220' : '#070a12';
       ctx.fill();
-      ctx.strokeStyle = node.status ? '#38bdf8' : '#334155';
+      ctx.strokeStyle = node.status ? '#1e3a5f' : '#1e293b';
       ctx.lineWidth = Math.max(1, 1.5 * topologyZoom);
       ctx.stroke();
 
       // Status Indicator Dot
-      const dotX = nx + Math.max(8, 14 * topologyZoom);
-      const dotY = ny + Math.max(10, 16 * topologyZoom);
-      const dotR = Math.max(2.5, 4 * topologyZoom);
+      const dotX = nx + Math.max(8, 12 * topologyZoom);
+      const dotY = ny + Math.max(10, 15 * topologyZoom);
+      const dotR = Math.max(2.5, 3.5 * topologyZoom);
 
       ctx.beginPath();
       ctx.arc(dotX, dotY, dotR, 0, Math.PI * 2);
-      ctx.fillStyle = node.status ? '#22c55e' : '#ef4444';
-      ctx.shadowColor = node.status ? '#22c55e' : '#ef4444';
+      ctx.fillStyle = node.status ? '#10b981' : '#ef4444';
+      ctx.shadowColor = node.status ? '#10b981' : '#ef4444';
       ctx.shadowBlur = 6;
       ctx.fill();
       ctx.shadowBlur = 0;
 
       // Provider Name Text
       ctx.fillStyle = '#f1f5f9';
-      ctx.font = `600 ${Math.max(9, 12 * topologyZoom)}px 'Inter', sans-serif`;
+      ctx.font = `600 ${Math.max(9, 11 * topologyZoom)}px 'Inter', sans-serif`;
       ctx.textAlign = 'left';
-      const nameToDraw = node.name.length > 13 ? node.name.slice(0, 12) + '..' : node.name;
-      ctx.fillText(nameToDraw, nx + Math.max(16, 24 * topologyZoom), ny + Math.max(12, 19 * topologyZoom));
+      const maxChars = Math.floor(nodeW / (8 * topologyZoom));
+      const nameToDraw = node.name.length > maxChars ? node.name.slice(0, maxChars - 2) + '..' : node.name;
+      ctx.fillText(nameToDraw, nx + Math.max(16, 22 * topologyZoom), ny + Math.max(11, 17 * topologyZoom));
 
       // Primary Model Badge Text
       ctx.fillStyle = '#38bdf8';
-      ctx.font = `500 ${Math.max(8, 10 * topologyZoom)}px 'JetBrains Mono', monospace`;
+      ctx.font = `500 ${Math.max(8, 9.5 * topologyZoom)}px 'JetBrains Mono', monospace`;
       const primaryModel = node.models[0] || 'default';
-      const modelToDraw = primaryModel.length > 16 ? primaryModel.slice(0, 15) + '..' : primaryModel;
-      ctx.fillText(modelToDraw, nx + Math.max(8, 12 * topologyZoom), ny + Math.max(22, 36 * topologyZoom));
+      const modelMaxChars = Math.floor(nodeW / (7.5 * topologyZoom));
+      const modelToDraw = primaryModel.length > modelMaxChars ? primaryModel.slice(0, modelMaxChars - 2) + '..' : primaryModel;
+      ctx.fillText(modelToDraw, nx + Math.max(8, 12 * topologyZoom), ny + Math.max(24, 34 * topologyZoom));
     });
 
   } catch (err) {

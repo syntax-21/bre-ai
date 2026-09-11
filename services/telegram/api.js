@@ -7,7 +7,7 @@ const https = require('https');
 const { getConfig } = require('../../api/_shared');
 
 const httpsAgent = new https.Agent({
-  rejectUnauthorized: false,
+  rejectUnauthorized: true,
   keepAlive: true,
   timeout: 35000
 });
@@ -315,9 +315,11 @@ async function sendTelegramDocument(chatId, filename, bufferOrString, caption = 
   header += `Content-Disposition: form-data; name="chat_id"\r\n\r\n${chatId}\r\n`;
   if (caption) {
     header += `--${boundary}\r\nContent-Disposition: form-data; name="caption"\r\n\r\n${cleanTelegramText(caption).slice(0, 1000)}\r\n`;
+    header += `--${boundary}\r\nContent-Disposition: form-data; name="parse_mode"\r\n\r\nMarkdown\r\n`;
   }
   header += `--${boundary}\r\n`;
-  header += `Content-Disposition: form-data; name="document"; filename="${filename}"\r\n`;
+  const safeFilename = String(filename || 'file.bin').replace(/["\r\n]/g, '_').slice(0, 200);
+  header += `Content-Disposition: form-data; name="document"; filename="${safeFilename}"\r\n`;
   header += `Content-Type: application/octet-stream\r\n\r\n`;
 
   const footer = `\r\n--${boundary}--\r\n`;

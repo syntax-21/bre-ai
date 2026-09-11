@@ -136,6 +136,14 @@ _• 「Bre、こんにちは」 → Bre AI returns in Japanese 🇯🇵_
 • \`/location [lat, lon] | [Tempat] | [Alamat]\` - Kirim pin lokasi peta
 • \`/contact [nomor] [Nama Depan] [Nama Belakang]\` - Kirim kartu kontak
 
+⚡ *Perintah Pintas & Fitur Baru:*
+⚡ /remind [pesan] dalam X menit — Pengingat otomatis
+⏰ /listremind — Lihat daftar pengingat aktif
+❌ /cancelreminder [ID] — Batalkan pengingat
+📊 /mystats — Statistik penggunaan Bre AI-mu
+🎤 /tts [teks] — Ubah teks menjadi suara
+🖼️ /image [deskripsi] — Buat gambar dari teks
+
 🎭 *Gaya Bahasa Indonesia Aktif:* ${styleLabel}
 _Gaya ini berlaku untuk semua respons Bahasa Indonesia Bre AI._
 Pencipta & Pengembang: *Amirun Rayan Ariandi* 🚀`;

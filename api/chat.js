@@ -2,8 +2,8 @@ const {
   getConfig,
   syncCloudConfig,
   sanitizeOutput,
-  checkRateLimit,
-  recordFailedAttempt,
+  checkChatRateLimit,
+  consumeChatRate,
   logRequest,
   checkBlacklist,
   getCachedResponse,
@@ -43,10 +43,12 @@ module.exports = async (req, res) => {
   const cfg = await syncCloudConfig();
 
   // Check Rate Limits (Anti-Spam per IP)
-  if (!checkRateLimit(ip)) {
-    logRequest({ ip, provider: 'RateLimiter', model: 'n/a', status: 429, latencyMs: 1, error: 'Rate limit exceeded', clientKeyName: clientChannel });
-    return res.status(429).json({ error: 'Batas kuota request tercapai. Silakan coba beberapa detik lagi.' });
+  const chatRate = checkChatRateLimit(ip);
+  if (chatRate.limited) {
+    logRequest({ ip, provider: 'RateLimiter', model: 'n/a', status: 429, latencyMs: 1, error: 'Chat rate limit exceeded', clientKeyName: clientChannel });
+    return res.status(429).json({ error: `Batas kuota request tercapai. Coba lagi dalam ${chatRate.retryAfter} detik.` });
   }
+  consumeChatRate(ip);
 
   // 3. Extract Custom Provider and Model Routing
   const requestedProvider = (req.headers['x-custom-provider'] || body.provider || '').trim();
@@ -94,6 +96,15 @@ module.exports = async (req, res) => {
     if (blockedWord) {
       logRequest({ ip, provider: 'Content Filter', model: requestedModel || 'n/a', status: 400, latencyMs: 2, error: `Blacklist keyword matched: "${blockedWord}"` });
       return res.status(400).json({ error: `Pesan diblokir oleh kebijakan keamanan konten (Terdeteksi kata terlarang: "${blockedWord}").` });
+    }
+  }
+
+  // API Key Authentication (when requireAuth is enabled)
+  if (cfg.requireAuth) {
+    const authResult = validateClientKey(req.headers?.authorization || body.apiKey, cfg);
+    if (!authResult.valid) {
+      logRequest({ ip, provider: 'AuthGate', model: requestedModel || 'n/a', status: 401, latencyMs: 1, error: authResult.error, clientKeyName: clientChannel });
+      return res.status(401).json({ error: authResult.error });
     }
   }
 
@@ -257,8 +268,11 @@ function normalizeChatUrl(rawUrl) {
   }
 
   // 7. Response Caching check (only for non-stream requests)
+  const maxTokens = body.max_tokens || cfg.maxTokens || 16384;
+  const temperature = body.temperature !== undefined ? body.temperature : (cfg.temperature || 0.7);
   const dialogueDigest = userMessages.map(m => `${m.role}:${typeof m.content === 'string' ? m.content : JSON.stringify(m.content)}`).join('|');
-  const cacheKey = `${primaryTarget.name}:${targetModelName}:${requestedLang}:${requestedStyle}:${dialogueDigest}`;
+  const sysHash = (body.customSystemPrompt || '').slice(0, 200);
+  const cacheKey = `${primaryTarget.name}:${targetModelName}:${requestedLang}:${requestedStyle}:${maxTokens}:${temperature}:${sysHash.length}:${dialogueDigest}`;
 
   if (cfg.cacheEnabled && !stream && allUserText.trim()) {
     const cachedData = getCachedResponse(cacheKey);
@@ -276,11 +290,8 @@ function normalizeChatUrl(rawUrl) {
     style: requestedStyle,
     customSystemPrompt: body.customSystemPrompt || '',
     language: requestedLang
-  });
+});
   const formattedMessages = [{ role: 'system', content: masterSystemContent }, ...userMessages];
-
-  const maxTokens = body.max_tokens || cfg.maxTokens || 16384;
-  const temperature = body.temperature !== undefined ? body.temperature : (cfg.temperature || 0.7);
 
   let finalError = null;
 
@@ -356,6 +367,7 @@ function normalizeChatUrl(rawUrl) {
           const upstreamContentType = (upstream.headers.get('content-type') || '').toLowerCase();
           if (upstreamContentType.includes('text/html')) {
             finalError = `Invalid upstream response (HTML page returned by ${currentTarget.name}/${currModel})`;
+            clearTimeout(timer);
             continue;
           }
 
@@ -472,6 +484,7 @@ function normalizeChatUrl(rawUrl) {
             finalError = `HTTP ${upstream.status} [${currentTarget.name}/${currModel}]: ${errText.slice(0, 200)}`;
           }
         } catch (e) {
+          clearTimeout(timer);  // Clean up timer on error
           finalError = e.name === 'AbortError' ? `Timeout [${currentTarget.name}/${currModel}]` : e.message;
         }
       } // end key loop
@@ -551,11 +564,13 @@ function sendStandbyResponse(res, stream, content, note) {
 
     const words = fullText.split(' ');
     let i = 0;
+    let cleared = false;
+    const doClear = () => { if (!cleared) { cleared = true; clearInterval(interval); try { res.write('data: [DONE]\n\n'); } catch(e) {} try { res.end(); } catch(e) {} } };
+    res.on('close', doClear);
     const interval = setInterval(() => {
       if (i >= words.length) {
-        clearInterval(interval);
-        res.write('data: [DONE]\n\n');
-        return res.end();
+        doClear();
+        return;
       }
       const chunk = (i === 0 ? '' : ' ') + words[i];
       const payload = JSON.stringify({

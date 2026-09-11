@@ -18,8 +18,8 @@ function updateTelegramModelDropdown(selectedModel) {
   endpoints.forEach(ep => { if(ep.name) allModels.add(ep.name.trim()); });
   if (!allModels.size) allModels.add('Default Provider');
   allModels.delete('auto');
-  sel.innerHTML = '<option value="auto">🌐 Otomatis ikuti Router AI (Rotasi)</option>' +
-    Array.from(allModels).map(m => `<option value="${m}" ${m === selectedModel ? 'selected' : ''}>${m}</option>`).join('');
+sel.innerHTML = '<option value="auto">🌐 Otomatis ikuti Router AI (Rotasi)</option>' +
+    Array.from(allModels).map(m => `<option value="${escapeHtml(m)}" ${m === selectedModel ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('');
 }
 
 async function loadTelegramStatus() {

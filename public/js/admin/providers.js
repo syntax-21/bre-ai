@@ -40,7 +40,7 @@ function renderProviders() {
     <div class="provider-box" id="providerCard_${i}">
       <div class="provider-box-head">
         <div style="display:flex; align-items:center; gap:10px;">
-          <div style="font-weight:600; font-size:15px; color:#38bdf8;">⚡ Provider #${i+1}: <span style="color:#f1f5f9;">${ep.name || 'Unnamed'}</span></div>
+          <div style="font-weight:600; font-size:15px; color:#38bdf8;">⚡ Provider #${i+1}: <span style="color:#f1f5f9;">${escapeHtml(ep.name) || 'Unnamed'}</span></div>
           <span class="ping-badge ${ep.status !== false ? 'ok' : 'fail'}">${ep.status !== false ? '🟢 Active' : '🔴 Inactive'}</span>
           <span id="pingBadge_${i}" class="ping-badge" style="display:none;"></span>
         </div>
@@ -52,29 +52,29 @@ function renderProviders() {
         </div>
       </div>
       <div class="grid-3" style="margin-bottom:14px;">
-        <div class="form-group" style="margin-bottom:0;"><label class="form-label">Nama Provider</label><input type="text" class="input-text p-name" value="${ep.name || ''}" placeholder="Contoh: Inception Labs"></div>
+        <div class="form-group" style="margin-bottom:0;"><label class="form-label">Nama Provider</label><input type="text" class="input-text p-name" value="${escapeHtml(ep.name) || ''}" placeholder="Contoh: Inception Labs"></div>
         <div class="form-group" style="margin-bottom:0;"><label class="form-label">Status Routing</label><select class="input-select p-status"><option value="true" ${ep.status !== false ? 'selected' : ''}>🟢 Aktif</option><option value="false" ${ep.status === false ? 'selected' : ''}>🔴 Nonaktif</option></select></div>
         <div class="form-group" style="margin-bottom:0;"><label class="form-label">Priority / Weight (1-100)</label><input type="number" class="input-text p-weight" value="${ep.weight || 1}" min="1" max="100"></div>
       </div>
-      <div class="form-group"><label class="form-label">Base URL Endpoint</label><input type="url" class="input-text p-url" value="${ep.url || ''}" placeholder="https://api.inceptionlabs.ai/v1/chat/completions"></div>
+      <div class="form-group"><label class="form-label">Base URL Endpoint</label><input type="url" class="input-text p-url" value="${escapeHtml(ep.url) || ''}" placeholder="https://api.inceptionlabs.ai/v1/chat/completions"></div>
       <div class="grid-2" style="margin-bottom:14px;">
         <div class="form-group" style="margin-bottom:0;">
           <label class="form-label">Model Asli (pisahkan koma)</label>
-          <input type="text" class="input-text p-models" id="pModels_${i}" value="${(ep.models || []).join(', ')}" placeholder="mercury-2, gpt-4o">
+          <input type="text" class="input-text p-models" id="pModels_${i}" value="${escapeHtml((ep.models || []).join(', '))}" placeholder="mercury-2, gpt-4o">
           <div id="modelTestRow_${i}" style="margin-top:8px; display:flex; flex-wrap:wrap; gap:6px;">
-            ${(ep.models || []).map((m, mi) => `<div id="modelCard_${i}_${mi}" style="display:flex; align-items:center; gap:4px; background:#141922; border:1px solid #232733; border-radius:6px; padding:3px 8px; font-size:12px;"><span style="color:#e2e8f0;">${m}</span><button type="button" onclick="testModel(${i},'${m.replace(/'/g, "\\'")}')" id="testModelBtn_${i}_${mi}" style="background:#1e3a5f; color:#38bdf8; border:1px solid #38bdf8; border-radius:4px; padding:1px 7px; font-size:11px; cursor:pointer;">⚡ Tes</button><span id="testModelBadge_${i}_${mi}" style="display:none;"></span></div>`).join('')}
+            ${(ep.models || []).map((m, mi) => `<div id="modelCard_${i}_${mi}" style="display:flex; align-items:center; gap:4px; background:#141922; border:1px solid #232733; border-radius:6px; padding:3px 8px; font-size:12px;"><span style="color:#e2e8f0;">${escapeHtml(m)}</span><button type="button" onclick="testModel(${i},'${m.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')" id="testModelBtn_${i}_${mi}" style="background:#1e3a5f; color:#38bdf8; border:1px solid #38bdf8; border-radius:4px; padding:1px 7px; font-size:11px; cursor:pointer;">⚡ Tes</button><span id="testModelBadge_${i}_${mi}" style="display:none;"></span></div>`).join('')}
           </div>
           <div id="testAllSummary_${i}" style="display:none; margin-top:10px;"></div>
           <div class="form-hint">Klik 🔍 Detect Model untuk isi otomatis. Klik 🧪 Test All untuk uji semua.</div>
         </div>
-        <div class="form-group" style="margin-bottom:0;"><label class="form-label">Model Mapping / Alias (alias:asli)</label><input type="text" class="input-text p-mapping" value="${(ep.mapping || []).join(', ')}" placeholder="claude-3-opus:mercury-2"></div>
+        <div class="form-group" style="margin-bottom:0;"><label class="form-label">Model Mapping / Alias (alias:asli)</label><input type="text" class="input-text p-mapping" value="${escapeHtml((ep.mapping || []).join(', '))}" placeholder="claude-3-opus:mercury-2"></div>
       </div>
       <div class="form-group" style="margin-bottom:0;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
           <label class="form-label" style="margin-bottom:0;">API Keys (Multi-Key Round Robin)</label>
           <button type="button" class="btn btn-outline" style="font-size:11px; padding:3px 8px;" onclick="toggleKeyMask(${i})" id="keyMaskBtn_${i}">👁️ Tampilkan Kunci</button>
         </div>
-        <textarea class="input-textarea p-keys masked-key" id="pKeys_${i}" rows="3" placeholder="sk_key_1&#10;sk_key_2">${(ep.keys || []).join('\n')}</textarea>
+        <textarea class="input-textarea p-keys masked-key" id="pKeys_${i}" rows="3" placeholder="sk_key_1&#10;sk_key_2">${escapeHtml((ep.keys || []).join('\n'))}</textarea>
         <div class="form-hint">Server otomatis merotasi kunci (Round-Robin) untuk menghindari rate limit.</div>
       </div>
     </div>
@@ -123,10 +123,10 @@ async function pingProvider(i) {
   if (badge) { badge.style.display = 'inline-flex'; badge.className = 'ping-badge testing'; badge.textContent = '⏳ Testing Ping...'; }
   try {
     const key = ep.keys?.[0] || '';
-    const model = ep.models?.[0] || 'mercury-2';
+const model = ep.models?.[0] || 'mercury-2';
     const r = await fetch('/api/test', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
       body: JSON.stringify({ customEndpoint: ep.url, customModel: model, customKeys: key })
     });
     const data = await r.json();
@@ -251,7 +251,7 @@ async function testAllModels(providerIdx) {
   });
   if (summaryEl) {
     summaryEl.style.display = 'block';
-    summaryEl.innerHTML = `<div style="background:#0d1a0d; border:1px solid #166534; border-radius:8px; padding:12px 14px;"><div style="font-size:13px; font-weight:600; color:#4ade80; margin-bottom:8px;">🧪 Hasil: <span style="color:#4ade80;">${working.length} berhasil</span> / <span style="color:#f87171;">${failed.length} gagal</span></div>${working.length > 0 ? `<button onclick="applyWorkingModels(${providerIdx}, ${JSON.stringify(working.map(w => w.model)).replace(/"/g, '&quot;')})" style="background:linear-gradient(135deg,#166534,#15803d);color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;">✅ Pakai ${working.length} Model Berhasil Saja</button>` : '<div style="color:#f87171; font-size:12px;">⚠️ Tidak ada model yang berhasil.</div>'}</div>`;
+    summaryEl.innerHTML = `<div style="background:#0d1a0d; border:1px solid #166534; border-radius:8px; padding:12px 14px;"><div style="font-size:13px; font-weight:600; color:#4ade80; margin-bottom:8px;">🧪 Hasil: <span style="color:#4ade80;">${working.length} berhasil</span> / <span style="color:#f87171;">${failed.length} gagal</span></div>${working.length > 0 ? `<button onclick="applyWorkingModels(${providerIdx}, ${escapeHtml(JSON.stringify(working.map(w => w.model)))})" style="background:linear-gradient(135deg,#166534,#15803d);color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;">✅ Pakai ${working.length} Model Berhasil Saja</button>` : '<div style="color:#f87171; font-size:12px;">⚠️ Tidak ada model yang berhasil.</div>'}</div>`;
   }
   if (btn) { btn.disabled = false; btn.textContent = '🧪 Test All Models'; }
   toast(`[${ep.name}] Selesai: ${working.length}/${ep.models.length} model berfungsi`, working.length > 0 ? 'ok' : 'err');
@@ -276,7 +276,7 @@ async function runBatchLatencyTest() {
   if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#38bdf8;padding:24px;">⏳ Menguji semua endpoint...</td></tr>`;
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Sedang Menguji...'; }
   try {
-    const r = await fetch('/api/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ testAll: true, endpoints }) });
+    const r = await fetch('/api/test', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` }, body: JSON.stringify({ testAll: true, endpoints }) });
     const data = await r.json();
     const results = data.results || [];
     if (!results.length) { if(tbody) tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#64748b;padding:20px;">Tidak ada provider aktif.</td></tr>`; return; }

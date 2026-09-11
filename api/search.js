@@ -26,10 +26,11 @@ module.exports = async (req, res) => {
     
     const reqOptions = {
       headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
-      rejectUnauthorized: false
+      rejectUnauthorized: true,
+      timeout: 10000
     };
 
-    https.get(apiUrl, reqOptions, upstreamRes => {
+    const httpsReq = https.get(apiUrl, reqOptions, upstreamRes => {
       let data = '';
       upstreamRes.on('data', chunk => { data += chunk; });
       upstreamRes.on('end', () => {
@@ -71,7 +72,9 @@ module.exports = async (req, res) => {
           results
         });
       });
-    }).on('error', err => {
+    });
+    httpsReq.on('timeout', () => { httpsReq.destroy(); });
+    httpsReq.on('error', err => {
       console.warn('DuckDuckGo upstream warning:', err.message);
       // Graceful fallback instead of breaking the chat
       res.json({

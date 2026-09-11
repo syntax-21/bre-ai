@@ -403,7 +403,7 @@ function buildHistoryUserSnippet(msg, userQueryPrompt = '', fallbackText = '') {
 }
 
 // Initialize and preload sessions on startup
-loadSessionsFromDisk();
+loadSessionsFromDisk().catch(() => {});
 
 module.exports = {
   conversationsMap,

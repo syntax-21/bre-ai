@@ -84,9 +84,8 @@ async function handle(cq, botService, router = null) {
   }
 
   if (data === 'adm_gen_masterkey') {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let rand = 'sk-bre-';
-    for (let i = 0; i < 32; i++) rand += chars.charAt(Math.floor(Math.random() * chars.length));
+    const crypto = require('crypto');
+    const rand = 'sk-bre-' + crypto.randomBytes(24).toString('hex');
     saveConfig({ clientApiKey: rand });
     await answerCallback(cq.id, '✅ Master API Key baru berhasil dibuat!', true, token);
     cq.data = 'adm_masterkey';
@@ -160,9 +159,8 @@ async function handle(cq, botService, router = null) {
   if (data.startsWith('adm_ck_create:')) {
     const label = data.split(':')[1] || 'Client App';
     const clientKeys = Array.isArray(cfg.clientKeys) ? [...cfg.clientKeys] : [];
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let rand = 'sk-bre-';
-    for (let i = 0; i < 32; i++) rand += chars.charAt(Math.floor(Math.random() * chars.length));
+    const crypto = require('crypto');
+    const rand = 'sk-bre-' + crypto.randomBytes(24).toString('hex');
 
     clientKeys.unshift({
       id: 'ck_' + Date.now(),

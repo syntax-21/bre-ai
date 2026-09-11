@@ -67,6 +67,8 @@ const {
   buildHistoryUserSnippet
 } = require('./sessionManager');
 
+const { getDueReminders, markReminderSent, loadReminders } = require('./reminderManager');
+
 class TelegramBotService {
   constructor() {
     this.isRunning = false;
@@ -136,8 +138,8 @@ class TelegramBotService {
     return cleanTelegramText(text);
   }
 
-  sendTelegramMessage(chatId, text, replyMarkup = null, replyToId = null, customToken = null) {
-    return sendTelegramMessage(chatId, text, replyMarkup, replyToId, customToken || this.activeToken);
+  sendTelegramMessage(chatId, text, replyMarkup = null, replyToId = null, customToken = null, editMessageId = null) {
+    return sendTelegramMessage(chatId, text, replyMarkup, replyToId, customToken || this.activeToken, editMessageId);
   }
 
   editTelegramMessage(chatId, messageId, text, replyMarkup = null, customToken = null) {
@@ -216,11 +218,6 @@ class TelegramBotService {
 
     // Handle language selection callbacks (available to all users, not just admin)
     const data = cq.data || '';
-    // set_lang removed — language is now auto-detected from user's message
-    if (data.startsWith('set_lang:')) {
-      await answerCallback(cq.id, 'Bahasa otomatis dari pesanmu 🌐', false, token);
-      return;
-    }
 
 
     // Handle style selection callbacks (owner-only, saves globally)
@@ -278,10 +275,6 @@ class TelegramBotService {
     return handleMessage(msg, this, ctx);
   }
 
-  queryBreAIRouter(userText, history = [], senderInfo = '') {
-    return queryBreAIRouter(userText, history, senderInfo);
-  }
-
   // Long Polling Loop with callback_query support
   async poll() {
     while (this.isRunning) {
@@ -299,7 +292,7 @@ class TelegramBotService {
             if (!this.isRunning) break;
             this.currentOffset = u.update_id + 1;
 
-            const incomingMsg = u.message || u.channel_post;
+            const incomingMsg = u.message || u.channel_post || u.edited_message || u.edited_channel_post;
             if (incomingMsg) {
               this.handleMessage(incomingMsg).catch(err => {
                 console.error('[TelegramBot] Error message:', err);
@@ -310,6 +303,18 @@ class TelegramBotService {
               });
             }
           }
+          // Check and send due reminders
+          try {
+            const due = getDueReminders();
+            for (const rem of due) {
+              await apiCall('sendMessage', {
+                chat_id: rem.chatId,
+                text: `⏰ *Pengingat:*\n\n${rem.message}`,
+                parse_mode: 'Markdown'
+              });
+              markReminderSent(rem.id);
+            }
+          } catch (remErr) {}
         }
       } catch (err) {
         if (!this.isRunning) break;

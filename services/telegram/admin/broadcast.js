@@ -3,6 +3,7 @@
 // Created by Amirun Rayan Ariandi
 // ========================================================
 const api = require('../api');
+const { getRecentUsersList } = require('../accessControl');
 
 function editTelegramMessage(...args) { return api.editTelegramMessage(...args); }
 function answerCallback(...args) { return api.answerCallback(...args); }

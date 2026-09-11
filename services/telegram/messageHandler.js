@@ -64,25 +64,23 @@ const {
  * @param {string|null} styleCode - Style/dialect override code
  * @returns {Promise<string>} AI response text
  */
-function queryBreAIRouter(userContent, history = [], senderInfo = '', langCode = null, styleCode = null) {
-  return new Promise(async (resolve, reject) => {
-    try {
-      const chatHandler = require('../../api/chat');
-      const cfg = getConfig();
-      const model = cfg.telegramModel || cfg.model || 'mercury-2';
+async function queryBreAIRouter(userContent, history = [], senderInfo = '', langCode = null, styleCode = null) {
+  const chatHandler = require('../../api/chat');
+  const cfg = getConfig();
+  const model = cfg.telegramModel || cfg.model || 'mercury-2';
 
-      const lastUserMessage = {
-        role: 'user',
-        content: userContent
-      };
+  const lastUserMessage = {
+    role: 'user',
+    content: userContent
+  };
 
-      // Language: always AUTO — AI detects and mirrors user's language
-      const effectiveLang = 'auto';
-      // Style: from explicit override or global config (only applies to Indonesian responses)
-      const effectiveStyle = styleCode || cfg.telegramStyle || cfg.defaultStyle || 'jakarta';
+  // Language: always AUTO — AI detects and mirrors user's language
+  const effectiveLang = 'auto';
+  // Style: from explicit override or global config (only applies to Indonesian responses)
+  const effectiveStyle = styleCode || cfg.telegramStyle || cfg.defaultStyle || 'jakarta';
 
-      // Telegram-specific platform instructions (appended as customSystemPrompt)
-      const customSystemPrompt = `[TELEGRAM PLATFORM — ${senderInfo}]:
+  // Telegram-specific platform instructions (appended as customSystemPrompt)
+  const customSystemPrompt = `[TELEGRAM PLATFORM — ${senderInfo}]:
 - Format: Use standard Telegram Markdown (*bold*, _italic_, \`code\`, \`\`\`code blocks\`\`\`).
 - DILARANG menggunakan tag HTML (<br>, <div>, dll). Jangan buat tabel markdown bergaris — gantikan dengan daftar poin • yang rapi.
 - Jika bahasa yang dideteksi adalah Bahasa Indonesia: gunakan gaya GAUL & SANTAI khas anak muda Indonesia.
@@ -95,51 +93,49 @@ function queryBreAIRouter(userContent, history = [], senderInfo = '', langCode =
 5. Contact: [TELEGRAM_CONTACT: {"phone_number": "+62812345", "first_name": "Name"}]
 6. Photo: [TELEGRAM_PHOTO: {"url": "https://...", "caption": "Caption"}]`;
 
-      const cleanHistory = sanitizeMessagesForLLM(history);
+  const cleanHistory = sanitizeMessagesForLLM(history);
 
-      const EventEmitter = require('events');
-      const mockReq = Object.assign(new EventEmitter(), {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-custom-provider': 'Telegram Bot',
-          'x-custom-style': effectiveStyle,
-          'x-custom-language': effectiveLang
-        },
-        body: {
-          model: model,
-          style: effectiveStyle,
-          language: effectiveLang,
-          messages: [...cleanHistory, lastUserMessage],
-          stream: false,
-          customSystemPrompt
-        },
-        socket: { remoteAddress: '127.0.0.1' }
-      });
+  const EventEmitter = require('events');
+  const mockReq = Object.assign(new EventEmitter(), {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-custom-provider': 'Telegram Bot',
+      'x-custom-style': effectiveStyle,
+      'x-custom-language': effectiveLang
+    },
+    body: {
+      model: model,
+      style: effectiveStyle,
+      language: effectiveLang,
+      messages: [...cleanHistory, lastUserMessage],
+      stream: false,
+      customSystemPrompt
+    },
+    socket: { remoteAddress: '127.0.0.1' }
+  });
 
-      const mockRes = {
-        statusCode: 200,
-        setHeader: () => {},
-        writeHead: (code) => { mockRes.statusCode = code; },
-        status: (code) => { mockRes.statusCode = code; return mockRes; },
-        end: (data) => {
-          if (mockRes.statusCode >= 400) reject(new Error(data || `Error ${mockRes.statusCode}`));
-        },
-        json: (data) => {
-          if (mockRes.statusCode >= 400) {
-            reject(new Error(data?.error || `Error ${mockRes.statusCode}`));
-          } else if (data?.choices?.[0]?.message?.content) {
-            resolve(data.choices[0].message.content);
-          } else {
-            reject(new Error('Format jawaban tidak sesuai'));
-          }
+  return new Promise((resolve, reject) => {
+    const mockRes = {
+      statusCode: 200,
+      setHeader: () => {},
+      writeHead: (code) => { mockRes.statusCode = code; },
+      status: (code) => { mockRes.statusCode = code; return mockRes; },
+      end: (data) => {
+        if (mockRes.statusCode >= 400) reject(new Error(data || `Error ${mockRes.statusCode}`));
+      },
+      json: (data) => {
+        if (mockRes.statusCode >= 400) {
+          reject(new Error(data?.error || `Error ${mockRes.statusCode}`));
+        } else if (data?.choices?.[0]?.message?.content) {
+          resolve(data.choices[0].message.content);
+        } else {
+          reject(new Error('Format jawaban tidak sesuai'));
         }
-      };
+      }
+    };
 
-      await chatHandler(mockReq, mockRes);
-    } catch (err) {
-      reject(err);
-    }
+    chatHandler(mockReq, mockRes).catch(reject);
   });
 }
 

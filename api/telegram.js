@@ -4,7 +4,7 @@
 // Created by Amirun Rayan Ariandi
 // ========================================================
 const telegramBot = require('../services/telegramBot');
-const { syncCloudConfig } = require('./_shared');
+const { syncCloudConfig, getConfig } = require('./_shared');
 
 const processedUpdates = new Set();
 
@@ -57,6 +57,13 @@ module.exports = async (req, res) => {
         const firstItem = processedUpdates.values().next().value;
         processedUpdates.delete(firstItem);
       }
+    }
+
+    const cfg = getConfig();
+    const webhookSecret = req.headers['x-telegram-bot-api-secret-token'];
+    if (cfg.telegramWebhookSecret && webhookSecret !== cfg.telegramWebhookSecret) {
+      console.log('[TelegramWebhook] Invalid secret_token rejected');
+      return res.status(200).json({ ok: true, note: 'invalid secret' });
     }
 
     try {

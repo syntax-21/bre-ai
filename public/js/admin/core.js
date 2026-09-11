@@ -38,7 +38,12 @@ function switchTab(tabId, btn) {
     sidebar.classList.remove('mobile-open');
     if (backdrop) backdrop.classList.remove('active');
   }
-  if (tabId === 'tab9Router') load9RouterData();
+  if (tabId === 'tab9Router') {
+    load9RouterData();
+    requestAnimationFrame(() => {
+      if (typeof renderTopologyGraph === 'function') renderTopologyGraph();
+    });
+  }
   if (tabId === 'tabDetails') load9RouterDetails();
   if (tabId === 'tabTester') updateTestModelDropdown();
   if (tabId === 'tabTelegram') loadTelegramStatus();
@@ -95,10 +100,14 @@ async function doLogin() {
       try { sessionStorage.setItem('bre_admin_pw', pw); } catch(e){}
       document.getElementById('loginOverlay').style.display = 'none';
       document.getElementById('appContainer').style.display = 'flex';
+      switchTab('tab9Router', document.getElementById('tabBtn9Router'));
       await loadConfig();
       load9RouterData();
       load9RouterDetails();
       loadCloudStorageStatus();
+      setTimeout(() => {
+        if (typeof renderTopologyGraph === 'function') renderTopologyGraph();
+      }, 50);
       if (!metricsTimer) metricsTimer = setInterval(load9RouterData, 10000);
       toast('Login berhasil! Selamat datang di Bre AI Settings.', 'ok');
     } else {
@@ -162,7 +171,8 @@ async function loadConfig() {
     setVal('cfgFreqPenalty', c.frequencyPenalty ?? 0.0);
     setVal('cfgPresPenalty', c.presencePenalty ?? 0.0);
     setVal('cfgMaxTokens', c.maxTokens || 16384);
-    setVal('cfgStream', c.forceStream === true ? 'true' : (c.forceStream === false ? 'false' : 'auto'));
+    const fsRaw = c.forceStream;
+    setVal('cfgStream', (fsRaw === true || fsRaw === 'true') ? 'true' : ((fsRaw === false || fsRaw === 'false') ? 'false' : 'auto'));
     setVal('cfgDefaultStyle', c.defaultStyle || 'santai');
     setVal('cfgClientKey', c.clientKey || c.clientApiKey || '');
     setVal('cfgRateMax', c.rateLimitMax || 5);
@@ -189,18 +199,21 @@ async function loadConfig() {
     setVal('cfgUpstashUrl', c.upstashRedisUrl || '');
     setVal('cfgUpstashToken', c.upstashRedisToken || '');
 
-    if(data.cloudStorageInfo) updateStorageBadges(data.cloudStorageInfo);
+if(data.cloudStorageInfo) updateStorageBadges(data.cloudStorageInfo);
 
     clientKeys = Array.isArray(c.clientKeys) ? c.clientKeys : [];
     endpoints = Array.isArray(c.endpoints) ? c.endpoints : [];
     renderProviders();
     updateTestModelDropdown();
+    if (typeof updateTelegramModelDropdown === 'function') updateTelegramModelDropdown(c.telegramModel);
+    if (typeof renderClientKeys === 'function') renderClientKeys();
     loadTelegramStatus();
   } catch(e) { toast('Error load config: ' + e.message, 'err'); }
 }
 
 // Auto-restore login session on page refresh
 window.addEventListener('DOMContentLoaded', () => {
+  switchTab('tab9Router', document.getElementById('tabBtn9Router'));
   try {
     const saved = sessionStorage.getItem('bre_admin_pw');
     if (saved) {
