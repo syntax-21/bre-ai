@@ -1664,6 +1664,35 @@ function populateDetailProviderDropdown() {
     Array.from(providers).map(p => `<option value="${escapeHtml(p)}" ${p === currentVal ? 'selected' : ''}>${escapeHtml(p)}</option>`).join('');
 }
 
+function setDetailDatePreset(preset) {
+  const startInp = document.getElementById('detailStartDate');
+  const endInp = document.getElementById('detailEndDate');
+  if (!startInp || !endInp) return;
+
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const toDateInputStr = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+  if (preset === 'today') {
+    startInp.value = toDateInputStr(now);
+    endInp.value = toDateInputStr(now);
+  } else if (preset === '24h') {
+    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    startInp.value = toDateInputStr(yesterday);
+    endInp.value = toDateInputStr(now);
+  } else if (preset === '7d') {
+    const d7 = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    startInp.value = toDateInputStr(d7);
+    endInp.value = toDateInputStr(now);
+  } else if (preset === '30d') {
+    const d30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    startInp.value = toDateInputStr(d30);
+    endInp.value = toDateInputStr(now);
+  }
+  detailCurrentPage = 1;
+  filterAndRenderDetailsTable();
+}
+
 function clearDetailFilters() {
   const provSel = document.getElementById('detailProviderSelect');
   if (provSel) provSel.value = 'all';
@@ -1696,13 +1725,17 @@ function filterAndRenderDetailsTable() {
   }
 
   if (startFilter) {
-    const startTime = new Date(startFilter).getTime();
-    filtered = filtered.filter(r => new Date(r.timestamp).getTime() >= startTime);
+    let startD = new Date(startFilter);
+    if (startFilter.length === 10) startD.setHours(0, 0, 0, 0);
+    const startTime = startD.getTime();
+    if (!isNaN(startTime)) filtered = filtered.filter(r => new Date(r.timestamp).getTime() >= startTime);
   }
 
   if (endFilter) {
-    const endTime = new Date(endFilter).getTime();
-    filtered = filtered.filter(r => new Date(r.timestamp).getTime() <= endTime);
+    let endD = new Date(endFilter);
+    if (endFilter.length === 10) endD.setHours(23, 59, 59, 999);
+    const endTime = endD.getTime();
+    if (!isNaN(endTime)) filtered = filtered.filter(r => new Date(r.timestamp).getTime() <= endTime);
   }
 
   if (query) {

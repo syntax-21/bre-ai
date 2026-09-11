@@ -3,41 +3,45 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bre AI Admin Console</title>
+  <title>Bre AI — Admin Console</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-base: #07090e;
-      --bg-sidebar: #0a0d14;
-      --bg-topbar: rgba(10, 13, 20, 0.88);
-      --bg-card: #0f131d;
-      --bg-card-subtle: #0b0e17;
-      --bg-card-hover: #141926;
-      --bg-input: #080a10;
-      --bg-modal: #0e121c;
-      --border-subtle: #182030;
-      --border-card: #1c2638;
-      --border-hover: #2a3854;
+      --bg-base: #08090d;
+      --bg-sidebar: #0b0d13;
+      --bg-topbar: rgba(11, 13, 19, 0.85);
+      --bg-card: #0f121b;
+      --bg-card-subtle: #0a0d14;
+      --bg-card-hover: #141824;
+      --bg-input: #07090e;
+      --bg-modal: #0d1018;
+      
+      --border-subtle: #171c28;
+      --border-card: #1a2130;
+      --border-hover: #263147;
       --border-focus: #38bdf8;
+      
       --accent-cyan: #38bdf8;
-      --accent-cyan-glow: rgba(56, 189, 248, 0.16);
-      --accent-blue: #60a5fa;
-      --accent-indigo: #818cf8;
-      --accent-emerald: #34d399;
-      --accent-amber: #fbbf24;
+      --accent-cyan-glow: rgba(56, 189, 248, 0.14);
+      --accent-blue: #3b82f6;
+      --accent-indigo: #6366f1;
+      --accent-emerald: #10b981;
+      --accent-amber: #f59e0b;
       --accent-rose: #f43f5e;
+      
       --text-main: #f8fafc;
       --text-secondary: #94a3b8;
       --text-muted: #64748b;
+      
       --sidebar-width: 260px;
-      --sidebar-collapsed-width: 76px;
-      --topbar-height: 64px;
+      --sidebar-collapsed-width: 74px;
+      --topbar-height: 60px;
       --radius-sm: 6px;
-      --radius-md: 10px;
-      --radius-lg: 14px;
-      --radius-xl: 18px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --radius-xl: 16px;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -45,19 +49,20 @@
     body {
       background: var(--bg-base);
       color: var(--text-main);
-      font-family: 'Plus Jakarta Sans', 'Geist', -apple-system, sans-serif;
+      font-family: 'Plus Jakarta Sans', 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
       min-height: 100vh;
       overflow-x: hidden;
       display: flex;
       flex-direction: column;
       -webkit-font-smoothing: antialiased;
+      letter-spacing: -0.01em;
     }
 
     /* Custom Modern Scrollbars */
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
     ::-webkit-scrollbar-track { background: var(--bg-base); }
-    ::-webkit-scrollbar-thumb { background: #1e283d; border-radius: 4px; }
-    ::-webkit-scrollbar-thumb:hover { background: #2d3b59; }
+    ::-webkit-scrollbar-thumb { background: #1b212f; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #263147; }
 
     /* Layout Shell */
     .admin-app-layout {
@@ -80,7 +85,7 @@
       bottom: 0;
       left: 0;
       z-index: 1000;
-      transition: width 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: width 0.22s cubic-bezier(0.16, 1, 0.3, 1), transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
       overflow-y: auto;
       overflow-x: hidden;
     }
@@ -92,7 +97,7 @@
 
     .sidebar-header {
       height: var(--topbar-height);
-      padding: 0 18px;
+      padding: 0 16px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -107,22 +112,22 @@
       text-decoration: none;
       color: #fff;
       font-weight: 700;
-      font-size: 16px;
+      font-size: 15px;
       white-space: nowrap;
       overflow: hidden;
     }
 
     .sidebar-brand-icon {
-      width: 34px;
-      height: 34px;
-      min-width: 34px;
+      width: 32px;
+      height: 32px;
+      min-width: 32px;
       background: linear-gradient(135deg, #0284c7, #38bdf8);
-      border-radius: 10px;
+      border-radius: 8px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 17px;
-      box-shadow: 0 4px 16px rgba(56, 189, 248, 0.35);
+      font-size: 16px;
+      box-shadow: 0 2px 10px rgba(56, 189, 248, 0.25);
     }
 
     .sidebar-brand-text {
@@ -139,25 +144,11 @@
       font-weight: 800;
       font-size: 15px;
       letter-spacing: -0.02em;
-      color: #fff;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .sidebar-brand-badge {
-      font-size: 10px;
-      font-weight: 700;
-      color: #38bdf8;
-      background: rgba(56, 189, 248, 0.12);
-      border: 1px solid rgba(56, 189, 248, 0.25);
-      padding: 1px 6px;
-      border-radius: 6px;
-      font-family: 'JetBrains Mono', monospace;
+      color: #ffffff;
     }
 
     .sidebar-brand-sub {
-      font-size: 11px;
+      font-size: 10.5px;
       color: var(--text-muted);
       font-weight: 500;
     }
@@ -166,15 +157,15 @@
       background: transparent;
       border: 1px solid var(--border-subtle);
       color: var(--text-secondary);
-      width: 28px;
-      height: 28px;
+      width: 26px;
+      height: 26px;
       border-radius: 6px;
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
       font-size: 12px;
-      transition: all 0.2s;
+      transition: all 0.15s;
     }
 
     .sidebar-toggle-btn:hover {
@@ -185,16 +176,16 @@
 
     /* Sidebar Search */
     .sidebar-search-box {
-      padding: 12px 14px 6px 14px;
+      padding: 10px 12px 4px 12px;
     }
 
     .sidebar-search-input {
       width: 100%;
       background: var(--bg-input);
       border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-md);
-      padding: 8px 12px;
-      font-size: 12.5px;
+      border-radius: var(--radius-sm);
+      padding: 7px 11px;
+      font-size: 12px;
       color: #fff;
       outline: none;
       transition: border-color 0.2s, box-shadow 0.2s;
@@ -216,25 +207,25 @@
     /* Sidebar Nav */
     .sidebar-nav-container {
       flex: 1;
-      padding: 10px 10px 20px 10px;
+      padding: 10px 8px 20px 8px;
       display: flex;
       flex-direction: column;
-      gap: 18px;
+      gap: 16px;
     }
 
     .sidebar-group {
       display: flex;
       flex-direction: column;
-      gap: 3px;
+      gap: 2px;
     }
 
     .sidebar-group-title {
-      font-size: 10.5px;
+      font-size: 10px;
       font-weight: 700;
       color: var(--text-muted);
       text-transform: uppercase;
       letter-spacing: 0.08em;
-      padding: 6px 10px 4px 10px;
+      padding: 4px 10px 4px 10px;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -242,23 +233,23 @@
 
     .admin-sidebar.sidebar-collapsed .sidebar-group-title {
       text-align: center;
-      font-size: 9px;
-      padding: 6px 2px 2px 2px;
+      font-size: 8.5px;
+      padding: 4px 2px;
     }
 
     .sidebar-nav-item {
       display: flex;
       align-items: center;
-      gap: 12px;
-      padding: 9px 12px;
-      border-radius: var(--radius-md);
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: var(--radius-sm);
       color: var(--text-secondary);
-      font-size: 13.5px;
+      font-size: 13px;
       font-weight: 500;
       background: transparent;
       border: 1px solid transparent;
       cursor: pointer;
-      transition: all 0.18s ease;
+      transition: all 0.15s ease;
       text-align: left;
       width: 100%;
       white-space: nowrap;
@@ -268,21 +259,19 @@
     .sidebar-nav-item:hover {
       background: var(--bg-card-hover);
       color: #fff;
-      border-color: rgba(255, 255, 255, 0.04);
     }
 
     .sidebar-nav-item.active {
-      background: rgba(56, 189, 248, 0.1);
+      background: rgba(56, 189, 248, 0.08);
       color: var(--accent-cyan);
       font-weight: 600;
-      border-color: rgba(56, 189, 248, 0.28);
-      box-shadow: 0 2px 10px rgba(56, 189, 248, 0.08);
+      border-color: rgba(56, 189, 248, 0.22);
     }
 
     .sidebar-nav-icon {
-      font-size: 16px;
-      width: 22px;
-      min-width: 22px;
+      font-size: 15px;
+      width: 20px;
+      min-width: 20px;
       text-align: center;
       display: flex;
       align-items: center;
@@ -293,7 +282,6 @@
       flex: 1;
       overflow: hidden;
       text-overflow: ellipsis;
-      transition: opacity 0.2s;
     }
 
     .admin-sidebar.sidebar-collapsed .sidebar-nav-label {
@@ -302,29 +290,29 @@
 
     /* Sidebar Footer */
     .sidebar-footer {
-      padding: 14px;
+      padding: 12px;
       border-top: 1px solid var(--border-subtle);
       display: flex;
       flex-direction: column;
-      gap: 10px;
-      background: rgba(7, 9, 14, 0.6);
+      gap: 8px;
+      background: rgba(7, 9, 14, 0.4);
     }
 
     .sidebar-status-card {
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 8px 10px;
+      padding: 6px 8px;
       background: var(--bg-card-subtle);
       border: 1px solid var(--border-subtle);
       border-radius: var(--radius-sm);
-      font-size: 11.5px;
+      font-size: 11px;
       color: var(--text-secondary);
     }
 
     .admin-sidebar.sidebar-collapsed .sidebar-status-card {
       justify-content: center;
-      padding: 8px 4px;
+      padding: 6px 2px;
     }
 
     .admin-sidebar.sidebar-collapsed .sidebar-status-text {
@@ -332,12 +320,12 @@
     }
 
     .status-dot-pulse {
-      width: 8px;
-      height: 8px;
-      min-width: 8px;
+      width: 7px;
+      height: 7px;
+      min-width: 7px;
       border-radius: 50%;
       background: var(--accent-emerald);
-      box-shadow: 0 0 8px var(--accent-emerald);
+      box-shadow: 0 0 6px var(--accent-emerald);
     }
 
     /* Main Content Wrapper */
@@ -348,7 +336,7 @@
       flex-direction: column;
       min-height: 100vh;
       background: var(--bg-base);
-      transition: margin-left 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: margin-left 0.22s cubic-bezier(0.16, 1, 0.3, 1);
       width: calc(100% - var(--sidebar-width));
     }
 
@@ -365,7 +353,7 @@
       backdrop-filter: blur(16px);
       -webkit-backdrop-filter: blur(16px);
       border-bottom: 1px solid var(--border-subtle);
-      padding: 0 28px;
+      padding: 0 24px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -376,7 +364,7 @@
     .topbar-left {
       display: flex;
       align-items: center;
-      gap: 14px;
+      gap: 12px;
     }
 
     .mobile-menu-btn {
@@ -384,38 +372,37 @@
       background: transparent;
       border: 1px solid var(--border-subtle);
       color: #fff;
-      width: 36px;
-      height: 36px;
-      border-radius: 8px;
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
       cursor: pointer;
       align-items: center;
       justify-content: center;
-      font-size: 18px;
+      font-size: 16px;
     }
 
     .breadcrumb-title {
-      font-size: 16px;
+      font-size: 14.5px;
       font-weight: 700;
       color: #fff;
       display: flex;
       align-items: center;
       gap: 8px;
-      letter-spacing: -0.01em;
     }
 
     .topbar-right {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
     }
 
     .topbar-active-eps {
-      font-size: 12px;
+      font-size: 11.5px;
       font-family: 'JetBrains Mono', monospace;
       color: var(--accent-emerald);
-      background: rgba(52, 211, 153, 0.1);
-      border: 1px solid rgba(52, 211, 153, 0.25);
-      padding: 5px 10px;
+      background: rgba(16, 185, 129, 0.08);
+      border: 1px solid rgba(16, 185, 129, 0.22);
+      padding: 4px 9px;
       border-radius: var(--radius-sm);
       display: flex;
       align-items: center;
@@ -424,8 +411,8 @@
     }
 
     .admin-content {
-      padding: 24px 28px 80px 28px;
-      max-width: 1280px;
+      padding: 20px 24px 70px 24px;
+      max-width: 1240px;
       width: 100%;
       margin: 0 auto;
       flex: 1;
@@ -433,11 +420,11 @@
 
     .tab-content {
       display: none;
-      animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      animation: fadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(4px); }
+      from { opacity: 0; transform: translateY(3px); }
       to { opacity: 1; transform: translateY(0); }
     }
 
@@ -448,181 +435,187 @@
       background: rgba(0, 0, 0, 0.65);
       backdrop-filter: blur(4px);
       z-index: 999;
-      opacity: 0;
-      transition: opacity 0.25s ease;
     }
 
-    .sidebar-backdrop.active {
-      display: block;
-      opacity: 1;
-    }
-
-    @media (max-width: 900px) {
-      .admin-sidebar { transform: translateX(-100%); }
-      .admin-sidebar.mobile-open { transform: translateX(0); box-shadow: 0 0 50px rgba(0,0,0,0.9); }
-      .admin-main-wrapper, .admin-main-wrapper.sidebar-collapsed { margin-left: 0; width: 100%; }
-      .mobile-menu-btn { display: flex; }
-      .admin-content { padding: 18px 16px 60px 16px; }
-      .admin-topbar { padding: 0 16px; }
-    }
-
-    /* Cards & Inputs */
+    /* Cards & Containers (Linear / Vercel style) */
     .card {
       background: var(--bg-card);
       border: 1px solid var(--border-card);
       border-radius: var(--radius-lg);
-      padding: 22px 24px;
-      margin-bottom: 22px;
-      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.28);
-      transition: border-color 0.2s, box-shadow 0.2s;
-    }
-    .card:hover { border-color: var(--border-hover); }
-    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; flex-wrap: wrap; gap: 12px; }
-    .card-title { font-size: 16px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 8px; letter-spacing: -0.01em; }
-    .card-subtitle { font-size: 12.5px; color: var(--text-muted); margin-top: 3px; line-height: 1.45; }
-
-    .presets-bar {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
+      padding: 20px 22px;
       margin-bottom: 18px;
-      padding: 12px 16px;
-      background: var(--bg-card-subtle);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-md);
-      align-items: center;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
     }
-    .preset-label { font-size: 11px; font-weight: 700; color: var(--text-muted); margin-right: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
-    .preset-btn { background: var(--bg-card); border: 1px solid var(--border-subtle); color: var(--text-secondary); padding: 5px 12px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
-    .preset-btn:hover { background: var(--bg-card-hover); color: var(--accent-cyan); border-color: var(--accent-cyan); }
 
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .card-title {
+      font-size: 14.5px;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -0.01em;
+    }
+
+    .card-subtitle {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 3px;
+      line-height: 1.4;
+    }
+
+    /* Provider Box */
     .provider-box {
       background: var(--bg-card-subtle);
       border: 1px solid var(--border-subtle);
       border-radius: var(--radius-md);
-      padding: 18px 20px;
-      margin-bottom: 18px;
-      transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+      padding: 16px 18px;
+      margin-bottom: 14px;
+      transition: border-color 0.15s, box-shadow 0.15s;
     }
-    .provider-box:hover { border-color: var(--border-hover); box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
-    .provider-box-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 10px; flex-wrap: wrap; gap: 10px; }
+    .provider-box:hover { border-color: var(--border-hover); }
+    .provider-box-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.04); padding-bottom: 10px; flex-wrap: wrap; gap: 8px; }
 
-    .form-group { margin-bottom: 16px; }
-    .form-label { display: block; font-size: 12.5px; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; }
-    .form-hint { font-size: 11.5px; color: var(--text-muted); margin-top: 5px; line-height: 1.4; }
+    /* Form Controls */
+    .form-group { margin-bottom: 14px; }
+    .form-label { display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 5px; }
+    .form-hint { font-size: 11.5px; color: var(--text-muted); margin-top: 4px; line-height: 1.4; }
 
     .input-text, .input-select, .input-textarea {
       width: 100%;
       background: var(--bg-input);
       border: 1px solid var(--border-subtle);
       color: #f1f5f9;
-      padding: 10px 14px;
+      padding: 8px 12px;
       border-radius: var(--radius-sm);
-      font-size: 13.5px;
+      font-size: 13px;
       outline: none;
-      transition: border-color 0.2s, box-shadow 0.2s;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      font-family: inherit;
     }
     .input-text:focus, .input-select:focus, .input-textarea:focus {
       border-color: var(--accent-cyan);
       box-shadow: 0 0 0 2px var(--accent-cyan-glow);
     }
-    .input-textarea { font-family: 'JetBrains Mono', monospace; font-size: 12.5px; line-height: 1.5; }
+    .input-textarea { font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.5; }
 
-    /* CRITICAL: API Key Textarea Security Mask */
+    /* Native Dark Calendar Inputs */
+    .input-date {
+      color-scheme: dark;
+      cursor: pointer;
+    }
+    .input-date::-webkit-calendar-picker-indicator {
+      cursor: pointer;
+      filter: invert(0.8) brightness(1.2);
+      opacity: 0.75;
+      padding: 3px;
+      border-radius: 4px;
+      transition: all 0.2s;
+    }
+    .input-date::-webkit-calendar-picker-indicator:hover {
+      opacity: 1;
+      background: rgba(56, 189, 248, 0.15);
+    }
+
+    /* API Key Textarea Password Mask */
     .masked-key {
       -webkit-text-security: disc !important;
       text-security: disc !important;
     }
 
-    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
-    .grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 16px; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+    .grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 14px; }
     @media (max-width: 768px) { .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; } }
 
+    /* Buttons */
     .btn {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 8px;
-      padding: 9px 16px;
+      gap: 6px;
+      padding: 8px 14px;
       border-radius: var(--radius-sm);
-      font-size: 13.5px;
+      font-size: 13px;
       font-weight: 600;
       cursor: pointer;
-      border: none;
-      transition: all 0.2s;
+      border: 1px solid transparent;
+      transition: all 0.15s;
       text-decoration: none;
       user-select: none;
+      font-family: inherit;
     }
-    .btn-save { background: linear-gradient(135deg, #0284c7, #0369a1); color: #fff; box-shadow: 0 4px 16px rgba(2, 132, 199, 0.35); }
-    .btn-save:hover { background: linear-gradient(135deg, #0369a1, #075985); box-shadow: 0 6px 20px rgba(2, 132, 199, 0.45); transform: translateY(-1px); }
+    .btn-save { background: linear-gradient(135deg, #0284c7, #0369a1); color: #fff; box-shadow: 0 2px 10px rgba(2, 132, 199, 0.3); }
+    .btn-save:hover { background: linear-gradient(135deg, #0369a1, #075985); }
     .btn-outline { background: transparent; color: var(--text-secondary); border: 1px solid var(--border-subtle); }
     .btn-outline:hover { background: var(--bg-card-hover); color: #fff; border-color: var(--border-hover); }
-    .btn-ping { background: rgba(56, 189, 248, 0.1); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.25); font-size: 12px; padding: 5px 12px; }
+    .btn-ping { background: rgba(56, 189, 248, 0.08); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.2); font-size: 11.5px; padding: 4px 10px; }
     .btn-ping:hover { background: #0284c7; color: #fff; }
-    .btn-danger { background: rgba(239, 68, 68, 0.12); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.25); font-size: 12px; padding: 5px 12px; }
-    .btn-danger:hover { background: #ef4444; color: #fff; }
+    .btn-danger { background: rgba(244, 63, 94, 0.08); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.2); font-size: 11.5px; padding: 4px 10px; }
+    .btn-danger:hover { background: #f43f5e; color: #fff; }
 
-    .ping-badge { font-size: 11.5px; font-weight: 600; padding: 3px 8px; border-radius: 4px; display: inline-flex; align-items: center; gap: 5px; font-family: 'JetBrains Mono', monospace; }
-    .ping-badge.ok { background: rgba(34, 197, 94, 0.12); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.25); }
-    .ping-badge.fail { background: rgba(239, 68, 68, 0.12); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.25); }
-    .ping-badge.testing { background: rgba(234, 179, 8, 0.12); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.25); }
+    .ping-badge { font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; font-family: 'JetBrains Mono', monospace; }
+    .ping-badge.ok { background: rgba(16, 185, 129, 0.1); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.22); }
+    .ping-badge.fail { background: rgba(244, 63, 94, 0.1); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.22); }
+    .ping-badge.testing { background: rgba(245, 158, 11, 0.1); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.22); }
 
-    .login-overlay { position: fixed; inset: 0; background: rgba(5, 7, 11, 0.96); backdrop-filter: blur(16px); display: flex; align-items: center; justify-content: center; z-index: 9999; padding: 20px; }
-    .login-card { background: var(--bg-card); border: 1px solid var(--border-card); border-radius: var(--radius-xl); padding: 36px; width: 100%; max-width: 420px; text-align: center; box-shadow: 0 25px 60px -12px rgba(0, 0, 0, 0.85); }
-
-    .toast-hub { position: fixed; top: 24px; right: 24px; display: flex; flex-direction: column; gap: 10px; z-index: 10000; }
-    .toast { background: #141926; border: 1px solid #232e42; color: #fff; padding: 12px 20px; border-radius: var(--radius-md); font-size: 13.5px; font-weight: 500; box-shadow: 0 10px 30px rgba(0,0,0,0.6); animation: toastIn 0.25s ease; transition: opacity 0.3s; display: flex; align-items: center; gap: 8px; }
-    .toast.ok { border-color: #22c55e; color: #86efac; }
-    .toast.err { border-color: #ef4444; color: #fca5a5; }
-    @keyframes toastIn { from { transform: translateY(-10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-
-    /* Bento KPI Cards */
-    .router-kpi-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 22px; }
+    /* Minimalist KPI Cards (No Rainbow Bars) */
+    .router-kpi-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 18px; }
     @media (max-width: 1100px) { .router-kpi-grid { grid-template-columns: repeat(3, 1fr); } }
     @media (max-width: 700px) { .router-kpi-grid { grid-template-columns: 1fr 1fr; } }
 
-    .router-kpi-card { background: var(--bg-card); border: 1px solid var(--border-card); border-radius: var(--radius-lg); padding: 18px 20px; position: relative; overflow: hidden; box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3); transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s; }
-    .router-kpi-card:hover { transform: translateY(-2px); border-color: var(--accent-cyan); box-shadow: 0 12px 30px rgba(56, 189, 248, 0.1); }
-    .router-kpi-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #38bdf8, #818cf8); }
-    .router-kpi-card:nth-child(2)::before { background: linear-gradient(90deg, #f97316, #fb923c); }
-    .router-kpi-card:nth-child(3)::before { background: linear-gradient(90deg, #38bdf8, #0ea5e9); }
-    .router-kpi-card:nth-child(4)::before { background: linear-gradient(90deg, #22c55e, #10b981); }
-    .router-kpi-card:nth-child(5)::before { background: linear-gradient(90deg, #eab308, #facc15); }
-    .router-kpi-card .kpi-label { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
-    .router-kpi-card .kpi-value { font-size: 26px; font-weight: 700; color: #ffffff; font-family: 'JetBrains Mono', monospace; line-height: 1.1; }
-    .router-kpi-card .kpi-value.green { color: #4ade80; }
+    .router-kpi-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: var(--radius-md);
+      padding: 16px 18px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+      transition: border-color 0.15s, background-color 0.15s;
+    }
+    .router-kpi-card:hover { border-color: var(--border-hover); background: var(--bg-card-hover); }
+    .router-kpi-card .kpi-label { font-size: 10.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+    .router-kpi-card .kpi-value { font-size: 24px; font-weight: 700; color: #ffffff; font-family: 'JetBrains Mono', monospace; line-height: 1.1; }
+    .router-kpi-card .kpi-value.green { color: #34d399; }
     .router-kpi-card .kpi-value.orange { color: #fb923c; }
     .router-kpi-card .kpi-value.blue { color: #38bdf8; }
     .router-kpi-card .kpi-value.yellow { color: #facc15; }
-    .router-kpi-card .kpi-sub { font-size: 11.5px; color: var(--text-muted); margin-top: 6px; }
+    .router-kpi-card .kpi-sub { font-size: 11px; color: var(--text-muted); margin-top: 5px; }
 
-    .time-filter-bar { display: inline-flex; background: var(--bg-input); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 3px; gap: 3px; }
-    .time-pill-btn { background: transparent; border: none; color: var(--text-secondary); padding: 5px 12px; font-size: 12px; font-weight: 600; border-radius: 4px; cursor: pointer; transition: all 0.2s; }
-    .time-pill-btn:hover { color: #ffffff; background: var(--bg-card-hover); }
-    .time-pill-btn.active { color: #ffffff; background: #1c2638; border: 1px solid rgba(56, 189, 248, 0.4); }
+    /* Time Filter & Segment Controls */
+    .time-filter-bar { display: inline-flex; background: var(--bg-input); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 2px; gap: 2px; }
+    .time-pill-btn { background: transparent; border: none; color: var(--text-secondary); padding: 4px 10px; font-size: 11.5px; font-weight: 600; border-radius: 4px; cursor: pointer; transition: all 0.15s; }
+    .time-pill-btn:hover { color: #ffffff; }
+    .time-pill-btn.active { color: #ffffff; background: #1a2233; border: 1px solid rgba(56, 189, 248, 0.3); }
 
-    .toggle-switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+    .toggle-switch { position: relative; display: inline-block; width: 40px; height: 22px; }
     .toggle-switch input { opacity: 0; width: 0; height: 0; }
-    .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #1a2233; transition: 0.25s; border-radius: 24px; border: 1px solid var(--border-subtle); }
-    .toggle-slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background-color: #94a3b8; transition: 0.25s; border-radius: 50%; }
+    .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #171d2b; transition: 0.2s; border-radius: 22px; border: 1px solid var(--border-subtle); }
+    .toggle-slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: #94a3b8; transition: 0.2s; border-radius: 50%; }
     .toggle-switch input:checked + .toggle-slider { background-color: #0284c7; border-color: #38bdf8; }
-    .toggle-switch input:checked + .toggle-slider:before { transform: translateX(20px); background-color: #fff; }
+    .toggle-switch input:checked + .toggle-slider:before { transform: translateX(18px); background-color: #fff; }
 
-    /* Topology Flow Visualizer */
+    /* Topology Radar Canvas */
     .topology-container {
       background: #06080e;
-      background-image: radial-gradient(rgba(56, 189, 248, 0.08) 1px, transparent 1px);
-      background-size: 20px 20px;
+      background-image: radial-gradient(rgba(56, 189, 248, 0.06) 1px, transparent 1px);
+      background-size: 18px 18px;
       border: 1px solid var(--border-card);
       border-radius: var(--radius-lg);
       position: relative;
-      height: 350px;
+      height: 340px;
       overflow: hidden;
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.8), 0 8px 25px rgba(0, 0, 0, 0.3);
+      box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.7);
     }
     .topology-canvas {
       position: absolute;
@@ -632,40 +625,32 @@
       cursor: grab;
       background: transparent;
     }
-    .topology-canvas:active {
-      cursor: grabbing;
-    }
+    .topology-canvas:active { cursor: grabbing; }
     .topology-controls {
       position: absolute;
-      bottom: 14px;
-      left: 14px;
+      bottom: 12px;
+      left: 12px;
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 5px;
       z-index: 10;
     }
     .topo-ctrl-btn {
-      width: 32px;
-      height: 32px;
-      background: #0f1522;
-      border: 1px solid #233148;
+      width: 28px;
+      height: 28px;
+      background: #0d121c;
+      border: 1px solid #1f2a3e;
       color: #cbd5e1;
-      border-radius: 8px;
+      border-radius: 6px;
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      font-size: 15px;
+      font-size: 13px;
       font-weight: bold;
-      transition: all 0.2s;
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+      transition: all 0.15s;
     }
-    .topo-ctrl-btn:hover {
-      background: #1e283b;
-      color: #38bdf8;
-      border-color: #38bdf8;
-      transform: scale(1.05);
-    }
+    .topo-ctrl-btn:hover { background: #1c2638; color: #38bdf8; border-color: #38bdf8; }
 
     /* Recent Requests Panel */
     .recent-req-panel {
@@ -674,14 +659,14 @@
       border-radius: var(--radius-lg);
       display: flex;
       flex-direction: column;
-      height: 350px;
-      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+      height: 340px;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
       overflow: hidden;
     }
     .recent-req-header {
-      padding: 14px 16px;
+      padding: 12px 14px;
       border-bottom: 1px solid var(--border-subtle);
-      font-size: 11px;
+      font-size: 10.5px;
       font-weight: 700;
       color: var(--text-muted);
       text-transform: uppercase;
@@ -689,41 +674,59 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      background: rgba(10, 13, 20, 0.5);
+      background: rgba(10, 13, 20, 0.4);
     }
     .recent-req-list {
       flex: 1;
       overflow-y: auto;
-      padding: 4px 0;
+      padding: 2px 0;
     }
     .recent-req-item {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 10px 14px;
-      border-bottom: 1px solid rgba(255,255,255,0.04);
+      padding: 9px 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
       cursor: pointer;
-      transition: background 0.15s;
+      transition: background 0.12s;
     }
     .recent-req-item:hover { background: var(--bg-card-hover); }
-    .recent-req-item-left { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
-    .recent-req-model { font-weight: 600; color: var(--accent-cyan); font-family: 'JetBrains Mono', monospace; font-size: 12px; }
-    .recent-req-prompt { color: var(--text-secondary); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 190px; }
-    .recent-req-item-right { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; margin-left: 10px; }
-    .recent-req-tokens { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: #4ade80; font-weight: 600; }
-    .recent-req-time { font-size: 10.5px; color: var(--text-muted); }
+    .recent-req-item-left { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+    .recent-req-model { font-weight: 600; color: var(--accent-cyan); font-family: 'JetBrains Mono', monospace; font-size: 11.5px; }
+    .recent-req-prompt { color: var(--text-secondary); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
+    .recent-req-item-right { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; margin-left: 8px; }
+    .recent-req-tokens { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #34d399; font-weight: 600; }
+    .recent-req-time { font-size: 10px; color: var(--text-muted); }
 
     /* Tables */
-    .table-responsive { width: 100%; overflow-x: auto; border-radius: var(--radius-md); border: 1px solid var(--border-subtle); background: var(--bg-input); }
-    .data-table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
-    .data-table th { background: #0d121c; color: var(--text-muted); padding: 12px 16px; font-weight: 600; border-bottom: 1px solid var(--border-subtle); white-space: nowrap; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.05em; }
-    .data-table td { padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.03); color: var(--text-secondary); }
+    .table-responsive { width: 100%; overflow-x: auto; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); background: var(--bg-input); }
+    .data-table { width: 100%; border-collapse: collapse; font-size: 12.5px; text-align: left; }
+    .data-table th { background: #0b0f17; color: var(--text-muted); padding: 10px 14px; font-weight: 600; border-bottom: 1px solid var(--border-subtle); white-space: nowrap; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .data-table td { padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,0.02); color: var(--text-secondary); }
     .data-table tr:hover td { background: var(--bg-card-hover); }
 
-    .seg-btn-group { display: inline-flex; background: var(--bg-input); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 3px; gap: 3px; }
-    .seg-btn { background: transparent; border: none; color: var(--text-secondary); padding: 6px 14px; font-size: 12px; font-weight: 600; border-radius: 4px; cursor: pointer; transition: all 0.2s; }
-    .seg-btn:hover { color: #ffffff; background: var(--bg-card-hover); }
-    .seg-btn.active { color: #38bdf8; background: #1a2538; border: 1px solid rgba(56, 189, 248, 0.4); font-weight: 700; }
+    .seg-btn-group { display: inline-flex; background: var(--bg-input); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 2px; gap: 2px; }
+    .seg-btn { background: transparent; border: none; color: var(--text-secondary); padding: 5px 12px; font-size: 11.5px; font-weight: 600; border-radius: 4px; cursor: pointer; transition: all 0.15s; }
+    .seg-btn:hover { color: #ffffff; }
+    .seg-btn.active { color: #38bdf8; background: #162030; border: 1px solid rgba(56, 189, 248, 0.3); }
+
+    .presets-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; padding: 10px 14px; background: var(--bg-card-subtle); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); }
+    .preset-label { font-size: 11.5px; font-weight: 600; color: var(--text-muted); margin-right: 4px; }
+    .preset-btn { background: #0f1420; border: 1px solid #1f2a3d; color: #cbd5e1; font-size: 11.5px; padding: 4px 10px; border-radius: 5px; cursor: pointer; transition: all 0.15s; }
+    .preset-btn:hover { background: #1a2538; color: #fff; border-color: #38bdf8; }
+
+    .guide-app-tab { background: transparent; border: 1px solid var(--border-subtle); color: var(--text-secondary); padding: 6px 12px; font-size: 12px; font-weight: 600; border-radius: 6px; cursor: pointer; transition: all 0.15s; }
+    .guide-app-tab:hover { background: var(--bg-card-hover); color: #fff; }
+    .guide-app-tab.active { background: rgba(56, 189, 248, 0.1); color: #38bdf8; border-color: rgba(56, 189, 248, 0.3); }
+
+    .login-overlay { position: fixed; inset: 0; background: rgba(5, 7, 11, 0.95); backdrop-filter: blur(16px); display: flex; align-items: center; justify-content: center; z-index: 9999; padding: 20px; }
+    .login-card { background: var(--bg-card); border: 1px solid var(--border-card); border-radius: var(--radius-xl); padding: 32px; width: 100%; max-width: 400px; text-align: center; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8); }
+
+    .toast-hub { position: fixed; top: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 10000; }
+    .toast { background: #121724; border: 1px solid #1f293d; color: #fff; padding: 10px 16px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 500; box-shadow: 0 8px 24px rgba(0,0,0,0.6); animation: toastIn 0.2s ease; transition: opacity 0.3s; display: flex; align-items: center; gap: 8px; }
+    .toast.ok { border-color: #10b981; color: #6ee7b7; }
+    .toast.err { border-color: #f43f5e; color: #fda4af; }
+    @keyframes toastIn { from { transform: translateY(-8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
   </style>
 </head>
 <body>
@@ -731,17 +734,17 @@
 <!-- Login Overlay Screen -->
 <div class="login-overlay" id="loginOverlay">
   <div class="login-card">
-    <div style="width: 48px; height: 48px; background: linear-gradient(135deg, #0284c7, #38bdf8); border-radius: 12px; margin: 0 auto 16px auto; display: flex; align-items: center; justify-content: center; font-size: 24px; box-shadow: 0 8px 24px rgba(56, 189, 248, 0.4);">⚡</div>
-    <div style="font-size: 24px; font-weight: 800; color: #fff; margin-bottom: 6px; letter-spacing: -0.02em;">Bre AI Admin Console</div>
-    <p style="color: var(--text-muted); font-size: 13.5px; margin-bottom: 24px;">Proxy Router, AI Gateway &amp; Telemetry Master</p>
+    <div style="width: 44px; height: 44px; background: linear-gradient(135deg, #0284c7, #38bdf8); border-radius: 10px; margin: 0 auto 14px auto; display: flex; align-items: center; justify-content: center; font-size: 22px; box-shadow: 0 4px 16px rgba(56, 189, 248, 0.35);">⚡</div>
+    <div style="font-size: 22px; font-weight: 800; color: #fff; margin-bottom: 4px; letter-spacing: -0.02em;">Bre AI</div>
+    <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 22px;">AI Gateway, Proxy Router &amp; Telemetry Master</p>
     <form onsubmit="event.preventDefault();doLogin()">
       <div class="form-group" style="text-align: left;">
         <label class="form-label">Password Master Admin</label>
         <input type="password" id="pwInput" class="input-text" placeholder="Masukkan Password Admin" required autocomplete="current-password">
       </div>
-      <button type="submit" class="btn btn-save" style="width: 100%; padding: 12px; margin-top: 10px; font-size: 14px;">Buka Panel Kontrol</button>
+      <button type="submit" class="btn btn-save" style="width: 100%; padding: 10px; margin-top: 8px; font-size: 13.5px;">Buka Panel Kontrol</button>
     </form>
-    <a href="/" style="display: inline-block; margin-top: 20px; color: var(--text-muted); font-size: 13px; text-decoration: none; transition: color 0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--text-muted)'">← Kembali ke Chat Utama</a>
+    <a href="/" style="display: inline-block; margin-top: 18px; color: var(--text-muted); font-size: 12.5px; text-decoration: none; transition: color 0.15s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--text-muted)'">← Kembali ke Chat Utama</a>
   </div>
 </div>
 
@@ -751,7 +754,7 @@
   <!-- Backdrop for Mobile Navigation -->
   <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="toggleMobileSidebar()"></div>
 
-  <!-- Modern Left Sidebar Navigation (Linear / Vercel Style) -->
+  <!-- Left Sidebar Navigation -->
   <aside class="admin-sidebar" id="adminSidebar">
     
     <!-- Sidebar Header -->
@@ -759,9 +762,7 @@
       <a href="/admin" class="sidebar-brand">
         <div class="sidebar-brand-icon">⚡</div>
         <div class="sidebar-brand-text">
-          <div class="sidebar-brand-title">
-            Bre AI <span class="sidebar-brand-badge">v2.5</span>
-          </div>
+          <div class="sidebar-brand-title">Bre AI</div>
           <div class="sidebar-brand-sub">Admin Console</div>
         </div>
       </a>
@@ -841,7 +842,7 @@
         <div class="status-dot-pulse"></div>
         <span class="sidebar-status-text">Serverless 24/7 Active</span>
       </div>
-      <a href="/" class="btn btn-outline" style="width: 100%; font-size: 12.5px; padding: 7px 12px; justify-content: center;">
+      <a href="/" class="btn btn-outline" style="width: 100%; font-size: 12px; padding: 6px 10px; justify-content: center;">
         ← Chat Utama
       </a>
     </div>
@@ -875,17 +876,17 @@
     <!-- Scrollable Main Content -->
     <main class="admin-content" id="mainContent">
 
-    <!-- TAB 1: OVERVIEW -->
+    <!-- TAB 1: OVERVIEW & TELEMETRY -->
     <div id="tab9Router" class="tab-content">
       
       <!-- Sub-Nav & Time Filter Header -->
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; flex-wrap: wrap; gap: 12px;">
-        <div style="display: flex; gap: 4px; background: #0c0f17; border: 1px solid #1e2536; padding: 3px; border-radius: 8px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+        <div style="display: flex; gap: 4px; background: #0a0d14; border: 1px solid #1a2130; padding: 2px; border-radius: 6px;">
           <button class="time-pill-btn active" onclick="switchTab('tab9Router', document.getElementById('tabBtn9Router'))">Overview</button>
           <button class="time-pill-btn" onclick="switchTab('tabDetails', document.getElementById('tabBtnDetails'))">Details</button>
         </div>
 
-        <div style="display: flex; gap: 10px; align-items: center;">
+        <div style="display: flex; gap: 8px; align-items: center;">
           <div class="time-filter-bar" id="timeFilterBar">
             <button class="time-pill-btn active" onclick="set9RouterTimeRange('today', this)">Today</button>
             <button class="time-pill-btn" onclick="set9RouterTimeRange('24h', this)">24h</button>
@@ -893,11 +894,11 @@
             <button class="time-pill-btn" onclick="set9RouterTimeRange('30d', this)">30D</button>
             <button class="time-pill-btn" onclick="set9RouterTimeRange('60d', this)">60D</button>
           </div>
-          <button class="btn btn-outline" style="padding: 6px 12px; font-size: 12px;" onclick="load9RouterData()">🔄 Refresh</button>
+          <button class="btn btn-outline" style="padding: 5px 10px; font-size: 11.5px;" onclick="load9RouterData()">🔄 Refresh</button>
         </div>
       </div>
 
-      <!-- Top 5 KPI Metric Cards -->
+      <!-- Top 5 Minimalist KPI Cards -->
       <div class="router-kpi-grid">
         <div class="router-kpi-card">
           <div class="kpi-label">TOTAL REQUESTS</div>
@@ -927,8 +928,8 @@
       </div>
 
       <!-- Two-Column Section: Topology Visualizer + Recent Requests -->
-      <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 20px;">
-        <!-- Left: Interactive Topology Flow Diagram -->
+      <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 14px; margin-bottom: 18px;">
+        <!-- Left: Interactive Topology Flow Radar -->
         <div class="topology-container" id="topologyContainer">
           <canvas id="topologyCanvas" class="topology-canvas"></canvas>
           <div class="topology-controls">
@@ -937,7 +938,7 @@
             <button class="topo-ctrl-btn" onclick="resetTopology()" title="Reset view">⟲</button>
             <button class="topo-ctrl-btn" onclick="toggleTopologyFullscreen()" title="Fullscreen">⛶</button>
           </div>
-          <div style="position: absolute; top: 12px; left: 14px; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; pointer-events: none;">
+          <div style="position: absolute; top: 12px; left: 14px; font-size: 10.5px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.06em; pointer-events: none;">
             🌐 Topology &amp; Telemetry Mesh
           </div>
         </div>
@@ -946,7 +947,7 @@
         <div class="recent-req-panel">
           <div class="recent-req-header">
             <span>RECENT REQUESTS</span>
-            <div style="display: flex; gap: 16px; font-size: 10px; color: #64748b;">
+            <div style="display: flex; gap: 14px; font-size: 9.5px; color: #64748b;">
               <span>In / Out</span>
               <span>When</span>
             </div>
@@ -960,25 +961,25 @@
       </div>
 
       <!-- Historical Usage & Trend Chart Card -->
-      <div class="card" style="margin-bottom: 20px; padding: 20px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+      <div class="card" style="margin-bottom: 18px; padding: 18px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
           <div class="seg-btn-group">
             <button class="seg-btn active primary" id="btnChartTokens" onclick="toggleChartUnit('tokens', this)">Tokens</button>
             <button class="seg-btn" id="btnChartCost" onclick="toggleChartUnit('cost', this)">Cost</button>
           </div>
-          <div style="font-size: 12px; color: #64748b;" id="chartPeriodLabel">Activity for selected period</div>
+          <div style="font-size: 11.5px; color: #64748b;" id="chartPeriodLabel">Activity for selected period</div>
         </div>
-        <div style="height: 180px; position: relative; display: flex; align-items: center; justify-content: center; background: #090c12; border: 1px solid #1a2230; border-radius: 8px;">
+        <div style="height: 180px; position: relative; display: flex; align-items: center; justify-content: center; background: #07090e; border: 1px solid #171d2b; border-radius: 6px;">
           <canvas id="usageTimelineCanvas" style="width: 100%; height: 100%; display: none;"></canvas>
-          <div id="chartNoDataNotice" style="color: #64748b; font-size: 13px;">No data for this period</div>
+          <div id="chartNoDataNotice" style="color: #64748b; font-size: 12.5px;">No data for this period</div>
         </div>
       </div>
 
-      <!-- Usage Breakdown Table Card (Usage by Model / Provider) -->
-      <div class="card" style="padding: 20px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+      <!-- Usage Breakdown Table Card -->
+      <div class="card" style="padding: 18px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
           <div style="display: flex; gap: 10px; align-items: center;">
-            <select id="breakdownTypeSelect" class="input-select" style="width: auto; padding: 6px 12px; font-size: 13px;" onchange="renderBreakdownTable()">
+            <select id="breakdownTypeSelect" class="input-select" style="width: auto; padding: 5px 10px; font-size: 12px;" onchange="renderBreakdownTable()">
               <option value="model">Usage by Model</option>
               <option value="provider">Usage by Provider</option>
             </select>
@@ -1005,7 +1006,7 @@
             </thead>
             <tbody id="breakdownTableBody">
               <tr>
-                <td colspan="8" style="text-align: center; color: #64748b; padding: 30px;">No usage recorded yet.</td>
+                <td colspan="8" style="text-align: center; color: #64748b; padding: 25px;">No usage recorded yet.</td>
               </tr>
             </tbody>
           </table>
@@ -1014,12 +1015,12 @@
 
     </div>
 
-    <!-- TAB 2: REQUEST DETAILS (Image 3) -->
+    <!-- TAB 2: REQUEST DETAILS & INSPECTOR -->
     <div id="tabDetails" class="tab-content" style="display: none;">
       <div class="card">
         
         <!-- Filter Controls Bar -->
-        <div style="display: grid; grid-template-columns: 200px 220px 220px 1fr auto; gap: 12px; margin-bottom: 20px; align-items: flex-end; flex-wrap: wrap;">
+        <div style="display: grid; grid-template-columns: 180px 170px 170px 1fr auto; gap: 10px; margin-bottom: 12px; align-items: flex-end; flex-wrap: wrap;">
           <div>
             <label class="form-label">Provider</label>
             <select id="detailProviderSelect" class="input-select" onchange="load9RouterDetails()">
@@ -1027,23 +1028,33 @@
             </select>
           </div>
           <div>
-            <label class="form-label">Start Date</label>
-            <input type="datetime-local" id="detailStartDate" class="input-text" onchange="load9RouterDetails()">
+            <label class="form-label">Mulai Tanggal</label>
+            <input type="date" id="detailStartDate" class="input-text input-date" onchange="load9RouterDetails()" onclick="try{this.showPicker()}catch(e){}">
           </div>
           <div>
-            <label class="form-label">End Date</label>
-            <input type="datetime-local" id="detailEndDate" class="input-text" onchange="load9RouterDetails()">
+            <label class="form-label">Sampai Tanggal</label>
+            <input type="date" id="detailEndDate" class="input-text input-date" onchange="load9RouterDetails()" onclick="try{this.showPicker()}catch(e){}">
           </div>
           <div>
-            <label class="form-label">Search</label>
-            <input type="text" id="detailSearchInput" class="input-text" placeholder="Search IP, model, error..." oninput="load9RouterDetails()">
+            <label class="form-label">Pencarian</label>
+            <input type="text" id="detailSearchInput" class="input-text" placeholder="Cari model, IP, kata kunci..." oninput="load9RouterDetails()">
           </div>
           <div>
-            <button class="btn btn-outline" style="padding: 10px 14px; font-size: 13px;" onclick="clearDetailFilters()">Clear Filters</button>
+            <button class="btn btn-outline" style="padding: 8px 12px; font-size: 12px;" onclick="clearDetailFilters()">Clear</button>
           </div>
         </div>
 
-        <!-- Detailed Requests Table matching Image 3 -->
+        <!-- Quick Preset Filter Buttons -->
+        <div style="display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; align-items: center;">
+          <span style="font-size: 11px; font-weight: 600; color: var(--text-muted); margin-right: 2px;">Preset Cepat:</span>
+          <button class="btn btn-outline" style="font-size: 11px; padding: 3px 8px;" onclick="setDetailDatePreset('today')">📅 Hari Ini</button>
+          <button class="btn btn-outline" style="font-size: 11px; padding: 3px 8px;" onclick="setDetailDatePreset('24h')">⏱️ 24 Jam</button>
+          <button class="btn btn-outline" style="font-size: 11px; padding: 3px 8px;" onclick="setDetailDatePreset('7d')">🗓️ 7 Hari Terakhir</button>
+          <button class="btn btn-outline" style="font-size: 11px; padding: 3px 8px;" onclick="setDetailDatePreset('30d')">🗓️ 30 Hari</button>
+          <button class="btn btn-outline" style="font-size: 11px; padding: 3px 8px;" onclick="clearDetailFilters()">🔄 Reset Semua</button>
+        </div>
+
+        <!-- Detailed Requests Table -->
         <div class="table-responsive">
           <table class="data-table" id="detailsTable">
             <thead>
@@ -1061,25 +1072,25 @@
             </thead>
             <tbody id="detailsTableBody">
               <tr>
-                <td colspan="9" style="text-align: center; color: #64748b; padding: 35px;">Memuat detail request 9Router...</td>
+                <td colspan="9" style="text-align: center; color: #64748b; padding: 30px;">Memuat detail request...</td>
               </tr>
             </tbody>
           </table>
         </div>
 
         <!-- Pagination Bar -->
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; font-size: 13px; color: #94a3b8;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px; font-size: 12px; color: #94a3b8;">
           <span id="detailPaginationInfo">Showing 0 of 0 requests</span>
-          <div style="display: flex; gap: 8px;">
-            <button class="btn btn-outline" id="btnPrevPage" style="padding: 5px 12px; font-size: 12px;" onclick="changeDetailPage(-1)" disabled>&lt; Previous</button>
-            <button class="btn btn-outline" id="btnNextPage" style="padding: 5px 12px; font-size: 12px;" onclick="changeDetailPage(1)" disabled>Next &gt;</button>
+          <div style="display: flex; gap: 6px;">
+            <button class="btn btn-outline" id="btnPrevPage" style="padding: 4px 10px; font-size: 11.5px;" onclick="changeDetailPage(-1)" disabled>&lt; Previous</button>
+            <button class="btn btn-outline" id="btnNextPage" style="padding: 4px 10px; font-size: 11.5px;" onclick="changeDetailPage(1)" disabled>Next &gt;</button>
           </div>
         </div>
 
       </div>
     </div>
 
-    <!-- TAB 1: PROVIDERS & ROUTING -->
+    <!-- TAB 3: PROVIDERS & ROUTING -->
     <div id="tabProviders" class="tab-content" style="display: none;">
       
       <!-- Preset Quick Templates -->
@@ -1094,64 +1105,64 @@
         <button class="preset-btn" onclick="addPreset('ollama')">💻 Ollama (Local)</button>
       </div>
 
-      <!-- Routing Strategy Selector (AUTO Rotation vs Priority vs Weighted) -->
-      <div style="background: linear-gradient(135deg, #0d131f, #090c14); border: 1px solid #1e293b; border-radius: 12px; padding: 18px 20px; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; margin-bottom: 12px;">
+      <!-- Routing Strategy Selector -->
+      <div style="background: var(--bg-card-subtle); border: 1px solid var(--border-card); border-radius: var(--radius-md); padding: 16px 18px; margin-bottom: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 10px;">
           <div>
-            <div style="font-weight: 700; font-size: 15px; color: #38bdf8; display: flex; align-items: center; gap: 8px;">
-              <span>🔀</span> Strategi Routing & Load Balancing Provider
+            <div style="font-weight: 700; font-size: 14px; color: #38bdf8; display: flex; align-items: center; gap: 6px;">
+              <span>🔀</span> Strategi Routing &amp; Load Balancing Provider
             </div>
-            <div style="font-size: 12px; color: #94a3b8; margin-top: 2px;">
-              Atur bagaimana permintaan AI didistribusikan jika seluruh/beberapa provider aktif menyala (ON).
+            <div style="font-size: 11.5px; color: #94a3b8; margin-top: 2px;">
+              Atur bagaimana permintaan AI didistribusikan jika beberapa provider aktif menyala (ON).
             </div>
           </div>
-          <div style="display: flex; gap: 8px; flex-wrap: wrap;" id="routingStrategyButtonGroup">
-            <button type="button" class="btn" id="btnRoutingAuto" onclick="setRoutingModeUI('auto')" style="background: #0284c7; color: #ffffff; border: 1px solid #38bdf8; font-size: 12px; padding: 6px 14px; font-weight: 600;">
+          <div style="display: flex; gap: 6px; flex-wrap: wrap;" id="routingStrategyButtonGroup">
+            <button type="button" class="btn" id="btnRoutingAuto" onclick="setRoutingModeUI('auto')" style="background: #0284c7; color: #ffffff; border: 1px solid #38bdf8; font-size: 11.5px; padding: 5px 12px;">
               🔄 AUTO (Bergantian / Round-Robin)
             </button>
-            <button type="button" class="btn btn-outline" id="btnRoutingPriority" onclick="setRoutingModeUI('priority')" style="font-size: 12px; padding: 6px 14px; border-color: #334155; color: #94a3b8;">
+            <button type="button" class="btn btn-outline" id="btnRoutingPriority" onclick="setRoutingModeUI('priority')" style="font-size: 11.5px; padding: 5px 12px; border-color: #263147; color: #94a3b8;">
               🥇 Prioritas Tunggal
             </button>
-            <button type="button" class="btn btn-outline" id="btnRoutingWeighted" onclick="setRoutingModeUI('weighted')" style="font-size: 12px; padding: 6px 14px; border-color: #334155; color: #94a3b8;">
-              ⚖️ Berdasarkan Bobot (Weight)
+            <button type="button" class="btn btn-outline" id="btnRoutingWeighted" onclick="setRoutingModeUI('weighted')" style="font-size: 11.5px; padding: 5px 12px; border-color: #263147; color: #94a3b8;">
+              ⚖️ Berdasarkan Bobot
             </button>
           </div>
         </div>
         <input type="hidden" id="cfgRoutingStrategy" value="auto">
-        <div id="routingModeDescription" style="font-size: 12px; color: #38bdf8; background: rgba(56, 189, 248, 0.08); border-left: 3px solid #38bdf8; padding: 8px 12px; border-radius: 4px;">
-          🔄 <b>Mode AUTO Aktif:</b> Setiap permintaan baru yang masuk akan dieksekusi secara <b>bergantian (bergilir/round-robin)</b> ke seluruh provider yang aktif ON untuk membagi beban secara merata dan mencegah limit API.
+        <div id="routingModeDescription" style="font-size: 11.5px; color: #38bdf8; background: rgba(56, 189, 248, 0.06); border-left: 3px solid #38bdf8; padding: 7px 10px; border-radius: 4px;">
+          🔄 <b>Mode AUTO Aktif:</b> Setiap permintaan baru yang masuk akan dieksekusi secara <b>bergantian (round-robin)</b> ke seluruh provider yang aktif ON.
         </div>
       </div>
 
       <!-- Auto-Failover Policy & Benchmark Toolbar -->
-      <div style="background: #0d111a; border: 1px solid #1e2433; border-radius: 10px; padding: 14px 18px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px;">
-        <label class="toggle-wrap" style="font-size: 13px; color: #e2e8f0;">
+      <div style="background: var(--bg-card-subtle); border: 1px solid var(--border-card); border-radius: var(--radius-md); padding: 12px 16px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+        <label class="toggle-wrap" style="font-size: 12.5px; color: #e2e8f0; display: flex; align-items: center; gap: 10px; cursor: pointer;">
           <span class="toggle-switch">
             <input type="checkbox" id="cfgAutoFailover" checked>
             <span class="toggle-slider"></span>
           </span>
           <div>
             <div style="font-weight: 600; color: #f1f5f9;">🔄 Zero-Downtime Auto-Failover</div>
-            <div style="font-size: 12px; color: #64748b;">Otomatis coba provider berikutnya jika provider aktif gagal atau terkena Rate Limit (429/5xx).</div>
+            <div style="font-size: 11px; color: #64748b;">Otomatis coba provider berikutnya jika provider aktif gagal atau terkena Rate Limit (429/5xx).</div>
           </div>
         </label>
-        <button class="btn btn-outline" style="border-color: #0284c7; color: #38bdf8;" onclick="runBatchLatencyTest()" id="btnBatchBenchmark">⚡ Test Semua Provider (Parallel Benchmark)</button>
+        <button class="btn btn-outline" style="border-color: #0284c7; color: #38bdf8; font-size: 12px; padding: 6px 12px;" onclick="runBatchLatencyTest()" id="btnBatchBenchmark">⚡ Test Semua Provider (Parallel Benchmark)</button>
       </div>
 
       <!-- Leaderboard Box -->
-      <div id="benchmarkLeaderboardBox" style="display: none; background: #07090e; border: 1px solid #0284c7; border-radius: 10px; padding: 18px; margin-bottom: 24px; box-shadow: 0 4px 20px rgba(2, 132, 199, 0.2);">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+      <div id="benchmarkLeaderboardBox" style="display: none; background: #07090e; border: 1px solid #0284c7; border-radius: 8px; padding: 14px; margin-bottom: 18px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
           <div>
-            <div style="font-weight: 700; font-size: 15px; color: #38bdf8;">🏆 Leaderboard Kecepatan Provider (Parallel Latency Probe)</div>
-            <div style="font-size: 12px; color: #64748b;">Diurutkan otomatis dari yang paling cepat merespons (Low Latency).</div>
+            <div style="font-weight: 700; font-size: 13.5px; color: #38bdf8;">🏆 Leaderboard Kecepatan Provider (Latency Probe)</div>
+            <div style="font-size: 11px; color: #64748b;">Diurutkan otomatis dari yang paling cepat merespons.</div>
           </div>
-          <button class="btn btn-outline" style="padding: 4px 10px; font-size: 12px;" onclick="document.getElementById('benchmarkLeaderboardBox').style.display='none'">✕ Tutup</button>
+          <button class="btn btn-outline" style="padding: 3px 8px; font-size: 11px;" onclick="document.getElementById('benchmarkLeaderboardBox').style.display='none'">✕ Tutup</button>
         </div>
         <div class="table-responsive">
           <table class="data-table">
             <thead>
               <tr>
-                <th style="width: 60px;">Rank</th>
+                <th style="width: 50px;">Rank</th>
                 <th>Nama Provider</th>
                 <th>Model Uji</th>
                 <th>Latensi</th>
@@ -1177,7 +1188,7 @@
       </div>
     </div>
 
-    <!-- TAB 2: GLOBAL ENGINE -->
+    <!-- TAB 4: GLOBAL ENGINE -->
     <div id="tabEngine" class="tab-content" style="display: none;">
       <div class="card">
         <div class="card-header">
@@ -1186,21 +1197,21 @@
             <div class="card-subtitle">Instruksi dasar dan batasan parameter model secara global.</div>
           </div>
           <div style="display: flex; gap: 6px;">
-            <button class="btn btn-outline" style="font-size: 12px; padding: 4px 10px;" onclick="applyPromptPreset('master')">Prompt Standar</button>
-            <button class="btn btn-outline" style="font-size: 12px; padding: 4px 10px;" onclick="applyPromptPreset('dev')">Developer / Code</button>
-            <button class="btn btn-outline" style="font-size: 12px; padding: 4px 10px;" onclick="applyPromptPreset('speed')">Ringkas & Cepat</button>
+            <button class="btn btn-outline" style="font-size: 11.5px; padding: 3px 8px;" onclick="applyPromptPreset('master')">Prompt Standar</button>
+            <button class="btn btn-outline" style="font-size: 11.5px; padding: 3px 8px;" onclick="applyPromptPreset('dev')">Developer / Code</button>
+            <button class="btn btn-outline" style="font-size: 11.5px; padding: 3px 8px;" onclick="applyPromptPreset('speed')">Ringkas & Cepat</button>
           </div>
         </div>
         
         <div class="form-group">
           <label class="form-label">Master System Prompt (Identitas & Karakter Mutlak AI)</label>
           <textarea id="cfgPrompt" class="input-textarea" rows="8"></textarea>
-          <div class="form-hint">System prompt ini akan disuntikkan ke setiap percakapan untuk mengunci persona Bre AI ciptaan Amirun Rayan Ariandi.</div>
+          <div class="form-hint">System prompt ini akan disuntikkan ke setiap percakapan untuk mengunci persona Bre AI.</div>
         </div>
         
         <div class="grid-2">
           <div class="form-group">
-            <label class="form-label">Default Temperature (Kreativitas: 0.0 - 2.0)</label>
+            <label class="form-label">Default Temperature (0.0 - 2.0)</label>
             <input type="number" id="cfgTemp" class="input-text" step="0.05" min="0" max="2">
           </div>
           <div class="form-group">
@@ -1213,12 +1224,10 @@
           <div class="form-group">
             <label class="form-label">Frequency Penalty (-2.0 s/d 2.0)</label>
             <input type="number" id="cfgFreqPenalty" class="input-text" step="0.1" min="-2" max="2" placeholder="0.0">
-            <div class="form-hint">Mencegah pengulangan kata yang sama.</div>
           </div>
           <div class="form-group">
             <label class="form-label">Presence Penalty (-2.0 s/d 2.0)</label>
             <input type="number" id="cfgPresPenalty" class="input-text" step="0.1" min="-2" max="2" placeholder="0.0">
-            <div class="form-hint">Mendorong model membahas topik baru.</div>
           </div>
         </div>
         
@@ -1237,7 +1246,7 @@
           </div>
         </div>
 
-        <div class="form-group" style="margin-top: 14px;">
+        <div class="form-group" style="margin-top: 10px;">
           <label class="form-label">🎭 Gaya Bahasa / Dialek AI Default (Global Tone)</label>
           <select id="cfgDefaultStyle" class="input-select">
             <option value="santai">✨ Santai &amp; Friendly (Hangat, Ceria, Ramah)</option>
@@ -1250,31 +1259,29 @@
             <option value="makassar">🌊 Makassar / Bugis (Tabe', Akrab, Hangat - Ji/Mi/Mo)</option>
             <option value="standar">🤖 Standar Bre AI (Netral &amp; Lugas)</option>
           </select>
-          <div class="form-hint">Gaya bahasa default ini akan diterapkan pada semua query chat AI (Web Chat &amp; API).</div>
         </div>
 
         <!-- In-Memory Response Caching Section -->
-        <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid #1e2433;">
-          <div class="card-title" style="font-size: 15px; margin-bottom: 4px;">⚡ In-Memory Response Caching</div>
-          <div class="card-subtitle" style="margin-bottom: 16px;">Simpan respon prompt yang identik langsung dalam RAM server untuk memangkas biaya token dan memberikan respon instan (0ms).</div>
+        <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border-subtle);">
+          <div class="card-title" style="font-size: 14px; margin-bottom: 3px;">⚡ In-Memory Response Caching</div>
+          <div class="card-subtitle" style="margin-bottom: 14px;">Simpan respon prompt yang identik langsung dalam RAM server untuk respon 0ms.</div>
 
           <div class="grid-2">
             <div class="form-group" style="margin-bottom: 0;">
-              <label class="toggle-wrap" style="font-size: 13px; color: #e2e8f0; margin-top: 8px;">
+              <label class="toggle-wrap" style="font-size: 12.5px; color: #e2e8f0; display: flex; align-items: center; gap: 8px; cursor: pointer; margin-top: 6px;">
                 <span class="toggle-switch">
                   <input type="checkbox" id="cfgCacheEnabled">
                   <span class="toggle-slider"></span>
                 </span>
                 <div>
                   <div style="font-weight: 600; color: #f1f5f9;">Aktifkan Response Caching</div>
-                  <div style="font-size: 12px; color: #64748b;">Query non-streaming identik dijawab instan dari memori.</div>
+                  <div style="font-size: 11px; color: #64748b;">Query identik dijawab instan dari memori RAM.</div>
                 </div>
               </label>
             </div>
             <div class="form-group" style="margin-bottom: 0;">
-              <label class="form-label">Cache TTL / Masa Berlaku (Detik)</label>
+              <label class="form-label">Cache TTL (Detik)</label>
               <input type="number" id="cfgCacheTTL" class="input-text" min="10" max="86400" placeholder="3600">
-              <div class="form-hint">Standar: 3600 detik (1 jam). Kedaluwarsa otomatis dibersihkan.</div>
             </div>
           </div>
         </div>
@@ -1282,26 +1289,26 @@
       </div>
     </div>
 
-    <!-- TAB: AI TOOLS & PROMPT STUDIO -->
+    <!-- TAB 5: AI TOOLS & PROMPT STUDIO -->
     <div id="tabTools" class="tab-content" style="display: none;">
       
       <!-- Multi-Provider Live Health Benchmarking Card -->
-      <div class="card" style="background: linear-gradient(135deg, #0d121f, #080b12); border: 1px solid #1e293b; box-shadow: 0 4px 20px rgba(0,0,0,0.4);">
+      <div class="card">
         <div class="card-header">
           <div>
-            <div class="card-title" style="color: #38bdf8; display: flex; align-items: center; gap: 8px;">
+            <div class="card-title" style="color: #38bdf8; display: flex; align-items: center; gap: 6px;">
               <span>⚡</span> Pemantau Kesehatan Provider Live (Health Benchmark)
             </div>
             <div class="card-subtitle">
-              Uji responsivitas, latensi HTTP, dan status upstream seluruh provider secara bersamaan untuk memastikan bot tidak pernah mengalami kendala.
+              Uji responsivitas, latensi HTTP, dan status upstream seluruh provider secara bersamaan.
             </div>
           </div>
-          <button type="button" class="btn" id="btnBenchmarkAll" onclick="runMultiProviderBenchmark()" style="background: #0284c7; color: #fff; font-size: 13px; padding: 8px 16px; font-weight: 600;">
+          <button type="button" class="btn" id="btnBenchmarkAll" onclick="runMultiProviderBenchmark()" style="background: #0284c7; color: #fff; font-size: 12px; padding: 6px 12px; font-weight: 600;">
             ⚡ Uji Semua Provider Bersamaan
           </button>
         </div>
 
-        <div class="table-responsive" style="margin-top: 10px;">
+        <div class="table-responsive" style="margin-top: 8px;">
           <table class="data-table">
             <thead>
               <tr>
@@ -1316,7 +1323,7 @@
             </thead>
             <tbody id="healthBenchmarkTableBody">
               <tr>
-                <td colspan="7" style="text-align: center; color: #64748b; padding: 25px;">
+                <td colspan="7" style="text-align: center; color: #64748b; padding: 20px;">
                   Klik tombol "⚡ Uji Semua Provider Bersamaan" di atas untuk memulai pengujian paralel real-time.
                 </td>
               </tr>
@@ -1329,7 +1336,7 @@
       <div class="card">
         <div class="card-header">
           <div>
-            <div class="card-title" style="display: flex; align-items: center; gap: 8px;">
+            <div class="card-title" style="display: flex; align-items: center; gap: 6px;">
               <span>🛠️</span> Studio Alat Spesialis AI &amp; Generator Cepat
             </div>
             <div class="card-subtitle">
@@ -1339,7 +1346,7 @@
         </div>
 
         <!-- Tool Selector Pills -->
-        <div style="display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap;">
+        <div style="display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap;">
           <button type="button" class="guide-app-tab active" onclick="selectStudioTool('search', this)">🔍 Web Search</button>
           <button type="button" class="guide-app-tab" onclick="selectStudioTool('code', this)">💻 Code Generator</button>
           <button type="button" class="guide-app-tab" onclick="selectStudioTool('summary', this)">📝 Ringkas Teks</button>
@@ -1350,21 +1357,21 @@
         </div>
 
         <!-- Dynamic Tool Form -->
-        <div id="studioToolContainer" style="background: #090c14; border: 1px solid #1e2433; border-radius: 10px; padding: 18px; margin-bottom: 18px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
-            <div style="font-weight: 700; color: #f1f5f9; font-size: 14px;" id="studioToolTitle">🔍 Web Search &amp; Riset Internet Live</div>
-            <span id="studioTelegramCommandBadge" style="font-size: 11.5px; font-family: 'JetBrains Mono', monospace; background: rgba(56, 189, 248, 0.12); color: #38bdf8; padding: 3px 8px; border-radius: 4px; border: 1px solid rgba(56, 189, 248, 0.25);">Perintah Bot: /search [kueri]</span>
+        <div id="studioToolContainer" style="background: var(--bg-card-subtle); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 16px; margin-bottom: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
+            <div style="font-weight: 700; color: #f1f5f9; font-size: 13.5px;" id="studioToolTitle">🔍 Web Search &amp; Riset Internet Live</div>
+            <span id="studioTelegramCommandBadge" style="font-size: 11px; font-family: 'JetBrains Mono', monospace; background: rgba(56, 189, 248, 0.1); color: #38bdf8; padding: 2px 7px; border-radius: 4px; border: 1px solid rgba(56, 189, 248, 0.2);">Perintah Bot: /search [kueri]</span>
           </div>
-          <div style="font-size: 12.5px; color: #94a3b8; margin-bottom: 14px;" id="studioToolDesc">
+          <div style="font-size: 12px; color: #94a3b8; margin-bottom: 12px;" id="studioToolDesc">
             Mencari informasi terkini dari internet dan merangkumnya secara akurat dengan sumber data valid.
           </div>
 
-          <div class="form-group" style="margin-bottom: 14px;">
+          <div class="form-group" style="margin-bottom: 12px;">
             <label class="form-label" id="studioInputLabel">Kueri / Input Data</label>
             <textarea id="studioInputText" class="input-textarea" rows="3" placeholder="Masukkan topik atau kueri pencarian..."></textarea>
           </div>
 
-          <div style="display: flex; justify-content: flex-end; gap: 10px;">
+          <div style="display: flex; justify-content: flex-end; gap: 8px;">
             <button type="button" class="btn btn-save" id="btnExecuteStudioTool" onclick="executeStudioTool()">
               🚀 Jalankan Alat AI Ini
             </button>
@@ -1372,22 +1379,22 @@
         </div>
 
         <!-- Execution Result Output -->
-        <div id="studioResultContainer" style="display: none; background: #06080e; border: 1px solid #1e293b; border-radius: 8px; padding: 16px; margin-top: 14px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1e2433; padding-bottom: 8px; margin-bottom: 12px;">
-            <span style="font-weight: 700; color: #10b981; font-size: 13px;">🟢 Hasil Eksekusi AI</span>
-            <span id="studioExecutionLatency" style="font-size: 12px; color: #38bdf8;">Latensi: 0 ms</span>
+        <div id="studioResultContainer" style="display: none; background: #06080e; border: 1px solid var(--border-card); border-radius: var(--radius-sm); padding: 14px; margin-top: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-subtle); padding-bottom: 6px; margin-bottom: 10px;">
+            <span style="font-weight: 700; color: #10b981; font-size: 12.5px;">🟢 Hasil Eksekusi AI</span>
+            <span id="studioExecutionLatency" style="font-size: 11.5px; color: #38bdf8;">Latensi: 0 ms</span>
           </div>
-          <div id="studioResultContent" style="color: #f1f5f9; font-size: 13.5px; line-height: 1.6; white-space: pre-wrap; word-break: break-word;"></div>
+          <div id="studioResultContent" style="color: #f1f5f9; font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;"></div>
         </div>
       </div>
 
     </div>
 
-    <!-- TAB 3: SECURITY & ACCESS CONTROL -->
+    <!-- TAB 6: SECURITY & ACCESS CONTROL -->
     <div id="tabSecurity" class="tab-content" style="display: none;">
       <div class="card">
         <div class="card-title">🔐 Kredensial Admin &amp; Proteksi Akses Panel</div>
-        <div class="card-subtitle" style="margin-bottom: 20px;">Ganti password login panel administrasi dan atur proteksi limit pencegahan spam.</div>
+        <div class="card-subtitle" style="margin-bottom: 16px;">Ganti password login panel administrasi dan atur proteksi limit pencegahan spam.</div>
         
         <div class="grid-2">
           <div class="form-group">
@@ -1397,23 +1404,21 @@
           </div>
           <div class="form-group">
             <label class="form-label">Status Proteksi API &amp; Web</label>
-            <div style="background: #060911; border: 1px solid #1e2433; border-radius: 8px; padding: 11px 14px; font-size: 13px; color: #10b981; display: flex; align-items: center; gap: 8px;">
-              <span>🛡️</span> <b>Proxy Terbuka &amp; Terlindungi</b> (Rate Limiter + Content Blacklist Aktif)
+            <div style="background: #060911; border: 1px solid var(--border-subtle); border-radius: 6px; padding: 9px 12px; font-size: 12.5px; color: #10b981; display: flex; align-items: center; gap: 6px;">
+              <span>🛡️</span> <b>Proxy Terbuka &amp; Terlindungi</b> (Rate Limiter + Content Moderation Aktif)
             </div>
-            <div class="form-hint">Pengguna web &amp; bot dapat langsung berinteraksi tanpa hambatan token/key.</div>
+            <div class="form-hint">Pengguna web &amp; bot dapat langsung berinteraksi dengan aman.</div>
           </div>
         </div>
         
-        <div class="grid-2" style="margin-top: 10px;">
+        <div class="grid-2" style="margin-top: 8px;">
           <div class="form-group">
             <label class="form-label">Maksimal Request Per IP (Rate Limit)</label>
             <input type="number" id="cfgRateMax" class="input-text" placeholder="5">
-            <div class="form-hint">Batas request sebelum IP diblokir sementara (Anti-Spam).</div>
           </div>
           <div class="form-group">
             <label class="form-label">Rentang Waktu Blokir (Detik)</label>
             <input type="number" id="cfgRateWin" class="input-text" placeholder="30">
-            <div class="form-hint">Lama waktu blokir dalam hitungan detik (HTTP 429).</div>
           </div>
         </div>
       </div>
@@ -1421,109 +1426,91 @@
       <!-- Content Moderation & Keyword Blacklist Card -->
       <div class="card">
         <div class="card-title">🛡️ Content Moderation &amp; Keyword Blacklist</div>
-        <div class="card-subtitle" style="margin-bottom: 16px;">Saring pesan masuk dan tolak kata-kata terlarang otomatis sebelum query dikirim ke model upstream (menghemat kuota dan menjaga kepatuhan).</div>
+        <div class="card-subtitle" style="margin-bottom: 14px;">Saring pesan masuk dan tolak kata-kata terlarang otomatis sebelum query dikirim ke model upstream.</div>
 
         <div class="form-group" style="margin-bottom: 0;">
-          <label class="form-label">Daftar Kata Terlarang (Satu kata/frasa per baris - Case Insensitive)</label>
-          <textarea id="cfgBlacklist" class="input-textarea" rows="4" placeholder="kata_kasar&#10;prompt_injection_keyword&#10;spam_phrase"></textarea>
-          <div class="form-hint">Jika prompt user memuat kata dalam daftar ini, server langsung menolak dengan HTTP 400 Bad Request tanpa menyentuh upstream AI.</div>
+          <label class="form-label">Daftar Kata Terlarang (Satu per baris - Case Insensitive)</label>
+          <textarea id="cfgBlacklist" class="input-textarea" rows="4" placeholder="kata_kasar&#10;prompt_injection_keyword"></textarea>
+          <div class="form-hint">Jika prompt memuat kata dalam daftar ini, server langsung menolak dengan HTTP 400.</div>
         </div>
       </div>
     </div>
 
-    <!-- TAB: TELEGRAM BOT INTEGRATION -->
+    <!-- TAB 7: TELEGRAM BOT INTEGRATION -->
     <div id="tabTelegram" class="tab-content" style="display: none;">
-      <!-- Exact Setup Bot Telegram Card (sesuai screenshot) -->
-      <div class="card" style="background: #0b0f19; border: 1px solid #1c2438; border-radius: 12px; padding: 24px; margin-bottom: 22px;">
-        
-        <!-- Header Row -->
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 20px;">
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px; margin-bottom: 16px;">
           <div>
-            <div style="font-size: 19px; font-weight: 700; color: #f8fafc; display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 20px;">🌐</span> Setup Bot Telegram
+            <div style="font-size: 16px; font-weight: 700; color: #f8fafc; display: flex; align-items: center; gap: 6px;">
+              <span>🌐</span> Setup Bot Telegram
             </div>
-            <div style="font-size: 13px; color: #94a3b8; margin-top: 4px;">
-              Atur Token dari <b>@BotFather</b> dan ID Admin Anda untuk mengendalikan &amp; menggunakan Bre AI di Telegram.
+            <div style="font-size: 12px; color: #94a3b8; margin-top: 2px;">
+              Atur Token dari <b>@BotFather</b> dan ID Admin untuk mengendalikan Bre AI di Telegram.
             </div>
           </div>
 
-          <!-- Top-Right Pill Badge: @bot_username (Buka Bot) -->
           <div id="tgBotBadgeContainer">
-            <a id="tgBotLinkBadge" href="https://t.me/bre_ai_bot" target="_blank" style="display: inline-flex; align-items: center; gap: 6px; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35); color: #34d399; font-size: 12px; font-weight: 600; padding: 6px 14px; border-radius: 9999px; text-decoration: none; transition: all 0.2s;">
-              <span style="width: 7px; height: 7px; border-radius: 50%; background: #10b981; display: inline-block;"></span>
+            <a id="tgBotLinkBadge" href="https://t.me/bre_ai_bot" target="_blank" style="display: inline-flex; align-items: center; gap: 6px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.25); color: #34d399; font-size: 11.5px; font-weight: 600; padding: 4px 12px; border-radius: 9999px; text-decoration: none;">
+              <span style="width: 6px; height: 6px; border-radius: 50%; background: #10b981; display: inline-block;"></span>
               <span id="tgBotBadgeText">@bre_ai_bot (Buka Bot)</span>
             </a>
           </div>
         </div>
 
-        <!-- Row 1: TELEGRAM BOT TOKEN -->
-        <div class="form-group" style="margin-bottom: 16px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-            <label class="form-label" style="font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0;">
-              TELEGRAM BOT TOKEN
-            </label>
-            <button type="button" class="btn btn-outline" style="font-size: 11px; padding: 2px 8px; border-color: #2a3449;" onclick="toggleTelegramTokenMask()" id="btnMaskTelegram">👁️ Tampilkan</button>
+        <!-- Telegram Bot Token -->
+        <div class="form-group" style="margin-bottom: 14px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+            <label class="form-label" style="margin-bottom: 0;">TELEGRAM BOT TOKEN</label>
+            <button type="button" class="btn btn-outline" style="font-size: 11px; padding: 2px 7px;" onclick="toggleTelegramTokenMask()" id="btnMaskTelegram">👁️ Tampilkan</button>
           </div>
-          <input type="password" id="cfgTelegramToken" class="input-text" placeholder="1234567890:ABCdefGhIJKlmNoPQRsTUVwxyZ..." style="background: #060911; border: 1px solid #1c2438; border-radius: 8px; padding: 13px 14px; color: #f1f5f9; font-family: monospace; font-size: 14px; width: 100%;">
+          <input type="password" id="cfgTelegramToken" class="input-text" placeholder="1234567890:ABCdefGhIJKlmNoPQRsTUVwxyZ...">
         </div>
 
-        <!-- Row 2: Grid 2 Columns (Admin ID & Domain Bot) -->
-        <div class="grid-2" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 22px;">
+        <div class="grid-2" style="margin-bottom: 16px;">
           <div class="form-group" style="margin-bottom: 0;">
-            <label class="form-label" style="font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">
-              TELEGRAM ADMIN ID (Chat ID)
-            </label>
-            <input type="text" id="cfgTelegramOwner" class="input-text" placeholder="425134037" style="background: #060911; border: 1px solid #1c2438; border-radius: 8px; padding: 13px 14px; color: #f1f5f9; font-family: monospace; font-size: 14px; width: 100%;">
+            <label class="form-label">TELEGRAM ADMIN ID (Chat ID)</label>
+            <input type="text" id="cfgTelegramOwner" class="input-text" placeholder="425134037">
           </div>
           <div class="form-group" style="margin-bottom: 0;">
-            <label class="form-label" style="font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;">
-              DOMAIN BOT (Default: URL Web)
-            </label>
-            <input type="text" id="cfgTelegramDomain" class="input-text" placeholder="temp-email-git-main-mrsimples-projects-db90aaf6.vercel.app" style="background: #060911; border: 1px solid #1c2438; border-radius: 8px; padding: 13px 14px; color: #f1f5f9; font-family: monospace; font-size: 14px; width: 100%;">
+            <label class="form-label">DOMAIN BOT (Default: URL Web)</label>
+            <input type="text" id="cfgTelegramDomain" class="input-text" placeholder="your-app.vercel.app">
           </div>
         </div>
 
-        <!-- Row 3: 4 Action Buttons Bar -->
-        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 12px;">
-          <button type="button" class="btn" onclick="saveTelegramSetupOnly()" style="background: #19202e; color: #f1f5f9; border: 1px solid #283449; border-radius: 8px; padding: 13px 16px; font-weight: 600; font-size: 13px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.background='#232c3f'" onmouseout="this.style.background='#19202e'">
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px;">
+          <button type="button" class="btn btn-outline" onclick="saveTelegramSetupOnly()" style="font-size: 12px; padding: 8px 10px;">
             1. Simpan
           </button>
-          
-          <button type="button" class="btn" onclick="setupTelegramWebhookFromDomain()" style="background: #2563eb; color: #ffffff; border: none; border-radius: 8px; padding: 13px 16px; font-weight: 600; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;" onmouseover="this.style.background='#1d4ed8'" onmouseout="this.style.background='#2563eb'">
-            <span>🔄</span> 2. Set Webhook
+          <button type="button" class="btn" onclick="setupTelegramWebhookFromDomain()" style="background: #2563eb; color: #fff; font-size: 12px; padding: 8px 10px;">
+            🔄 2. Set Webhook
           </button>
-          
-          <button type="button" class="btn" onclick="testTelegramBotFlow()" style="background: #059669; color: #ffffff; border: none; border-radius: 8px; padding: 13px 16px; font-weight: 600; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;" onmouseover="this.style.background='#047857'" onmouseout="this.style.background='#059669'">
-            <span>⚡</span> 3. Tes Bot
+          <button type="button" class="btn" onclick="testTelegramBotFlow()" style="background: #059669; color: #fff; font-size: 12px; padding: 8px 10px;">
+            ⚡ 3. Tes Bot
           </button>
-          
-          <button type="button" class="btn" onclick="showDetailedTelegramStatusModal()" style="background: #6d28d9; color: #ffffff; border: none; border-radius: 8px; padding: 13px 16px; font-weight: 600; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;" onmouseover="this.style.background='#5b21b6'" onmouseout="this.style.background='#6d28d9'">
-            <span>🔍</span> Cek Status
+          <button type="button" class="btn" onclick="showDetailedTelegramStatusModal()" style="background: #6d28d9; color: #fff; font-size: 12px; padding: 8px 10px;">
+            🔍 Cek Status
           </button>
         </div>
 
-        <!-- Row 4: Restart & Stop Buttons -->
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-          <button type="button" id="btnRestartBot" class="btn" onclick="restartTelegramBotService()" style="background: #92400e; color: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 11px 16px; font-weight: 600; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;" onmouseover="this.style.background='#b45309'" onmouseout="this.style.background='#92400e'">
-            <span>♻️</span> Restart Bot Service
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+          <button type="button" id="btnRestartBot" class="btn btn-outline" onclick="restartTelegramBotService()" style="color: #f59e0b; border-color: rgba(245, 158, 11, 0.3); font-size: 12px; padding: 7px 10px;">
+            ♻️ Restart Bot Service
           </button>
-          <button type="button" id="btnStopBot" class="btn" onclick="stopTelegramBotService()" style="background: #7f1d1d; color: #fecaca; border: 1px solid #ef4444; border-radius: 8px; padding: 11px 16px; font-weight: 600; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;" onmouseover="this.style.background='#991b1b'" onmouseout="this.style.background='#7f1d1d'">
-            <span>🛑</span> Stop Bot Service
+          <button type="button" id="btnStopBot" class="btn btn-outline" onclick="stopTelegramBotService()" style="color: #f43f5e; border-color: rgba(244, 63, 94, 0.3); font-size: 12px; padding: 7px 10px;">
+            🛑 Stop Bot Service
           </button>
         </div>
 
-        <!-- Hidden inputs for backward compatibility -->
         <input type="checkbox" id="cfgTelegramEnabled" checked style="display: none;">
         <input type="text" id="cfgTelegramWhitelist" style="display: none;">
-
       </div>
 
-      <!-- Advanced Telegram Settings Card (Mode Akses, Gaya Bahasa & Bahasa) -->
-      <div class="card" style="background: #0d111a; border: 1px solid #1e2433; border-radius: 12px; padding: 22px; margin-bottom: 24px;">
-        <div class="card-header" style="margin-bottom: 16px;">
+      <!-- Advanced Telegram Settings -->
+      <div class="card">
+        <div class="card-header" style="margin-bottom: 12px;">
           <div>
-            <div class="card-title" style="font-size: 16px;">🛡️ Mode Akses, Gaya Bahasa &amp; Bahasa Bot Telegram</div>
-            <div class="card-subtitle">Tentukan hak akses bot (Publik vs Khusus Pengguna Diizinkan), atur gaya bahasa/dialek respons, dan bahasa default.</div>
+            <div class="card-title">🛡️ Mode Akses, Gaya Bahasa &amp; Bahasa Bot Telegram</div>
+            <div class="card-subtitle">Atur hak akses, gaya bahasa respons, dan bahasa default.</div>
           </div>
         </div>
 
@@ -1534,7 +1521,6 @@
               <option value="public">🟢 Terbuka untuk Publik (Semua Pengguna Bisa Chat)</option>
               <option value="diizinkan">🔒 Khusus Pengguna Diizinkan (Akses Terbatas)</option>
             </select>
-            <div class="form-hint">Di mode Khusus Diizinkan, hanya Admin dan akun dalam daftar diizinkan yang dapat chat dengan Bre AI.</div>
           </div>
           <div class="form-group">
             <label class="form-label">🎭 Gaya Bahasa Respons Bot Telegram</label>
@@ -1549,12 +1535,10 @@
               <option value="makassar">🌊 Makassar / Bugis (Tabe', Akrab)</option>
               <option value="standar">🤖 Standar Bre AI (Netral)</option>
             </select>
-            <div class="form-hint">Gaya bahasa bot default di Telegram (Pengguna dapat mengganti gaya masing-masing dengan perintah <code>/style</code>).</div>
           </div>
         </div>
 
-        <!-- Language Selection Row -->
-        <div class="form-group" style="margin-top: 16px; margin-bottom: 0;">
+        <div class="form-group" style="margin-top: 10px; margin-bottom: 0;">
           <label class="form-label">🌐 Bahasa Default Respons Bot Telegram</label>
           <select id="cfgTelegramLanguage" class="input-select">
             <option value="id">🇮🇩 Bahasa Indonesia (Default)</option>
@@ -1568,20 +1552,19 @@
             <option value="ru">🇷🇺 Русский (Russian)</option>
             <option value="ko">🇰🇷 한국어 (Korean)</option>
           </select>
-          <div class="form-hint">Bahasa default untuk semua pengguna bot. Pengguna individual dapat mengubah bahasa mereka sendiri dengan perintah <code>/language</code> di Telegram.</div>
         </div>
       </div>
 
       <!-- Telegram User List Management Card -->
-      <div class="card" style="margin-top: 24px;">
+      <div class="card">
         <div class="card-header">
           <div>
-            <div class="card-title">👥 Kelola Pengguna Telegram (Daftar Pengguna Diizinkan &amp; Dicekal)</div>
-            <div class="card-subtitle">Daftarkan akun Telegram yang diizinkan atau dicekal dengan kontrol status instan, pencarian, dan filter.</div>
+            <div class="card-title">👥 Kelola Pengguna Telegram</div>
+            <div class="card-subtitle">Daftarkan akun Telegram yang diizinkan atau dicekal.</div>
           </div>
         </div>
 
-        <div class="grid-3" style="margin-bottom: 14px;">
+        <div class="grid-3" style="margin-bottom: 12px;">
           <div class="form-group" style="margin-bottom: 0;">
             <label class="form-label">ID Telegram / @Username</label>
             <input type="text" id="newTgUserId" class="input-text" placeholder="123456789 atau @username">
@@ -1591,25 +1574,24 @@
             <input type="text" id="newTgUserName" class="input-text" placeholder="Contoh: Rayan (Kantor)">
           </div>
           <div class="form-group" style="margin-bottom: 0;">
-            <label class="form-label">Hak Akses / Status</label>
+            <label class="form-label">Hak Akses</label>
             <select id="newTgUserRole" class="input-select">
-              <option value="diizinkan">🟢 Diizinkan (Diberi Akses)</option>
-              <option value="blocked">🔴 Diblokir (Ditolak Akses)</option>
+              <option value="diizinkan">🟢 Diizinkan</option>
+              <option value="blocked">🔴 Diblokir</option>
             </select>
           </div>
         </div>
-        <div style="display: flex; justify-content: flex-end; margin-bottom: 18px;">
-          <button class="btn btn-save" onclick="addTelegramUser()">➕ Tambah Pengguna ke Daftar</button>
+        <div style="display: flex; justify-content: flex-end; margin-bottom: 14px;">
+          <button class="btn btn-save" onclick="addTelegramUser()">➕ Tambah Pengguna</button>
         </div>
 
-        <!-- Filter Buttons & Search Bar -->
-        <div style="display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; justify-content: space-between;">
-          <div style="display: flex; gap: 6px;" id="tgUserFilterBtns">
-            <button type="button" class="btn" id="btnTgUserAll" onclick="filterTelegramUsersUI('all')" style="background: #0284c7; color: #fff; font-size: 12px; padding: 5px 12px;">👥 Semua (<span id="tgCountAll">0</span>)</button>
-            <button type="button" class="btn btn-outline" id="btnTgUserAllowed" onclick="filterTelegramUsersUI('diizinkan')" style="font-size: 12px; padding: 5px 12px; color: #86efac; border-color: rgba(34, 197, 94, 0.4);">🟢 Diizinkan (<span id="tgCountAllowed">0</span>)</button>
-            <button type="button" class="btn btn-outline" id="btnTgUserBlocked" onclick="filterTelegramUsersUI('blocked')" style="font-size: 12px; padding: 5px 12px; color: #fca5a5; border-color: rgba(239, 68, 68, 0.4);">🔴 Diblokir (<span id="tgCountBlocked">0</span>)</button>
+        <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; justify-content: space-between;">
+          <div style="display: flex; gap: 4px;" id="tgUserFilterBtns">
+            <button type="button" class="btn" id="btnTgUserAll" onclick="filterTelegramUsersUI('all')" style="background: #0284c7; color: #fff; font-size: 11.5px; padding: 4px 10px;">👥 Semua (<span id="tgCountAll">0</span>)</button>
+            <button type="button" class="btn btn-outline" id="btnTgUserAllowed" onclick="filterTelegramUsersUI('diizinkan')" style="font-size: 11.5px; padding: 4px 10px; color: #34d399;">🟢 Diizinkan (<span id="tgCountAllowed">0</span>)</button>
+            <button type="button" class="btn btn-outline" id="btnTgUserBlocked" onclick="filterTelegramUsersUI('blocked')" style="font-size: 11.5px; padding: 4px 10px; color: #fb7185;">🔴 Diblokir (<span id="tgCountBlocked">0</span>)</button>
           </div>
-          <input type="text" id="tgUserSearchInput" class="input-text" style="max-width: 280px; padding: 6px 12px; font-size: 13px;" placeholder="🔍 Cari ID / Nama / Catatan..." oninput="filterTelegramUsersUI()">
+          <input type="text" id="tgUserSearchInput" class="input-text" style="max-width: 240px; padding: 5px 10px; font-size: 12px;" placeholder="🔍 Cari ID / Nama..." oninput="filterTelegramUsersUI()">
         </div>
 
         <div class="table-responsive">
@@ -1625,7 +1607,7 @@
             </thead>
             <tbody id="telegramUsersTableBody">
               <tr>
-                <td colspan="5" style="text-align: center; color: #64748b; padding: 20px;">Belum ada daftar pengguna khusus.</td>
+                <td colspan="5" style="text-align: center; color: #64748b; padding: 18px;">Belum ada daftar pengguna khusus.</td>
               </tr>
             </tbody>
           </table>
@@ -1633,13 +1615,13 @@
       </div>
     </div>
 
-    <!-- TAB 4: LIVE MODEL TESTER -->
+    <!-- TAB 8: LIVE MODEL TESTER -->
     <div id="tabTester" class="tab-content" style="display: none;">
       <div class="card">
         <div class="card-title">Live Model Query & Latency Inspector</div>
-        <div class="card-subtitle" style="margin-bottom: 20px;">Uji respon dan kecepatan model AI langsung dari panel admin tanpa membuka tab chat.</div>
+        <div class="card-subtitle" style="margin-bottom: 16px;">Uji respon dan kecepatan model AI langsung dari panel admin.</div>
         
-        <div class="grid-2" style="margin-bottom: 16px;">
+        <div class="grid-2" style="margin-bottom: 14px;">
           <div class="form-group">
             <label class="form-label">Pilih Model Uji</label>
             <select id="testModelSelect" class="input-select"></select>
@@ -1650,25 +1632,116 @@
           </div>
         </div>
         
-        <div style="display: flex; gap: 10px; margin-bottom: 16px;">
+        <div style="display: flex; gap: 8px; margin-bottom: 14px;">
           <button class="btn btn-save" id="btnRunTest" onclick="runLiveTest()">⚡ Kirim Query Uji</button>
           <button class="btn btn-outline" onclick="clearLiveOutput()">Bersihkan Output</button>
         </div>
         
         <div class="form-group">
           <label class="form-label">Output & Respon Server:</label>
-          <div id="testOutputArea" style="background: #06070a; border: 1px solid #1e2433; border-radius: 8px; padding: 14px; min-height: 120px; font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #94a3b8; white-space: pre-wrap;">Tekan 'Kirim Query Uji' untuk melihat respon...</div>
+          <div id="testOutputArea" style="background: #06070a; border: 1px solid var(--border-subtle); border-radius: 6px; padding: 12px; min-height: 110px; font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: #94a3b8; white-space: pre-wrap;">Tekan 'Kirim Query Uji' untuk melihat respon...</div>
         </div>
       </div>
     </div>
 
-    <!-- TAB 5: BACKUP & RESTORE -->
+    <!-- TAB 9: CLOUD STORAGE & PERSISTENCE -->
+    <div id="tabCloud" class="tab-content" style="display: none;">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">☁️ Penyimpanan Cloud Permanen (Vercel & GitHub)</div>
+            <div class="card-subtitle">Pastikan seluruh konfigurasi web tersimpan permanen di cloud tanpa takut reset akibat Vercel cold start.</div>
+          </div>
+          <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+            <button class="btn btn-save" onclick="saveAllConfig()">💾 Simpan Konfigurasi</button>
+          </div>
+        </div>
+
+        <div style="background: var(--bg-card-subtle); border: 1px solid var(--border-card); border-radius: var(--radius-md); padding: 14px 16px; margin-bottom: 18px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 8px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span id="cloudStatusBadge" class="ping-badge testing" style="font-size: 12px; padding: 3px 10px;">☁️ Memeriksa...</span>
+              <span style="font-weight: 600; color: #f1f5f9; font-size: 14px;" id="cloudStatusTitle">Status Penyimpanan</span>
+            </div>
+            <button type="button" class="btn btn-outline" style="font-size: 11.5px; padding: 3px 8px;" onclick="loadCloudStorageStatus(true)">🔄 Cek Status Storage</button>
+          </div>
+          <div id="cloudStatusExplanation" style="font-size: 12px; color: #94a3b8; line-height: 1.5;">
+            Memuat informasi status penyimpanan...
+          </div>
+        </div>
+
+        <!-- Section 1: Upstash Redis / Vercel KV -->
+        <div style="border: 1px solid var(--border-card); border-radius: var(--radius-md); padding: 18px; margin-bottom: 16px; background: rgba(56, 189, 248, 0.02);">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">
+            <div>
+              <div style="font-size: 15px; font-weight: 600; color: #38bdf8; display: flex; align-items: center; gap: 6px;">
+                ⚡ Opsi 1: Vercel KV / Upstash Redis (Direkomendasikan - Paling Cepat & Gratis)
+              </div>
+              <div style="font-size: 11.5px; color: #64748b; margin-top: 2px;">
+                Database Redis serverless resmi Vercel. Pengaturan tersimpan secara instan (&lt;20ms).
+              </div>
+            </div>
+            <button type="button" class="btn btn-outline" style="border-color: #38bdf8; color: #38bdf8; font-size: 11.5px; padding: 4px 10px;" onclick="testUpstashConnection()">⚡ Test Koneksi Upstash</button>
+          </div>
+
+          <div class="grid-2">
+            <div class="form-group">
+              <label class="form-label">Upstash / Vercel KV REST API URL</label>
+              <input type="text" id="cfgUpstashUrl" class="input-text" placeholder="https://xxxxxx.upstash.io">
+            </div>
+            <div class="form-group">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                <label class="form-label" style="margin-bottom: 0;">Upstash / Vercel KV REST API Token</label>
+                <button type="button" class="btn btn-outline" style="font-size: 10.5px; padding: 1px 6px;" onclick="toggleUpstashTokenMask()" id="btnMaskUpstash">👁️ Tampilkan</button>
+              </div>
+              <input type="password" id="cfgUpstashToken" class="input-text" placeholder="AX... (Token Rahasia)">
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 2: GitHub Repository Sync -->
+        <div style="border: 1px solid var(--border-card); border-radius: var(--radius-md); padding: 18px; background: rgba(16, 185, 129, 0.02);">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">
+            <div>
+              <div style="font-size: 15px; font-weight: 600; color: #34d399; display: flex; align-items: center; gap: 6px;">
+                🐙 Opsi 2: Sinkronisasi Repositori GitHub (Auto-Commit dari Web)
+              </div>
+              <div style="font-size: 11.5px; color: #64748b; margin-top: 2px;">
+                Setiap kali klik "Simpan", Bre AI langsung meng-commit <code>config.json</code> terbaru ke GitHub Anda!
+              </div>
+            </div>
+            <button type="button" class="btn btn-outline" style="border-color: #34d399; color: #34d399; font-size: 11.5px; padding: 4px 10px;" onclick="testGitHubConnection()">⚡ Test Koneksi GitHub</button>
+          </div>
+
+          <div class="grid-3" style="display: grid; grid-template-columns: 1fr 1fr 120px; gap: 10px;">
+            <div class="form-group">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                <label class="form-label" style="margin-bottom: 0;">GitHub Token (PAT)</label>
+                <button type="button" class="btn btn-outline" style="font-size: 10.5px; padding: 1px 6px;" onclick="toggleGithubTokenMask()" id="btnMaskGithub">👁️ Tampilkan</button>
+              </div>
+              <input type="password" id="cfgGithubToken" class="input-text" placeholder="ghp_...">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Nama Repositori GitHub</label>
+              <input type="text" id="cfgGithubRepo" class="input-text" placeholder="username/bre-ai-main">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Branch</label>
+              <input type="text" id="cfgGithubBranch" class="input-text" placeholder="main" value="main">
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- TAB 10: BACKUP & RESTORE -->
     <div id="tabBackup" class="tab-content" style="display: none;">
       <div class="card">
         <div class="card-title">Backup, Restore & Reset Konfigurasi</div>
-        <div class="card-subtitle" style="margin-bottom: 20px;">Cadangkan seluruh konfigurasi proxy Anda, pulihkan dari file JSON, atau reset ke pengaturan awal.</div>
+        <div class="card-subtitle" style="margin-bottom: 16px;">Cadangkan seluruh konfigurasi proxy Anda atau pulihkan dari file JSON.</div>
         
-        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
           <button class="btn btn-outline" onclick="exportConfigJSON()">📥 Download Backup (config.json)</button>
           <button class="btn btn-outline" onclick="document.getElementById('importFile').click()">📤 Import File Backup</button>
           <input type="file" id="importFile" accept=".json" style="display: none;" onchange="importConfigFile(event)">
@@ -1677,169 +1750,57 @@
       </div>
     </div>
 
-    <!-- TAB: CLOUD STORAGE & PERSISTENCE (VERCEL & GITHUB) -->
-    <div id="tabCloud" class="tab-content" style="display: none;">
-      <div class="card">
-        <div class="card-header">
-          <div>
-            <div class="card-title">☁️ Penyimpanan Cloud Permanen (Vercel & GitHub)</div>
-            <div class="card-subtitle">Pastikan seluruh konfigurasi web tersimpan permanen di cloud tanpa takut reset akibat Vercel cold start / read-only filesystem.</div>
-          </div>
-          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-            <button class="btn btn-save" onclick="saveAllConfig()">💾 Simpan Konfigurasi</button>
-          </div>
-        </div>
-
-        <!-- Cloud Engine Status Banner -->
-        <div style="background: #090c13; border: 1px solid #1e2433; border-radius: 10px; padding: 18px 20px; margin-bottom: 24px;">
-          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 10px;">
-            <div style="display: flex; align-items: center; gap: 12px;">
-              <span id="cloudStatusBadge" class="ping-badge testing" style="font-size: 13px; padding: 4px 12px;">☁️ Memeriksa...</span>
-              <span style="font-weight: 600; color: #f1f5f9; font-size: 15px;" id="cloudStatusTitle">Status Penyimpanan</span>
-            </div>
-            <button type="button" class="btn btn-outline" style="font-size: 12px; padding: 4px 10px;" onclick="loadCloudStorageStatus(true)">🔄 Cek Status Storage</button>
-          </div>
-          <div id="cloudStatusExplanation" style="font-size: 13px; color: #94a3b8; line-height: 1.6;">
-            Memuat informasi status penyimpanan...
-          </div>
-        </div>
-
-        <!-- Section 1: Upstash Redis / Vercel KV -->
-        <div style="border: 1px solid #1e2433; border-radius: 10px; padding: 22px; margin-bottom: 22px; background: rgba(56, 189, 248, 0.02);">
-          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 14px;">
-            <div>
-              <div style="font-size: 16px; font-weight: 600; color: #38bdf8; display: flex; align-items: center; gap: 8px;">
-                ⚡ Opsi 1: Vercel KV / Upstash Redis (Direkomendasikan - Paling Cepat & Gratis)
-              </div>
-              <div style="font-size: 12px; color: #64748b; margin-top: 2px;">
-                Database Redis serverless resmi Vercel. Pengaturan tersimpan secara instan (&lt;20ms) dan permanen lintas seluruh serverless lambda global.
-              </div>
-            </div>
-            <button type="button" class="btn btn-outline" style="border-color: #38bdf8; color: #38bdf8; font-size: 12px;" onclick="testUpstashConnection()">⚡ Test Koneksi Upstash</button>
-          </div>
-
-          <div style="background: #0d1117; border-left: 3px solid #38bdf8; padding: 12px 14px; border-radius: 6px; margin-bottom: 16px; font-size: 12px; color: #cbd5e1; line-height: 1.5;">
-            <b>💡 Cara 1-Klik di Vercel Dashboard (Paling Mudah):</b><br>
-            Buka Vercel Dashboard → Pilih Proyek Anda → Klik tab <b>Storage</b> → Klik <b>Create Database</b> → Pilih <b>KV</b> (atau Upstash Redis) → Klik <b>Connect to Project</b>.<br>
-            <i>Begitu terhubung, Bre AI akan otomatis mendeteksi database tanpa Anda perlu mengisi kolom URL &amp; Token di bawah!</i>
-          </div>
-
-          <div class="grid-2">
-            <div class="form-group">
-              <label class="form-label">Upstash / Vercel KV REST API URL</label>
-              <input type="text" id="cfgUpstashUrl" class="input-text" placeholder="https://xxxxxx.upstash.io">
-              <div class="form-hint">URL endpoint REST API Upstash Redis.</div>
-            </div>
-            <div class="form-group">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                <label class="form-label" style="margin-bottom: 0;">Upstash / Vercel KV REST API Token</label>
-                <button type="button" class="btn btn-outline" style="font-size: 11px; padding: 2px 7px;" onclick="toggleUpstashTokenMask()" id="btnMaskUpstash">👁️ Tampilkan</button>
-              </div>
-              <input type="password" id="cfgUpstashToken" class="input-text" placeholder="AX... (Token Rahasia Read/Write)">
-              <div class="form-hint">Token autentikasi REST API Upstash.</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Section 2: GitHub Repository Sync -->
-        <div style="border: 1px solid #1e2433; border-radius: 10px; padding: 22px; margin-bottom: 16px; background: rgba(16, 185, 129, 0.02);">
-          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 14px;">
-            <div>
-              <div style="font-size: 16px; font-weight: 600; color: #34d399; display: flex; align-items: center; gap: 8px;">
-                🐙 Opsi 2: Sinkronisasi Repositori GitHub (Auto-Commit dari Web)
-              </div>
-              <div style="font-size: 12px; color: #64748b; margin-top: 2px;">
-                Karena Anda deploy via <b>Vercel + GitHub</b>, setiap kali klik "Simpan", Bre AI langsung meng-commit <code>config.json</code> terbaru ke GitHub Anda!
-              </div>
-            </div>
-            <button type="button" class="btn btn-outline" style="border-color: #34d399; color: #34d399; font-size: 12px;" onclick="testGitHubConnection()">⚡ Test Koneksi GitHub</button>
-          </div>
-
-          <div style="background: #0d1117; border-left: 3px solid #34d399; padding: 12px 14px; border-radius: 6px; margin-bottom: 16px; font-size: 12px; color: #cbd5e1; line-height: 1.5;">
-            <b>💡 Cara Menggunakan GitHub Sync:</b><br>
-            1. Buat Personal Access Token (PAT) di GitHub (Settings → Developer Settings → Personal access tokens → Token classic dengan izin <b>repo</b>).<br>
-            2. Masukkan Token dan nama repositori (contoh: <code>AmirunRayan/bre-ai-main</code>).<br>
-            3. Klik <b>Test Koneksi GitHub</b> lalu <b>Simpan Semua Pengaturan</b>.
-          </div>
-
-          <div class="grid-3" style="display: grid; grid-template-columns: 1fr 1fr 140px; gap: 12px;">
-            <div class="form-group">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                <label class="form-label" style="margin-bottom: 0;">GitHub Token (PAT)</label>
-                <button type="button" class="btn btn-outline" style="font-size: 11px; padding: 2px 7px;" onclick="toggleGithubTokenMask()" id="btnMaskGithub">👁️ Tampilkan</button>
-              </div>
-              <input type="password" id="cfgGithubToken" class="input-text" placeholder="ghp_... atau github_pat_...">
-              <div class="form-hint">Token akses GitHub dengan izin <code>repo</code>.</div>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Nama Repositori GitHub</label>
-              <input type="text" id="cfgGithubRepo" class="input-text" placeholder="username/bre-ai-main">
-              <div class="form-hint">Format: <code>owner/repository</code>.</div>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Branch</label>
-              <input type="text" id="cfgGithubBranch" class="input-text" placeholder="main" value="main">
-              <div class="form-hint">Branch target git.</div>
-            </div>
-          </div>
-        </div>
-
-      </div>
-    </div>
-
-
-
     </main>
   </div>
 </div>
 
-<!-- Request Detail Inspector Modal (9Router) -->
+<!-- Request Detail Inspector Modal -->
 <div class="login-overlay" id="requestDetailModal" style="display: none; z-index: 10001;">
-  <div class="card" style="width: 100%; max-width: 720px; max-height: 90vh; overflow-y: auto; margin: 0; background: #0f131c; border-color: #232d40; box-shadow: 0 25px 50px rgba(0,0,0,0.8);">
-    <div class="card-header" style="border-bottom: 1px solid #1e2536; padding-bottom: 14px; margin-bottom: 16px;">
+  <div class="card" style="width: 100%; max-width: 680px; max-height: 90vh; overflow-y: auto; margin: 0; background: #0c0f17; border-color: #1f2a3e; box-shadow: 0 20px 50px rgba(0,0,0,0.8);">
+    <div class="card-header" style="border-bottom: 1px solid var(--border-subtle); padding-bottom: 12px; margin-bottom: 14px;">
       <div>
-        <div class="card-title" id="modalReqTitle" style="font-size: 16px; display: flex; align-items: center; gap: 8px;">
+        <div class="card-title" id="modalReqTitle" style="font-size: 15px; display: flex; align-items: center; gap: 6px;">
           <span>🔍 Request Inspector</span>
           <span id="modalReqStatusBadge" class="ping-badge ok">200 OK</span>
         </div>
         <div class="card-subtitle" id="modalReqTimestamp">Timestamp: -</div>
       </div>
-      <button class="btn btn-outline" style="padding: 4px 10px; font-size: 14px;" onclick="closeRequestModal()">✕</button>
+      <button class="btn btn-outline" style="padding: 3px 8px; font-size: 13px;" onclick="closeRequestModal()">✕</button>
     </div>
 
     <!-- Metadata Grid -->
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; font-size: 13px;">
-      <div style="background: #090c12; padding: 10px 14px; border-radius: 8px; border: 1px solid #1e2536;">
-        <div style="color: #64748b; font-size: 11px; text-transform: uppercase;">Provider & Model</div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; font-size: 12px;">
+      <div style="background: #080a10; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-subtle);">
+        <div style="color: #64748b; font-size: 10.5px; text-transform: uppercase;">Provider & Model</div>
         <div style="color: #f1f5f9; font-weight: 600; margin-top: 2px;" id="modalReqProvModel">-</div>
       </div>
-      <div style="background: #090c12; padding: 10px 14px; border-radius: 8px; border: 1px solid #1e2536;">
-        <div style="color: #64748b; font-size: 11px; text-transform: uppercase;">Latency & TTFT</div>
+      <div style="background: #080a10; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-subtle);">
+        <div style="color: #64748b; font-size: 10.5px; text-transform: uppercase;">Latency & TTFT</div>
         <div style="color: #38bdf8; font-family: monospace; font-weight: 600; margin-top: 2px;" id="modalReqLatency">-</div>
       </div>
-      <div style="background: #090c12; padding: 10px 14px; border-radius: 8px; border: 1px solid #1e2536;">
-        <div style="color: #64748b; font-size: 11px; text-transform: uppercase;">Tokens (Input / Cached / Output)</div>
-        <div style="color: #22c55e; font-family: monospace; font-weight: 600; margin-top: 2px;" id="modalReqTokens">-</div>
+      <div style="background: #080a10; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-subtle);">
+        <div style="color: #64748b; font-size: 10.5px; text-transform: uppercase;">Tokens (Input / Cached / Output)</div>
+        <div style="color: #34d399; font-family: monospace; font-weight: 600; margin-top: 2px;" id="modalReqTokens">-</div>
       </div>
-      <div style="background: #090c12; padding: 10px 14px; border-radius: 8px; border: 1px solid #1e2536;">
-        <div style="color: #64748b; font-size: 11px; text-transform: uppercase;">Est. Cost & Client IP</div>
-        <div style="color: #eab308; font-family: monospace; font-weight: 600; margin-top: 2px;" id="modalReqCostIp">-</div>
+      <div style="background: #080a10; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-subtle);">
+        <div style="color: #64748b; font-size: 10.5px; text-transform: uppercase;">Est. Cost & Client IP</div>
+        <div style="color: #facc15; font-family: monospace; font-weight: 600; margin-top: 2px;" id="modalReqCostIp">-</div>
       </div>
     </div>
 
     <!-- Request Preview -->
     <div class="form-group">
       <label class="form-label">User Prompt / Request Summary</label>
-      <div id="modalReqPrompt" class="input-textarea" style="max-height: 120px; overflow-y: auto; white-space: pre-wrap; color: #cbd5e1; background: #06080d;"></div>
+      <div id="modalReqPrompt" class="input-textarea" style="max-height: 110px; overflow-y: auto; white-space: pre-wrap; color: #cbd5e1; background: #06080d;"></div>
     </div>
 
     <!-- Response Preview -->
     <div class="form-group">
       <label class="form-label">Model Completion / Response Preview</label>
-      <div id="modalReqResponse" class="input-textarea" style="max-height: 140px; overflow-y: auto; white-space: pre-wrap; color: #86efac; background: #06080d;"></div>
+      <div id="modalReqResponse" class="input-textarea" style="max-height: 130px; overflow-y: auto; white-space: pre-wrap; color: #86efac; background: #06080d;"></div>
     </div>
 
-    <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px;">
+    <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px;">
       <button class="btn btn-outline" onclick="closeRequestModal()">Tutup</button>
     </div>
   </div>
