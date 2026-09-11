@@ -1,4 +1,4 @@
-﻿// ================================================================
+// ================================================================
 // admin/config.js - Save/export/import/reset config, routing mode
 // ================================================================
 
@@ -74,9 +74,6 @@ async function saveAllConfig() {
     telegramUsers,
     upstashRedisUrl: getVal('cfgUpstashUrl').trim(),
     upstashRedisToken: getVal('cfgUpstashToken').trim(),
-    githubToken: getVal('cfgGithubToken').trim(),
-    githubRepo: getVal('cfgGithubRepo').trim(),
-    githubBranch: getVal('cfgGithubBranch').trim() || 'main',
     forceStream: streamMode === 'true' ? true : (streamMode === 'false' ? false : 'auto')
   };
   if (newPw) payload.adminPassword = newPw;
@@ -95,7 +92,7 @@ async function saveAllConfig() {
       try { localStorage.setItem('bre_full_config', JSON.stringify(payload)); } catch(e){}
       if (data.cloudStorageInfo) updateStorageBadges(data.cloudStorageInfo, data.cloudStatus);
       if (data.cloudStatus?.synced) toast(`✅ Konfigurasi tersimpan PERMANEN! (${data.cloudStatus.message})`, 'ok');
-      else if (data.isReadOnlyFS) toast('⚠️ Disimpan di cache serverless. Hubungkan Vercel KV atau GitHub Sync untuk tersimpan permanen.', 'ok');
+      else if (data.isReadOnlyFS) toast('⚠️ Disimpan di cache serverless. Hubungkan Vercel KV untuk tersimpan permanen.', 'ok');
       else toast('✅ Seluruh konfigurasi berhasil disimpan permanen!', 'ok');
     } else { toast('❌ Gagal menyimpan konfigurasi', 'err'); }
   } catch(e) { toast('❌ Error: ' + e.message, 'err'); }

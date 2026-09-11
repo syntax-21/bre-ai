@@ -5,7 +5,6 @@
 const {
   getConfig,
   testUpstash,
-  testGitHub,
   getCloudStorageInfo
 } = require('../../../api/_shared');
 const api = require('../api');
@@ -25,13 +24,12 @@ async function handle(cq, botService, router = null) {
     const st = getCloudStorageInfo();
     let modeText = '💾 File Lokal / Zero-DB';
     if (st.upstashActive) modeText = '🟢 Vercel KV / Upstash Redis Aktif';
-    else if (st.githubActive) modeText = '🟢 GitHub Auto-Commit Aktif';
+    else if (st.isServerless) modeText = '🟢 Aktif (Serverless)';
 
     const text = `☁️ *Status Penyimpanan Cloud & Persistensi*\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
       `• *Mode Penyimpanan:* ${modeText}\n` +
       `• *Vercel KV / Upstash:* ${st.upstashActive ? '🟢 Terhubung' : '⚪ Belum disetel'}\n` +
-      `• *GitHub Auto-Commit:* ${st.githubActive ? '🟢 Terhubung' : '⚪ Belum disetel'}\n` +
       `• *Serverless Ready:* ${st.isServerless ? '🟢 Vercel Cloud' : '💻 Local/VPS'}\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
       `_Pilih opsi pengujian koneksi cloud di bawah:_`;
@@ -40,9 +38,6 @@ async function handle(cq, botService, router = null) {
       inline_keyboard: [
         [
           { text: '⚡ Test Upstash / Vercel KV', callback_data: 'adm_test_upstash' }
-        ],
-        [
-          { text: '🐙 Test GitHub Sync', callback_data: 'adm_test_github' }
         ],
         [
           { text: '⬅️ Menu Utama', callback_data: 'adm_main' }
@@ -56,13 +51,6 @@ async function handle(cq, botService, router = null) {
   if (data === 'adm_test_upstash') {
     await answerCallback(cq.id, '⏳ Menguji koneksi Upstash Redis...', false, token);
     const res = await testUpstash(cfg.upstashRedisUrl, cfg.upstashRedisToken);
-    await answerCallback(cq.id, res.ok ? `✅ ${res.message}` : `❌ ${res.error}`, true, token);
-    return;
-  }
-
-  if (data === 'adm_test_github') {
-    await answerCallback(cq.id, '⏳ Menguji koneksi GitHub API...', false, token);
-    const res = await testGitHub(cfg.githubToken, cfg.githubRepo, cfg.githubBranch);
     await answerCallback(cq.id, res.ok ? `✅ ${res.message}` : `❌ ${res.error}`, true, token);
     return;
   }

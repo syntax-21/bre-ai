@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
@@ -15,14 +15,13 @@
 <div class="login-overlay" id="loginOverlay">
   <div class="login-card">
     <img src="/bre_ai_avatar.jpg" alt="Bre AI Avatar" class="login-avatar">
-    <div style="font-size: 22px; font-weight: 800; color: #fff; margin-bottom: 4px; letter-spacing: -0.02em;">Bre AI</div>
-    <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 22px;">AI Gateway, Proxy Router &amp; Telemetry Master</p>
+    <div style="font-size: 22px; font-weight: 800; color: #fff; margin-bottom: 22px; letter-spacing: -0.02em;">Bre AI Gateway</div>
     <form onsubmit="event.preventDefault();doLogin()">
       <div class="form-group" style="text-align: left;">
-        <label class="form-label">Password Master Admin</label>
-        <input type="password" id="pwInput" class="input-text" placeholder="Masukkan Password Admin" required autocomplete="current-password">
+        <label class="form-label">Password</label>
+        <input type="password" id="pwInput" class="input-text" placeholder="Password" required autocomplete="current-password">
       </div>
-      <button type="submit" class="btn btn-save" style="width: 100%; padding: 10px; margin-top: 8px; font-size: 13.5px;">Buka Panel Kontrol</button>
+      <button type="submit" class="btn btn-save" style="width: 100%; padding: 10px; margin-top: 8px; font-size: 13.5px;">Login</button>
     </form>
     <a href="/" style="display: inline-block; margin-top: 18px; color: var(--text-muted); font-size: 12.5px; text-decoration: none; transition: color 0.15s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--text-muted)'">← Kembali ke Chat Utama</a>
   </div>
@@ -64,11 +63,11 @@
         <div class="sidebar-group-title">Monitoring &amp; Telemetry</div>
         <button class="sidebar-nav-item active" data-tab="tab9Router" id="tabBtn9Router" onclick="switchTab('tab9Router', this)">
           <span class="sidebar-nav-icon">📊</span>
-          <span class="sidebar-nav-label">Overview &amp; Telemetry</span>
+          <span class="sidebar-nav-label">Overview</span>
         </button>
         <button class="sidebar-nav-item" data-tab="tabDetails" id="tabBtnDetails" onclick="switchTab('tabDetails', this)">
           <span class="sidebar-nav-icon">📜</span>
-          <span class="sidebar-nav-label">Request Inspector</span>
+          <span class="sidebar-nav-label">Details</span>
         </button>
       </div>
 
@@ -82,10 +81,6 @@
         <button class="sidebar-nav-item" data-tab="tabEngine" onclick="switchTab('tabEngine', this)">
           <span class="sidebar-nav-icon">⚙️</span>
           <span class="sidebar-nav-label">Global Engine</span>
-        </button>
-        <button class="sidebar-nav-item" data-tab="tabTools" onclick="switchTab('tabTools', this)">
-          <span class="sidebar-nav-icon">🛠️</span>
-          <span class="sidebar-nav-label">AI Tools &amp; Prompt Studio</span>
         </button>
         <button class="sidebar-nav-item" data-tab="tabTester" onclick="switchTab('tabTester', this)">
           <span class="sidebar-nav-icon">🧪</span>
@@ -120,7 +115,7 @@
     <div class="sidebar-footer">
       <div class="sidebar-status-card">
         <div class="status-dot-pulse"></div>
-        <span class="sidebar-status-text">Serverless 24/7 Active</span>
+        <span class="sidebar-status-text">Aktif</span>
       </div>
       <a href="/" class="btn btn-outline" style="width: 100%; font-size: 12px; padding: 6px 10px; justify-content: center;">
         ← Chat Utama
@@ -138,7 +133,7 @@
       <div class="topbar-left">
         <button class="mobile-menu-btn" onclick="toggleMobileSidebar()" title="Buka Menu">☰</button>
         <div class="breadcrumb-title" id="activeViewTitle">
-          📊 Overview &amp; Telemetry
+          Overview
         </div>
       </div>
 
@@ -570,106 +565,7 @@
       </div>
     </div>
 
-    <!-- TAB 5: AI TOOLS & PROMPT STUDIO -->
-    <div id="tabTools" class="tab-content" style="display: none;">
-      
-      <!-- Multi-Provider Live Health Benchmarking Card -->
-      <div class="card">
-        <div class="card-header">
-          <div>
-            <div class="card-title" style="color: #38bdf8; display: flex; align-items: center; gap: 6px;">
-              <span>⚡</span> Pemantau Kesehatan Provider Live (Health Benchmark)
-            </div>
-            <div class="card-subtitle">
-              Uji responsivitas, latensi HTTP, dan status upstream seluruh provider secara bersamaan.
-            </div>
-          </div>
-          <button type="button" class="btn" id="btnBenchmarkAll" onclick="runMultiProviderBenchmark()" style="background: #0284c7; color: #fff; font-size: 12px; padding: 6px 12px; font-weight: 600;">
-            ⚡ Uji Semua Provider Bersamaan
-          </button>
-        </div>
 
-        <div class="table-responsive" style="margin-top: 8px;">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>No</th>
-                <th>Nama Provider</th>
-                <th>Target Endpoint URL</th>
-                <th>Model Primer</th>
-                <th>Status HTTP</th>
-                <th>Latensi</th>
-                <th>Keterangan</th>
-              </tr>
-            </thead>
-            <tbody id="healthBenchmarkTableBody">
-              <tr>
-                <td colspan="7" style="text-align: center; color: #64748b; padding: 20px;">
-                  Klik tombol "⚡ Uji Semua Provider Bersamaan" di atas untuk memulai pengujian paralel real-time.
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- AI Tools & Prompt Studio Card -->
-      <div class="card">
-        <div class="card-header">
-          <div>
-            <div class="card-title" style="display: flex; align-items: center; gap: 6px;">
-              <span>🛠️</span> Studio Alat Spesialis AI &amp; Generator Cepat
-            </div>
-            <div class="card-subtitle">
-              Gunakan alat kecerdasan buatan terstruktur ini langsung dari web atau melalui bot Telegram Anda.
-            </div>
-          </div>
-        </div>
-
-        <!-- Tool Selector Pills -->
-        <div style="display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap;">
-          <button type="button" class="guide-app-tab active" onclick="selectStudioTool('search', this)">🔍 Web Search</button>
-          <button type="button" class="guide-app-tab" onclick="selectStudioTool('code', this)">💻 Code Generator</button>
-          <button type="button" class="guide-app-tab" onclick="selectStudioTool('summary', this)">📝 Ringkas Teks</button>
-          <button type="button" class="guide-app-tab" onclick="selectStudioTool('prd', this)">📋 PRD Builder</button>
-          <button type="button" class="guide-app-tab" onclick="selectStudioTool('copy', this)">✍️ Copywriter</button>
-          <button type="button" class="guide-app-tab" onclick="selectStudioTool('think', this)">🧠 Deep Reasoning</button>
-          <button type="button" class="guide-app-tab" onclick="selectStudioTool('translate', this)">🌐 Translator</button>
-        </div>
-
-        <!-- Dynamic Tool Form -->
-        <div id="studioToolContainer" style="background: var(--bg-card-subtle); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 16px; margin-bottom: 16px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
-            <div style="font-weight: 700; color: #f1f5f9; font-size: 13.5px;" id="studioToolTitle">🔍 Web Search &amp; Riset Internet Live</div>
-            <span id="studioTelegramCommandBadge" style="font-size: 11px; font-family: 'JetBrains Mono', monospace; background: rgba(56, 189, 248, 0.1); color: #38bdf8; padding: 2px 7px; border-radius: 4px; border: 1px solid rgba(56, 189, 248, 0.2);">Perintah Bot: /search [kueri]</span>
-          </div>
-          <div style="font-size: 12px; color: #94a3b8; margin-bottom: 12px;" id="studioToolDesc">
-            Mencari informasi terkini dari internet dan merangkumnya secara akurat dengan sumber data valid.
-          </div>
-
-          <div class="form-group" style="margin-bottom: 12px;">
-            <label class="form-label" id="studioInputLabel">Kueri / Input Data</label>
-            <textarea id="studioInputText" class="input-textarea" rows="3" placeholder="Masukkan topik atau kueri pencarian..."></textarea>
-          </div>
-
-          <div style="display: flex; justify-content: flex-end; gap: 8px;">
-            <button type="button" class="btn btn-save" id="btnExecuteStudioTool" onclick="executeStudioTool()">
-              🚀 Jalankan Alat AI Ini
-            </button>
-          </div>
-        </div>
-
-        <!-- Execution Result Output -->
-        <div id="studioResultContainer" style="display: none; background: #06080e; border: 1px solid var(--border-card); border-radius: var(--radius-sm); padding: 14px; margin-top: 12px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-subtle); padding-bottom: 6px; margin-bottom: 10px;">
-            <span style="font-weight: 700; color: #10b981; font-size: 12.5px;">🟢 Hasil Eksekusi AI</span>
-            <span id="studioExecutionLatency" style="font-size: 11.5px; color: #38bdf8;">Latensi: 0 ms</span>
-          </div>
-          <div id="studioResultContent" style="color: #f1f5f9; font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;"></div>
-        </div>
-      </div>
-
-    </div>
 
     <!-- TAB 6: SECURITY & ACCESS CONTROL -->
     <div id="tabSecurity" class="tab-content" style="display: none;">
@@ -923,6 +819,38 @@
           <div id="testOutputArea" style="background: #06070a; border: 1px solid var(--border-subtle); border-radius: 6px; padding: 12px; min-height: 110px; font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: #94a3b8; white-space: pre-wrap;">Tekan 'Kirim Query Uji' untuk melihat respon...</div>
         </div>
       </div>
+
+      <div class="card" style="margin-top: 20px;">
+        <div class="card-header">
+          <div>
+            <div class="card-title">⚡ Multi-Provider Health Benchmark</div>
+            <div class="card-subtitle">Uji latensi dan kesiapan seluruh provider AI secara paralel dalam satu klik.</div>
+          </div>
+          <button class="btn btn-save" id="btnBenchmarkAll" onclick="runMultiProviderBenchmark()">⚡ Uji Semua Provider Bersamaan</button>
+        </div>
+        <div class="table-container" style="margin-top: 14px;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width: 40px;">#</th>
+                <th>Provider</th>
+                <th>Base URL</th>
+                <th>Model</th>
+                <th>Status</th>
+                <th>Latensi</th>
+                <th>Routing Failover</th>
+              </tr>
+            </thead>
+            <tbody id="healthBenchmarkTableBody">
+              <tr>
+                <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 25px;">
+                  Klik "⚡ Uji Semua Provider Bersamaan" untuk memulai tes performa & kesehatan upstream.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
 
     <!-- TAB 9: CLOUD STORAGE & PERSISTENCE -->
@@ -930,8 +858,8 @@
       <div class="card">
         <div class="card-header">
           <div>
-            <div class="card-title">☁️ Penyimpanan Cloud Permanen (Vercel & GitHub)</div>
-            <div class="card-subtitle">Pastikan seluruh konfigurasi web tersimpan permanen di cloud tanpa takut reset akibat Vercel cold start.</div>
+            <div class="card-title">☁️ Penyimpanan Cloud Permanen (Vercel KV / Upstash)</div>
+            <div class="card-subtitle">Pastikan seluruh konfigurasi web tersimpan permanen di cloud database tanpa takut reset akibat Vercel cold start.</div>
           </div>
           <div style="display: flex; gap: 6px; flex-wrap: wrap;">
             <button class="btn btn-save" onclick="saveAllConfig()">💾 Simpan Konfigurasi</button>
@@ -951,12 +879,12 @@
           </div>
         </div>
 
-        <!-- Section 1: Upstash Redis / Vercel KV -->
-        <div style="border: 1px solid var(--border-card); border-radius: var(--radius-md); padding: 18px; margin-bottom: 16px; background: rgba(56, 189, 248, 0.02);">
+        <!-- Upstash Redis / Vercel KV Database -->
+        <div style="border: 1px solid var(--border-card); border-radius: var(--radius-md); padding: 18px; background: rgba(56, 189, 248, 0.02);">
           <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">
             <div>
               <div style="font-size: 15px; font-weight: 600; color: #38bdf8; display: flex; align-items: center; gap: 6px;">
-                ⚡ Opsi 1: Vercel KV / Upstash Redis (Direkomendasikan - Paling Cepat & Gratis)
+                ⚡ Vercel KV / Upstash Redis (Direkomendasikan - Paling Cepat & Gratis)
               </div>
               <div style="font-size: 11.5px; color: #64748b; margin-top: 2px;">
                 Database Redis serverless resmi Vercel. Pengaturan tersimpan secara instan (&lt;20ms).
@@ -976,39 +904,6 @@
                 <button type="button" class="btn btn-outline" style="font-size: 10.5px; padding: 1px 6px;" onclick="toggleUpstashTokenMask()" id="btnMaskUpstash">👁️ Tampilkan</button>
               </div>
               <input type="password" id="cfgUpstashToken" class="input-text" placeholder="AX... (Token Rahasia)">
-            </div>
-          </div>
-        </div>
-
-        <!-- Section 2: GitHub Repository Sync -->
-        <div style="border: 1px solid var(--border-card); border-radius: var(--radius-md); padding: 18px; background: rgba(16, 185, 129, 0.02);">
-          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;">
-            <div>
-              <div style="font-size: 15px; font-weight: 600; color: #34d399; display: flex; align-items: center; gap: 6px;">
-                🐙 Opsi 2: Sinkronisasi Repositori GitHub (Auto-Commit dari Web)
-              </div>
-              <div style="font-size: 11.5px; color: #64748b; margin-top: 2px;">
-                Setiap kali klik "Simpan", Bre AI langsung meng-commit <code>config.json</code> terbaru ke GitHub Anda!
-              </div>
-            </div>
-            <button type="button" class="btn btn-outline" style="border-color: #34d399; color: #34d399; font-size: 11.5px; padding: 4px 10px;" onclick="testGitHubConnection()">⚡ Test Koneksi GitHub</button>
-          </div>
-
-          <div class="grid-3" style="display: grid; grid-template-columns: 1fr 1fr 120px; gap: 10px;">
-            <div class="form-group">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-                <label class="form-label" style="margin-bottom: 0;">GitHub Token (PAT)</label>
-                <button type="button" class="btn btn-outline" style="font-size: 10.5px; padding: 1px 6px;" onclick="toggleGithubTokenMask()" id="btnMaskGithub">👁️ Tampilkan</button>
-              </div>
-              <input type="password" id="cfgGithubToken" class="input-text" placeholder="ghp_...">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Nama Repositori GitHub</label>
-              <input type="text" id="cfgGithubRepo" class="input-text" placeholder="username/bre-ai-main">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Branch</label>
-              <input type="text" id="cfgGithubBranch" class="input-text" placeholder="main" value="main">
             </div>
           </div>
         </div>
@@ -1041,7 +936,7 @@
     <div class="card-header" style="border-bottom: 1px solid var(--border-subtle); padding-bottom: 12px; margin-bottom: 14px;">
       <div>
         <div class="card-title" id="modalReqTitle" style="font-size: 15px; display: flex; align-items: center; gap: 6px;">
-          <span>🔍 Request Inspector</span>
+          <span>🔍 Details</span>
           <span id="modalReqStatusBadge" class="ping-badge ok">200 OK</span>
         </div>
         <div class="card-subtitle" id="modalReqTimestamp">Timestamp: -</div>

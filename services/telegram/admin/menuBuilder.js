@@ -1,4 +1,4 @@
-﻿// ========================================================
+// ========================================================
 // Bre AI v3.0 - Telegram Bot Admin: Menu Builder & Dashboard
 // Created by Amirun Rayan Ariandi
 // ========================================================
@@ -137,7 +137,7 @@ function getMainMenuText(senderName, conversationsCount = 0) {
   const m = getMetrics();
   const activeLang = LANGUAGE_LABELS[cfg.telegramLanguage || 'id'] || '🇮🇩 Indonesia';
   const storageInfo = getCloudStorageInfo();
-  const storageLabel = storageInfo.upstashActive ? '🟢 Vercel KV / Upstash' : (storageInfo.githubActive ? '🟢 GitHub Sync' : '💾 Local / Zero-DB');
+  const storageLabel = storageInfo.upstashActive ? '🟢 Vercel KV / Upstash' : (storageInfo.isServerless ? '🟢 Aktif' : '💾 Local / Zero-DB');
 
   return `👑 *Bre AI Master Control Panel*\n` +
     `Halo *${senderName}*! Seluruh pengaturan proxy & bot Web Admin dapat Anda kendalikan penuh di sini:\n\n` +

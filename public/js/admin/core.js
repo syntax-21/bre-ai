@@ -1,4 +1,4 @@
-﻿// ================================================================
+// ================================================================
 // admin/core.js - Login, Tab navigation, Config loader, Sidebar
 // ================================================================
 
@@ -10,11 +10,10 @@ let allLogs = [];
 let metricsTimer = null;
 
 const TAB_TITLES = {
-  'tab9Router': '📊 Overview & Telemetry',
-  'tabDetails': '📜 Request Inspector & Logs',
+  'tab9Router': 'Overview',
+  'tabDetails': 'Details',
   'tabProviders': '🔌 Endpoints & Routing Strategy',
   'tabEngine': '⚙️ Global AI Engine & Fallback',
-  'tabTools': '🛠️ AI Tools & Prompt Studio',
   'tabSecurity': '🛡️ Keamanan, Rate Limit & Access',
   'tabTelegram': '🤖 Telegram Bot Controller',
   'tabCloud': '☁️ Cloud Storage Database',
@@ -189,9 +188,6 @@ async function loadConfig() {
     // Cloud
     setVal('cfgUpstashUrl', c.upstashRedisUrl || '');
     setVal('cfgUpstashToken', c.upstashRedisToken || '');
-    setVal('cfgGithubToken', c.githubToken || '');
-    setVal('cfgGithubRepo', c.githubRepo || '');
-    setVal('cfgGithubBranch', c.githubBranch || 'main');
 
     if(data.cloudStorageInfo) updateStorageBadges(data.cloudStorageInfo);
 

@@ -1,69 +1,7 @@
-﻿// ================================================================
-// admin/tester.js - Live Model Tester, Benchmark, AI Tools Studio
+// ================================================================
+// admin/tester.js - Live Model Tester, Benchmark
 // ================================================================
 
-const STUDIO_TOOLS = {
-  search: { title: '🔍 Web Search & Riset Internet Live', cmd: '/search [kueri]', desc: 'Mencari informasi terkini dari internet.', label: 'Topik / Kueri Pencarian Web', placeholder: 'Masukkan kueri pencarian (contoh: perkembangan AI terkini 2026)...', buildPrompt: (input) => `[PENCARIAN WEB LIVE: "${input}"]\n\nSebagai Bre AI, carilah informasi akurat dan rangkum topik "${input}" secara komprehensif.` },
-  code: { title: '💻 Code Assistant & Bug Fixer', cmd: '/code [deskripsi]', desc: 'Menghasilkan kode pemrograman berkualitas tinggi.', label: 'Deskripsi Program / Bug yang Ingin Diperbaiki', placeholder: 'Contoh: Buatkan script scraper website dengan Python BeautifulSoup...', buildPrompt: (input) => `Bertindaklah sebagai Principal Software Engineer. Buatkan kode berkualitas tinggi untuk: "${input}". Berikan kode lengkap dalam blok kode dengan nama file di baris pertama.` },
-  summary: { title: '📝 Smart Document Summarizer', cmd: '/summary [teks]', desc: 'Merangkum teks panjang menjadi ringkasan eksekutif.', label: 'Teks / Dokumen yang Ingin Dirangkum', placeholder: 'Tempelkan artikel atau teks panjang di sini...', buildPrompt: (input) => `Buatkan ringkasan eksekutif, poin-poin penting (Key Takeaways), dan Action Items dari teks berikut:\n\n${input}` },
-  prd: { title: '📋 Product Requirement Document (PRD) Builder', cmd: '/prd [nama fitur]', desc: 'Menyusun dokumen PRD lengkap standar industri.', label: 'Nama Fitur / Konsep Produk', placeholder: 'Contoh: Fitur Multi-Tenant Booking & Pembayaran Otomatis QRIS...', buildPrompt: (input) => `Bertindaklah sebagai Senior Product Manager. Susun PRD lengkap untuk: "${input}". Format: Overview, Problem Statement, User Stories, Functional Specs, Acceptance Criteria, Edge Cases, Success Metrics.` },
-  copy: { title: '✍️ Viral Copywriting & Marketing Content', cmd: '/copy [topik]', desc: 'Meracik copywriting persuasif berkonversi tinggi.', label: 'Produk / Topik Promosi Iklan', placeholder: 'Contoh: Layanan Konsultasi Bisnis Digital Marketing UMKM...', buildPrompt: (input) => `Bertindaklah sebagai Master Copywriter (AIDA & PAS framework). Buatkan copywriting persuasif untuk: "${input}". Berikan: 3 Hook/Headline, Benefits, Value Proposition, CTA persuasif.` },
-  think: { title: '🧠 Deep Analytical Reasoning (Chain of Thought)', cmd: '/think [masalah]', desc: 'Memecahkan masalah analitis kompleks secara sistematis.', label: 'Pertanyaan / Masalah Analitis', placeholder: 'Contoh: Analisis perbandingan arsitektur Monolith vs Microservices...', buildPrompt: (input) => `Analisis dan pecahkan pertanyaan berikut dengan penalaran sistematis langkah demi langkah:\n\n"${input}"\n\nSajikan analisis komparatif, trade-offs, mitigasi risiko, dan rekomendasi konkrit.` },
-  translate: { title: '🌐 Smart Polyglot Translator', cmd: '/translate [bahasa] [teks]', desc: 'Menerjemahkan teks secara natural dan profesional.', label: 'Bahasa Target & Teks Sumber', placeholder: 'english Selamat pagi rekan-rekan, mari kita review progress sprint minggu ini.', buildPrompt: (input) => { const parts = input.trim().split(/\s+/); const target = parts[0]||'English'; const text = parts.slice(1).join(' ')||input; return `Terjemahkan teks berikut ke dalam bahasa ${target} dengan nada profesional:\n\n"${text}"\n\nSertakan opsi alternatif santai jika ada.`; } }
-};
-let currentStudioToolKey = 'search';
-
-function selectStudioTool(toolKey, btn) {
-  currentStudioToolKey = toolKey;
-  const tool = STUDIO_TOOLS[toolKey];
-  if (!tool) return;
-  document.querySelectorAll('#tabTools .guide-app-tab').forEach(b => b.classList.remove('active'));
-  if (btn) btn.classList.add('active');
-  const setTxt = (id, val) => { const el=document.getElementById(id); if(el) el.textContent=val; };
-  setTxt('studioToolTitle', tool.title);
-  setTxt('studioTelegramCommandBadge', `Perintah Bot: ${tool.cmd}`);
-  setTxt('studioToolDesc', tool.desc);
-  setTxt('studioInputLabel', tool.label);
-  const inputEl = document.getElementById('studioInputText');
-  if (inputEl) { inputEl.placeholder = tool.placeholder; inputEl.value = ''; }
-  const resContainer = document.getElementById('studioResultContainer');
-  if (resContainer) resContainer.style.display = 'none';
-}
-
-async function executeStudioTool() {
-  const tool = STUDIO_TOOLS[currentStudioToolKey];
-  const inputEl = document.getElementById('studioInputText');
-  const input = (inputEl?.value || '').trim();
-  const resContainer = document.getElementById('studioResultContainer');
-  const resContent = document.getElementById('studioResultContent');
-  const latencyEl = document.getElementById('studioExecutionLatency');
-  const btn = document.getElementById('btnExecuteStudioTool');
-  if (!input) return toast('Silakan masukkan input teks untuk menjalankan alat ini.', 'err');
-  if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Menjalankan...'; }
-  if (resContainer) { resContainer.style.display = 'block'; if(resContent) resContent.innerHTML = '<span style="color:#94a3b8;">Sedang menghubungi engine AI Bre AI...</span>'; }
-  const startTime = Date.now();
-  try {
-    const promptToSend = tool.buildPrompt(input);
-    const res = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'user', content: promptToSend }], stream: false }) });
-    const elapsed = Date.now() - startTime;
-    const data = await res.json();
-    if (res.ok) {
-      if(latencyEl) latencyEl.textContent = `Latensi: ${elapsed} ms`;
-      const reply = data.choices?.[0]?.message?.content || JSON.stringify(data);
-      if(resContent) resContent.textContent = reply;
-      toast('Alat AI berhasil dieksekusi!', 'ok');
-    } else {
-      if(latencyEl) latencyEl.textContent = `Error (${elapsed} ms)`;
-      if(resContent) resContent.innerHTML = `<span style="color:#ef4444;">${data.error || 'Gagal mengeksekusi alat'}</span>`;
-      toast(data.error || 'Eksekusi gagal', 'err');
-    }
-  } catch(err) {
-    const elapsed = Date.now() - startTime;
-    if(latencyEl) latencyEl.textContent = `Error (${elapsed} ms)`;
-    if(resContent) resContent.innerHTML = `<span style="color:#ef4444;">${err.message}</span>`;
-    toast('Error: ' + err.message, 'err');
-  } finally { if(btn) { btn.disabled = false; btn.innerHTML = '🚀 Jalankan Alat AI Ini'; } }
-}
 
 async function runMultiProviderBenchmark() {
   syncProvidersFromUI();
