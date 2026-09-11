@@ -68,11 +68,11 @@ module.exports = async (req, res) => {
     // 9Router Overview (KPI, Topology, Usage breakdown, Recent requests)
     if (body.action === 'get_router_overview') {
       const data = getRouterOverview({
-        timeRange: body.timeRange || 'today',
+        timeRange: body.timeRange || body.range || 'today',
         provider: body.provider || 'all',
         model: body.model || 'all'
       });
-      return res.json({ ok: true, ...data });
+      return res.json({ ok: true, overview: data, ...data });
     }
 
     // 9Router Details (Filtered Request Logs table)
@@ -86,7 +86,7 @@ module.exports = async (req, res) => {
         page: body.page || 1,
         limit: body.limit || 50
       });
-      return res.json({ ok: true, ...data });
+      return res.json({ ok: true, requests: data.requests || [], ...data });
     }
 
     if (body.action === 'get_metrics') {

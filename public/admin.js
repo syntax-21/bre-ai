@@ -902,7 +902,7 @@ async function load9RouterData() {
     });
     if (!r.ok) return;
     const data = await r.json();
-    routerOverviewData = data.overview || {};
+    routerOverviewData = data.overview || data || {};
 
     const o = routerOverviewData;
     const totalReq = o.totalRequests || 0;

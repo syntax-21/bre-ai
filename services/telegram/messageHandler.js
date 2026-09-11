@@ -206,8 +206,10 @@ async function handleMessage(msg, botService, ctx = null) {
     const duration = audioObj.duration || 0;
     const caption = (msg.caption || '').trim();
     const title = msg.audio?.title ? ` (Judul: "${msg.audio.title}", Artis: "${msg.audio.performer || 'Unknown'}")` : '';
+    const sizeBytes = audioObj.file_size || 0;
+    const sizeStr = sizeBytes > 1048576 ? `${(sizeBytes / 1048576).toFixed(2)} MB` : `${(sizeBytes / 1024).toFixed(1)} KB`;
 
-    userQueryPrompt = `${replyPrefix}${forwardPrefix}[Pengguna mengirimkan rekaman ${isVoice ? 'suara (Voice Note)' : 'audio/musik'}${title}, Durasi: ${duration} detik, Catatan: "${caption || '(tanpa catatan teks)'}"]. Responlah pesan suara/audio ini dengan ramah, apresiatif, cerdas, dan tawarkan bantuan yang relevan sebagai Bre AI.${forwardGuidance ? '\n' + forwardGuidance : ''}`;
+    userQueryPrompt = `${replyPrefix}${forwardPrefix}[ANALISIS REKAMAN ${isVoice ? 'SUARA (VOICE NOTE)' : 'AUDIO / MUSIK'}${title}]\n• Durasi: ${duration} detik\n• Format: ${audioObj.mime_type || (isVoice ? 'audio/ogg (Opus)' : 'audio/mpeg')}\n• Ukuran File: ${sizeStr}\n${caption ? `• Catatan/Instruksi Pengguna: "${caption}"\n` : ''}\nInstruksi Analisis Bre AI:\n1. Analisis isi rekaman audio/suara ini secara komprehensif, cerdas, dan tanggap.\n2. Pahami maksud pesan, intonasi, instruksi, atau pertanyaan yang disampaikan.\n3. Berikan tanggapan solutif, ringkasan kontekstual, atau evaluasi audio terbaik sebagai Bre AI.${forwardGuidance ? '\n' + forwardGuidance : ''}`;
     historyDisplaySnippet = forwardInfo
       ? `[${isVoice ? 'Voice Note' : 'Audio'} Terusan dari ${forwardInfo.sourceName} (${duration}s)]: ${caption || 'Rekaman Suara'}`
       : `[${isVoice ? 'Voice Note' : 'Audio'} (${duration}s)]: ${caption || 'Rekaman Suara'}`;
@@ -216,9 +218,31 @@ async function handleMessage(msg, botService, ctx = null) {
     const vidObj = msg.video || msg.video_note;
     const duration = vidObj.duration || 0;
     const caption = (msg.caption || '').trim();
-    const dims = msg.video ? ` (${msg.video.width}x${msg.video.height})` : '';
+    const dims = msg.video ? ` (${msg.video.width}x${msg.video.height})` : (msg.video_note ? ` (${msg.video_note.length}x${msg.video_note.length})` : '');
+    const thumbObj = vidObj.thumbnail || vidObj.thumb || null;
 
-    userQueryPrompt = `${replyPrefix}${forwardPrefix}[Pengguna mengirimkan ${isRound ? 'Video Bulat (Video Note)' : 'Video'}${dims}, Durasi: ${duration} detik, Catatan: "${caption || '(tanpa keterangan)'}"]. Berikan tanggapan yang apresiatif, cerdas, dan tanyakan apa yang ingin dibahas atau dibantu terkait video tersebut sebagai Bre AI.${forwardGuidance ? '\n' + forwardGuidance : ''}`;
+    let hasVisionThumb = false;
+    if (thumbObj && thumbObj.file_id) {
+      try {
+        const thumbBuf = await api.downloadTelegramFile(thumbObj.file_id, token);
+        const base64Image = thumbBuf.toString('base64');
+        const dataUrl = `data:image/jpeg;base64,${base64Image}`;
+        const vidQuestion = `${replyPrefix}${forwardPrefix}[ANALISIS CUPLIKAN & METADATA VIDEO ${isRound ? 'NOTE ' : ''}${dims} — Durasi: ${duration} detik, Format: ${vidObj.mime_type || 'video/mp4'}]\n${caption ? `Instruksi/Pertanyaan: "${caption}"\n\n` : ''}Deskripsikan, evaluasi, dan analisis visual adegan pada video ini secara rinci: kenali subjek/objek, latar belakang/suasana, aksi/kejadian, teks yang tampak, dan berikan wawasan cerdas yang mendalam sebagai Bre AI.${forwardGuidance ? '\n' + forwardGuidance : ''}`;
+
+        visionPayload = [
+          { type: 'text', text: vidQuestion },
+          { type: 'image_url', image_url: { url: dataUrl } }
+        ];
+        hasVisionThumb = true;
+      } catch (e) {
+        console.warn('[TelegramBot] Gagal download video thumb:', e.message);
+      }
+    }
+
+    if (!hasVisionThumb) {
+      userQueryPrompt = `${replyPrefix}${forwardPrefix}[ANALISIS BERKAS VIDEO ${isRound ? 'BULAT (VIDEO NOTE)' : ''}${dims}]\n• Durasi: ${duration} detik\n• Format: ${vidObj.mime_type || 'video/mp4'}\n• Ukuran: ${vidObj.file_size ? `${Math.round(vidObj.file_size / 1024)} KB` : 'N/A'}\n${caption ? `• Catatan/Instruksi Pengguna: "${caption}"\n` : ''}\nLakukan analisis mendalam terhadap video ini: jelaskan konteks, perkirakan alur konten/adegan, dan berikan tanggapan cerdas, solusi, serta jawaban solutif sebagai Bre AI.${forwardGuidance ? '\n' + forwardGuidance : ''}`;
+    }
+
     historyDisplaySnippet = forwardInfo
       ? `[Video Terusan dari ${forwardInfo.sourceName} (${duration}s)]: ${caption || 'Video'}`
       : `[Video (${duration}s)]: ${caption || 'Video'}`;
@@ -252,6 +276,7 @@ async function handleMessage(msg, botService, ctx = null) {
     const sizeBytes = doc.file_size || 0;
     const sizeStr = sizeBytes > 1048576 ? `${(sizeBytes / 1048576).toFixed(2)} MB` : `${(sizeBytes / 1024).toFixed(1)} KB`;
     const mime = doc.mime_type || 'application/octet-stream';
+    const docThumb = doc.thumbnail || doc.thumb || null;
 
     // 1. If document is an image file (PNG/JPG/WEBP/GIF sent as uncompressed document)
     if (category === 'image_file' && sizeBytes <= 5242880) {
@@ -272,9 +297,18 @@ async function handleMessage(msg, botService, ctx = null) {
         historyDisplaySnippet = `[Foto Dokumen: ${fileName}]`;
       }
     }
-    // 2. Download and extract document content (Spreadsheets, Word, PDF, Text, Code up to 10MB)
+    // 2. Download and extract document content (Spreadsheets, Word, PDF, Video, Audio, Text, Code up to 10MB)
     else if (sizeBytes <= 10485760) {
       try {
+        // If document has thumbnail (e.g. video / pdf / doc thumbnail)
+        let thumbDataUrl = null;
+        if (docThumb && docThumb.file_id) {
+          try {
+            const tBuf = await api.downloadTelegramFile(docThumb.file_id, token);
+            thumbDataUrl = `data:image/jpeg;base64,${tBuf.toString('base64')}`;
+          } catch (te) {}
+        }
+
         const buf = await api.downloadTelegramFile(doc.file_id, token);
         const parsedDoc = await extractDocumentContent(buf, fileName, mime);
 
@@ -284,7 +318,24 @@ async function handleMessage(msg, botService, ctx = null) {
             ? rawContent.slice(0, 15000) + '\n... [Data dipangkas untuk optimasi respons instan]'
             : rawContent;
 
-          if (parsedDoc.type === 'spreadsheet') {
+          if (parsedDoc.type === 'video') {
+            if (thumbDataUrl) {
+              visionPayload = [
+                { type: 'text', text: `${replyPrefix}${forwardPrefix}[ANALISIS BERKAS VIDEO: "${fileName}"]\n${snippet}\n\nInstruksi/Pertanyaan:\n${caption || 'Analisis berkas video ini secara mendalam: evaluasi cuplikan gambar, struktur kontainer, perkirakan konten adegan, dan berikan wawasan komprehensif sebagai Bre AI.'}${forwardGuidance ? '\n' + forwardGuidance : ''}` },
+                { type: 'image_url', image_url: { url: thumbDataUrl } }
+              ];
+            } else {
+              userQueryPrompt = `${replyPrefix}${forwardPrefix}[Pengguna melampirkan berkas video: "${fileName}"]:\n${snippet}\n\nInstruksi/Pertanyaan:\n${caption || 'Analisis berkas video ini secara mendalam: evaluasi spesifikasi kontainer, alur perkiraan konten, dan berikan wawasan komprehensif sebagai Bre AI.'}${forwardGuidance ? '\n' + forwardGuidance : ''}`;
+            }
+            historyDisplaySnippet = forwardInfo
+              ? `[Video Terusan dari ${forwardInfo.sourceName}]: ${fileName} (${sizeStr})`
+              : `[Video ${fileName} (${sizeStr})]: ${caption || 'Analisis Video'}`;
+          } else if (parsedDoc.type === 'audio') {
+            userQueryPrompt = `${replyPrefix}${forwardPrefix}[Pengguna melampirkan berkas audio: "${fileName}"]:\n${snippet}\n\nInstruksi/Pertanyaan:\n${caption || 'Analisis berkas audio ini secara mendalam: evaluasi struktur teknis, metadata, dan berikan tanggapan cerdas yang solutif sebagai Bre AI.'}${forwardGuidance ? '\n' + forwardGuidance : ''}`;
+            historyDisplaySnippet = forwardInfo
+              ? `[Audio Terusan dari ${forwardInfo.sourceName}]: ${fileName} (${sizeStr})`
+              : `[Audio ${fileName} (${sizeStr})]: ${caption || 'Analisis Audio'}`;
+          } else if (parsedDoc.type === 'spreadsheet') {
             userQueryPrompt = `${replyPrefix}${forwardPrefix}[Pengguna melampirkan berkas spreadsheet Excel/Tabel: "${fileName}" (Ukuran: ${sizeStr})]:\n=== DATA TABEL SPREADSHEET ===\n${snippet}\n=== AKHIR DATA TABEL ===\n\nInstruksi/Pertanyaan dari pengguna:\n${caption || 'Analisis seluruh data tabel di atas secara rinci, buatkan ringkasan eksekutif, evaluasi angka/kategori/tren, buatkan pivot/formula jika relevan, dan berikan wawasan cerdas sebagai Bre AI.'}${forwardGuidance ? '\n' + forwardGuidance : ''}`;
             historyDisplaySnippet = forwardInfo
               ? `[Excel Terusan dari ${forwardInfo.sourceName}]: ${fileName} (${sizeStr})`

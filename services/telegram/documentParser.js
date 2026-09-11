@@ -263,6 +263,204 @@ async function parsePdfDocument(buffer) {
 }
 
 /**
+ * Fast extraction of MP4/MOV/3GP metadata (atoms: ftyp, moov, mvhd, tkhd)
+ */
+function parseMp4Atoms(buffer) {
+  let durationSec = 0;
+  let width = 0;
+  let height = 0;
+  let majorBrand = '';
+  try {
+    let offset = 0;
+    while (offset < buffer.length - 8) {
+      const size = buffer.readUInt32BE(offset);
+      const type = buffer.toString('latin1', offset + 4, offset + 8);
+      const actualSize = size === 1 ? Number(buffer.readBigUInt64BE(offset + 8)) : size;
+      if (actualSize < 8 || offset + actualSize > buffer.length + 1000) break;
+
+      if (type === 'ftyp') {
+        majorBrand = buffer.toString('latin1', offset + 8, offset + 12).trim();
+      } else if (type === 'moov') {
+        // Search inside moov for mvhd and tkhd
+        const moovData = buffer.slice(offset + 8, Math.min(buffer.length, offset + actualSize));
+        let mOff = 0;
+        while (mOff < moovData.length - 8) {
+          const aSize = moovData.readUInt32BE(mOff);
+          const aType = moovData.toString('latin1', mOff + 4, mOff + 8);
+          if (aSize < 8 || mOff + aSize > moovData.length) { mOff += 4; continue; }
+
+          if (aType === 'mvhd') {
+            const version = moovData[mOff + 8];
+            let timescale = 0;
+            let duration = 0;
+            if (version === 1) {
+              timescale = moovData.readUInt32BE(mOff + 28);
+              duration = Number(moovData.readBigUInt64BE(mOff + 32));
+            } else {
+              timescale = moovData.readUInt32BE(mOff + 20);
+              duration = moovData.readUInt32BE(mOff + 24);
+            }
+            if (timescale > 0 && duration > 0) {
+              durationSec = Math.round((duration / timescale) * 10) / 10;
+            }
+          } else if (aType === 'trak') {
+            // Find tkhd inside trak to get width & height
+            const trakData = moovData.slice(mOff + 8, mOff + aSize);
+            let tOff = 0;
+            while (tOff < trakData.length - 8) {
+              const tSize = trakData.readUInt32BE(tOff);
+              const tType = trakData.toString('latin1', tOff + 4, tOff + 8);
+              if (tSize < 8 || tOff + tSize > trakData.length) { tOff += 4; continue; }
+              if (tType === 'tkhd') {
+                const ver = trakData[tOff + 8];
+                const wPos = ver === 1 ? tOff + 92 : tOff + 80;
+                if (wPos + 8 <= trakData.length) {
+                  const w = trakData.readUInt32BE(wPos) >> 16;
+                  const h = trakData.readUInt32BE(wPos + 4) >> 16;
+                  if (w > 0 && h > 0 && (!width || w > width)) {
+                    width = w;
+                    height = h;
+                  }
+                }
+              }
+              tOff += tSize;
+            }
+          }
+          mOff += aSize;
+        }
+      }
+      offset += actualSize;
+    }
+  } catch (e) {}
+  return { durationSec, width, height, majorBrand };
+}
+
+/**
+ * Extracts Video metadata (.mp4, .mkv, .avi, .mov, .webm, .flv, .wmv, .3gp, .m4v, .ts)
+ */
+function parseVideoMetadata(buffer, fileName = '', mimeType = '') {
+  const ext = fileName.includes('.') ? fileName.split('.').pop().toLowerCase() : '';
+  const sizeBytes = buffer.length;
+  const sizeStr = sizeBytes > 1048576 ? `${(sizeBytes / 1048576).toFixed(2)} MB` : `${(sizeBytes / 1024).toFixed(1)} KB`;
+
+  let formatName = ext.toUpperCase() || 'VIDEO';
+  let duration = 0;
+  let resolution = '';
+
+  // 1. MP4 / MOV / 3GP / M4V
+  if (['mp4', 'mov', '3gp', 'm4v'].includes(ext) || mimeType.includes('mp4') || mimeType.includes('quicktime')) {
+    const mp4Info = parseMp4Atoms(buffer);
+    if (mp4Info.durationSec > 0) duration = mp4Info.durationSec;
+    if (mp4Info.width && mp4Info.height) resolution = `${mp4Info.width}x${mp4Info.height}`;
+    if (mp4Info.majorBrand) formatName = `${ext.toUpperCase()} (${mp4Info.majorBrand})`;
+  }
+  // 2. AVI
+  else if (ext === 'avi' || mimeType.includes('msvideo')) {
+    try {
+      if (buffer.toString('latin1', 0, 4) === 'RIFF' && buffer.toString('latin1', 8, 12) === 'AVI ') {
+        const avihIdx = buffer.indexOf('avih');
+        if (avihIdx !== -1 && avihIdx + 36 <= buffer.length) {
+          const uSecPerFrame = buffer.readUInt32LE(avihIdx + 4);
+          const totalFrames = buffer.readUInt32LE(avihIdx + 16);
+          const w = buffer.readUInt32LE(avihIdx + 32);
+          const h = buffer.readUInt32LE(avihIdx + 36);
+          if (w > 0 && h > 0) resolution = `${w}x${h}`;
+          if (uSecPerFrame > 0 && totalFrames > 0) {
+            duration = Math.round((uSecPerFrame * totalFrames / 1000000) * 10) / 10;
+          }
+        }
+      }
+    } catch (e) {}
+  }
+  // 3. WebM / MKV (Matroska)
+  else if (['webm', 'mkv'].includes(ext) || mimeType.includes('webm') || mimeType.includes('matroska')) {
+    formatName = ext === 'webm' ? 'WebM Video' : 'Matroska Video (MKV)';
+  }
+  // 4. FLV
+  else if (ext === 'flv' || mimeType.includes('flv')) {
+    formatName = 'Flash Video (FLV)';
+  }
+  // 5. WMV
+  else if (ext === 'wmv' || mimeType.includes('wmv')) {
+    formatName = 'Windows Media Video (WMV)';
+  }
+
+  const durStr = duration > 0 ? `${duration} detik` : 'Estimasi multi-track';
+  const resStr = resolution ? `Resolusi: ${resolution}` : 'Resolusi: Standard Definition / High-Def';
+
+  return `[BERKAS VIDEO: "${fileName}"]\n` +
+    `• Format Kontainer: ${formatName}\n` +
+    `• Ukuran File: ${sizeStr} (${sizeBytes.toLocaleString()} bytes)\n` +
+    `• Durasi: ${durStr}\n` +
+    `• ${resStr}\n` +
+    `• MIME Type: ${mimeType || 'video/' + (ext || 'mp4')}`;
+}
+
+/**
+ * Extracts Audio metadata (.mp3, .wav, .ogg, .m4a, .aac, .flac, .wma, .opus, .amr, .webm)
+ */
+function parseAudioMetadata(buffer, fileName = '', mimeType = '') {
+  const ext = fileName.includes('.') ? fileName.split('.').pop().toLowerCase() : '';
+  const sizeBytes = buffer.length;
+  const sizeStr = sizeBytes > 1048576 ? `${(sizeBytes / 1048576).toFixed(2)} MB` : `${(sizeBytes / 1024).toFixed(1)} KB`;
+
+  let formatName = ext.toUpperCase() || 'AUDIO';
+  let duration = 0;
+  let sampleRate = 0;
+  let channels = 0;
+  let title = '';
+  let artist = '';
+  let album = '';
+
+  // 1. WAV
+  if (ext === 'wav' || mimeType.includes('wav')) {
+    try {
+      if (buffer.toString('latin1', 0, 4) === 'RIFF' && buffer.toString('latin1', 8, 12) === 'WAVE') {
+        const fmtIdx = buffer.indexOf('fmt ');
+        if (fmtIdx !== -1 && fmtIdx + 24 <= buffer.length) {
+          channels = buffer.readUInt16LE(fmtIdx + 10);
+          sampleRate = buffer.readUInt32LE(fmtIdx + 12);
+          const byteRate = buffer.readUInt32LE(fmtIdx + 16);
+          if (byteRate > 0) {
+            duration = Math.round((sizeBytes / byteRate) * 10) / 10;
+          }
+        }
+      }
+    } catch (e) {}
+  }
+  // 2. MP3 (Check ID3v2 tags)
+  else if (ext === 'mp3' || mimeType.includes('mpeg') || mimeType.includes('mp3')) {
+    try {
+      if (buffer.toString('latin1', 0, 3) === 'ID3') {
+        const id3Buf = buffer.slice(0, Math.min(buffer.length, 4096)).toString('latin1');
+        const titMatch = id3Buf.match(/TIT2[\s\S]{4}([^\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09]+)/);
+        if (titMatch) title = titMatch[1].replace(/[^a-zA-Z0-9\s_\-\(\)\.]/g, '').trim();
+        const artMatch = id3Buf.match(/TPE1[\s\S]{4}([^\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09]+)/);
+        if (artMatch) artist = artMatch[1].replace(/[^a-zA-Z0-9\s_\-\(\)\.]/g, '').trim();
+        const albMatch = id3Buf.match(/TALB[\s\S]{4}([^\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09]+)/);
+        if (albMatch) album = albMatch[1].replace(/[^a-zA-Z0-9\s_\-\(\)\.]/g, '').trim();
+      }
+    } catch (e) {}
+  }
+
+  let tagStr = '';
+  if (title || artist || album) {
+    tagStr = `\n• Metadata Tag: ${title ? `Judul: "${title}" ` : ''}${artist ? `| Artis: "${artist}" ` : ''}${album ? `| Album: "${album}"` : ''}`;
+  }
+
+  const durStr = duration > 0 ? `\n• Durasi: ${duration} detik` : '';
+  const srStr = sampleRate > 0 ? `\n• Sample Rate: ${sampleRate} Hz (${channels === 1 ? 'Mono' : 'Stereo'})` : '';
+
+  return `[BERKAS AUDIO: "${fileName}"]\n` +
+    `• Format Audio: ${formatName}\n` +
+    `• Ukuran File: ${sizeStr} (${sizeBytes.toLocaleString()} bytes)\n` +
+    `• MIME Type: ${mimeType || 'audio/' + (ext || 'mpeg')}` +
+    durStr +
+    srStr +
+    tagStr;
+}
+
+/**
  * Main dispatcher to parse any incoming document buffer
  * @param {Buffer} buffer
  * @param {string} fileName
@@ -274,6 +472,8 @@ async function extractDocumentContent(buffer, fileName = '', mimeType = '') {
   const isExcel = ['xlsx', 'xls', 'csv', 'tsv', 'ods', 'tab'].includes(ext) || mimeType.includes('spreadsheet') || mimeType.includes('excel');
   const isWord = ['docx', 'doc', 'odt', 'rtf'].includes(ext) || mimeType.includes('wordprocessingml') || mimeType.includes('msword');
   const isPdf = ext === 'pdf' || mimeType.includes('pdf');
+  const isVideo = ['mp4', 'mkv', 'avi', 'mov', 'webm', 'flv', 'wmv', '3gp', 'm4v', 'ts', 'ogv', 'vob'].includes(ext) || mimeType.startsWith('video/');
+  const isAudio = ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac', 'wma', 'opus', 'amr', 'weba', 'mid', 'midi', 'aiff'].includes(ext) || mimeType.startsWith('audio/');
 
   try {
     if (isExcel) {
@@ -303,6 +503,26 @@ async function extractDocumentContent(buffer, fileName = '', mimeType = '') {
         type: 'pdf',
         text: parsedText || `Dokumen PDF (${fileName})`,
         summary: 'Adobe PDF'
+      };
+    }
+
+    if (isVideo) {
+      const parsedText = parseVideoMetadata(buffer, fileName, mimeType);
+      return {
+        success: true,
+        type: 'video',
+        text: parsedText,
+        summary: `Video (${ext.toUpperCase() || 'MP4'})`
+      };
+    }
+
+    if (isAudio) {
+      const parsedText = parseAudioMetadata(buffer, fileName, mimeType);
+      return {
+        success: true,
+        type: 'audio',
+        text: parsedText,
+        summary: `Audio (${ext.toUpperCase() || 'MP3'})`
       };
     }
 
@@ -338,5 +558,7 @@ module.exports = {
   extractDocumentContent,
   parseSpreadsheet,
   parseWordDocument,
-  parsePdfDocument
+  parsePdfDocument,
+  parseVideoMetadata,
+  parseAudioMetadata
 };

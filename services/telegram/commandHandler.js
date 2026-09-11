@@ -8,6 +8,7 @@ const {
   saveConfig,
   getMetrics,
   getLogs,
+  getRouterOverview,
   clearResponseCache,
   testSingleModel,
   fetchAvailableModels,
@@ -177,6 +178,81 @@ async function handleSlashCommand({
       `• *Waktu Server:* ${new Date().toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB\n\n` +
       `_Sistem berjalan normal. Ketik \`/admin\` untuk membuka Dashboard Panel._`,
       null, null, token
+    );
+    return true;
+  }
+
+  // /stats, /telemetry, /overview
+  if (lowerText === '/stats' || lowerText.startsWith('/stats ') || lowerText === '/telemetry' || lowerText.startsWith('/telemetry ') || lowerText === '/overview' || lowerText.startsWith('/overview ')) {
+    const rawArg = lowerText.replace(/^\/(stats|telemetry|overview)/, '').trim();
+    let range = 'today';
+    if (['24h', '24 jam', '1d'].includes(rawArg)) range = '24h';
+    else if (['7d', '7 hari', '1w'].includes(rawArg)) range = '7d';
+    else if (['30d', '30 hari', '1m'].includes(rawArg)) range = '30d';
+    else if (['60d', 'all', 'semua'].includes(rawArg)) range = '60d';
+
+    const overview = getRouterOverview({ timeRange: range });
+    const kpi = overview.kpi || {};
+    const totalReq = (kpi.totalRequests || overview.totalRequests || 0).toLocaleString();
+    const successReq = (overview.successfulRequests || 0).toLocaleString();
+    const failedReq = (overview.failedRequests || 0).toLocaleString();
+    const inTokens = (kpi.totalInputTokens || overview.totalInputTokens || 0).toLocaleString();
+    const cachedTokens = (kpi.totalCachedTokens || overview.totalCachedTokens || 0).toLocaleString();
+    const outTokens = (kpi.totalOutputTokens || overview.totalOutputTokens || 0).toLocaleString();
+    const totalTokens = (kpi.totalTokens || overview.totalTokens || 0).toLocaleString();
+    const estCost = overview.estCostStr || `~$${(overview.estCost || 0).toFixed(4)}`;
+    const avgLat = kpi.avgLatencyMs || 0;
+    const avgTtft = kpi.avgTtftMs || 0;
+    const errRate = kpi.errorRate || '0.0%';
+
+    let rangeLabel = 'Hari Ini (Today)';
+    if (range === '24h') rangeLabel = '24 Jam Terakhir';
+    else if (range === '7d') rangeLabel = '7 Hari Terakhir';
+    else if (range === '30d') rangeLabel = '30 Hari Terakhir';
+    else if (range === '60d') rangeLabel = 'Semua Waktu (60 Hari)';
+
+    const recents = (overview.recentRequests || []).slice(0, 4);
+    let recentStr = '';
+    if (recents.length > 0) {
+      recentStr = '\n\n⏱️ *Aktivitas Terakhir:*\n' + recents.map(r => {
+        const statusIcon = r.status >= 200 && r.status < 400 ? '🟢' : '🔴';
+        const snippet = (r.requestSummary || r.model || '').slice(0, 35);
+        return `${statusIcon} \`${r.model}\` (${r.provider || 'router'}) — _${r.when || 'baru saja'}_: "${snippet}..."`;
+      }).join('\n');
+    }
+
+    const replyMarkup = {
+      inline_keyboard: [
+        [
+          { text: range === 'today' ? '🔘 Today' : 'Today', callback_data: 'adm_telemetry_range:today' },
+          { text: range === '24h' ? '🔘 24h' : '24h', callback_data: 'adm_telemetry_range:24h' },
+          { text: range === '7d' ? '🔘 7D' : '7D', callback_data: 'adm_telemetry_range:7d' },
+          { text: range === '60d' ? '🔘 All' : 'All', callback_data: 'adm_telemetry_range:60d' }
+        ],
+        [
+          { text: '📊 Buka Admin Panel', callback_data: 'adm_main' },
+          { text: '🔄 Refresh', callback_data: `adm_telemetry_range:${range}` }
+        ]
+      ]
+    };
+
+    await api.sendTelegramMessage(
+      chatId,
+      `📊 *Statistik & Telemetry Bre AI*\n` +
+      `📅 *Periode:* *${rangeLabel}*\n\n` +
+      `• 📈 *Total Permintaan:* \`${totalReq} req\` (${successReq} sukses · ${failedReq} error)\n` +
+      `• 📥 *Input Tokens:* \`${inTokens} token\`\n` +
+      `• 💾 *Cached Tokens:* \`${cachedTokens} token\` (Diskon Cache Hit)\n` +
+      `• 📤 *Output Tokens:* \`${outTokens} token\`\n` +
+      `• 🪙 *Total Tokens:* \`${totalTokens} token\`\n` +
+      `• 💵 *Estimasi Biaya:* \`${estCost}\`\n` +
+      `• ⚡ *Rata-rata Latensi:* \`${avgLat} ms\` (TTFT: ~${avgTtft} ms)\n` +
+      `• 🛡️ *Tingkat Error:* \`${errRate}\`` +
+      recentStr +
+      `\n\n_Ketik \`/stats [today|24h|7d|30d]\` atau pilih tombol periode di bawah._`,
+      replyMarkup,
+      null,
+      token
     );
     return true;
   }

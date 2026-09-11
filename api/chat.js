@@ -39,11 +39,12 @@ module.exports = async (req, res) => {
 
   // 1. IP and Rate Limiting
   const ip = req.headers?.['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || '127.0.0.1';
+  const clientChannel = (req.headers?.['x-client-channel'] || (req.headers?.['x-custom-provider'] === 'Telegram Bot' ? 'Telegram Bot' : (req.headers?.authorization ? 'API Client' : 'Direct Web'))).trim();
   const cfg = await syncCloudConfig();
 
   // Check Rate Limits (Anti-Spam per IP)
   if (!checkRateLimit(ip)) {
-    logRequest({ ip, provider: 'RateLimiter', model: 'n/a', status: 429, latencyMs: 1, error: 'Rate limit exceeded' });
+    logRequest({ ip, provider: 'RateLimiter', model: 'n/a', status: 429, latencyMs: 1, error: 'Rate limit exceeded', clientKeyName: clientChannel });
     return res.status(429).json({ error: 'Batas kuota request tercapai. Silakan coba beberapa detik lagi.' });
   }
 
@@ -424,7 +425,8 @@ function normalizeChatUrl(rawUrl) {
                 totalTokens: promptTokensEst + compTokensEst,
                 failover: isFailover || mIdx > 0,
                 requestSummary: allUserText.slice(0, 100),
-                responseSummary: accumulatedResponse.slice(0, 120)
+                responseSummary: accumulatedResponse.slice(0, 120),
+                clientKeyName: clientChannel
               });
 
               return res.end();
@@ -453,7 +455,8 @@ function normalizeChatUrl(rawUrl) {
                 totalTokens: promptTok + compTok,
                 failover: isFailover || mIdx > 0,
                 requestSummary: allUserText.slice(0, 100),
-                responseSummary: (data.choices?.[0]?.message?.content || '').slice(0, 120)
+                responseSummary: (data.choices?.[0]?.message?.content || '').slice(0, 120),
+                clientKeyName: clientChannel
               });
 
               if (cfg.cacheEnabled) {
@@ -483,6 +486,7 @@ function normalizeChatUrl(rawUrl) {
     model: targetModelName || 'bre-standby',
     status: 200,
     latencyMs: totalMs,
+    clientKeyName: clientChannel,
     error: finalError || 'Failed to connect to upstream provider, activated Standby Engine'
   });
 

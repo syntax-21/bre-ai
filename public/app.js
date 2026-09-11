@@ -517,6 +517,143 @@ async function compressImage(file, maxDimension = 1024, quality = 0.75) {
   });
 }
 
+async function extractVideoKeyframesAndMeta(file) {
+  return new Promise((resolve) => {
+    const video = document.createElement('video');
+    video.preload = 'metadata';
+    video.muted = true;
+    video.playsInline = true;
+    const url = URL.createObjectURL(file);
+    video.src = url;
+
+    const cleanup = () => {
+      try { URL.revokeObjectURL(url); } catch(e){}
+    };
+
+    const timeout = setTimeout(() => {
+      cleanup();
+      resolve({ duration: 0, width: 0, height: 0, frames: [] });
+    }, 8000);
+
+    video.onloadedmetadata = async () => {
+      const duration = video.duration || 0;
+      const width = video.videoWidth || 640;
+      const height = video.videoHeight || 360;
+
+      const timestamps = [];
+      if (duration > 0) {
+        if (duration <= 3) {
+          timestamps.push(duration * 0.5);
+        } else if (duration <= 10) {
+          timestamps.push(1, duration * 0.5, duration - 1);
+        } else {
+          timestamps.push(duration * 0.15, duration * 0.5, duration * 0.85);
+        }
+      } else {
+        timestamps.push(0);
+      }
+
+      const frames = [];
+      const canvas = document.createElement('canvas');
+      const maxDim = 640;
+      let cW = width;
+      let cH = height;
+      if (cW > maxDim || cH > maxDim) {
+        if (cW > cH) {
+          cH = Math.round((cH * maxDim) / cW);
+          cW = maxDim;
+        } else {
+          cW = Math.round((cW * maxDim) / cH);
+          cH = maxDim;
+        }
+      }
+      canvas.width = cW;
+      canvas.height = cH;
+      const ctx = canvas.getContext('2d');
+
+      for (const t of timestamps) {
+        try {
+          await new Promise((resSeek) => {
+            const onSeek = () => {
+              video.removeEventListener('seeked', onSeek);
+              try {
+                ctx.drawImage(video, 0, 0, cW, cH);
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                frames.push({ timeSec: t, dataUrl });
+              } catch (e) {}
+              resSeek();
+            };
+            video.addEventListener('seeked', onSeek);
+            video.currentTime = Math.min(t, duration || 0);
+          });
+        } catch (err) {}
+      }
+
+      clearTimeout(timeout);
+      cleanup();
+      resolve({ duration, width, height, frames });
+    };
+
+    video.onerror = () => {
+      clearTimeout(timeout);
+      cleanup();
+      resolve({ duration: 0, width: 0, height: 0, frames: [] });
+    };
+  });
+}
+
+async function extractAudioWaveformAndMeta(file) {
+  return new Promise(async (resolve) => {
+    let duration = 0;
+    let sampleRate = 44100;
+    let channels = 2;
+    let peaks = [];
+
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) {
+        const audioCtx = new AudioCtx();
+        const arrayBuf = await file.arrayBuffer();
+        const audioBuffer = await audioCtx.decodeAudioData(arrayBuf);
+        duration = audioBuffer.duration;
+        sampleRate = audioBuffer.sampleRate;
+        channels = audioBuffer.numberOfChannels;
+
+        const rawData = audioBuffer.getChannelData(0);
+        const samples = 24;
+        const blockSize = Math.floor(rawData.length / samples) || 1;
+        for (let i = 0; i < samples; i++) {
+          let blockStart = blockSize * i;
+          let sum = 0;
+          for (let j = 0; j < blockSize && (blockStart + j) < rawData.length; j++) {
+            sum += Math.abs(rawData[blockStart + j]);
+          }
+          peaks.push(Math.min(1, (sum / blockSize) * 2.5));
+        }
+        try { audioCtx.close(); } catch(e){}
+        return resolve({ duration, sampleRate, channels, peaks });
+      }
+    } catch (e) {}
+
+    try {
+      const audio = document.createElement('audio');
+      const url = URL.createObjectURL(file);
+      audio.src = url;
+      audio.onloadedmetadata = () => {
+        duration = audio.duration || 0;
+        try { URL.revokeObjectURL(url); } catch(e){}
+        resolve({ duration, sampleRate, channels, peaks });
+      };
+      audio.onerror = () => {
+        try { URL.revokeObjectURL(url); } catch(e){}
+        resolve({ duration: 0, sampleRate, channels, peaks });
+      };
+    } catch(err) {
+      resolve({ duration: 0, sampleRate, channels, peaks });
+    }
+  });
+}
+
 function setupPaste() {
   document.addEventListener('paste', async e => {
     const items = (e.clipboardData || e.originalEvent?.clipboardData)?.items;
@@ -546,6 +683,8 @@ function setupPaste() {
 async function handleFiles(list) {
   for (const f of Array.from(list)) {
     const isImg = f.type.startsWith('image/') || /\.(png|jpg|jpeg|gif|webp|svg|bmp|heic|heif)$/i.test(f.name);
+    const isVid = f.type.startsWith('video/') || /\.(mp4|mkv|avi|mov|webm|flv|wmv|3gp|m4v|ts|ogv|vob)$/i.test(f.name);
+    const isAud = f.type.startsWith('audio/') || /\.(mp3|wav|ogg|m4a|aac|flac|wma|opus|amr|weba|mid|midi|aiff)$/i.test(f.name);
     const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
     const isDocx = /\.docx$/i.test(f.name) || f.type.includes('wordprocessingml');
     const isExcel = /\.(xlsx|xls)$/i.test(f.name) || f.type.includes('spreadsheet') || f.type.includes('excel');
@@ -568,6 +707,90 @@ async function handleFiles(list) {
       } catch (err) {
         console.error('Image processing failed:', err);
         toast('Gagal memproses gambar: ' + err.message, 'err');
+      }
+      continue;
+    }
+
+    if (isVid) {
+      toast(`🎬 Menganalisis video: ${f.name}...`, 'info');
+      try {
+        const vidMeta = await extractVideoKeyframesAndMeta(f);
+        const durStr = vidMeta.duration > 0 ? `${Math.round(vidMeta.duration)}s` : 'Video';
+        const resStr = vidMeta.width && vidMeta.height ? `${vidMeta.width}x${vidMeta.height}` : 'HD';
+        const sizeStr = f.size > 1048576 ? `${(f.size / 1048576).toFixed(2)} MB` : `${(f.size / 1024).toFixed(1)} KB`;
+
+        const frameSummary = vidMeta.frames.length > 0
+          ? `[Cuplikan Visual: ${vidMeta.frames.length} keyframe diekstrak pada timeline ${vidMeta.frames.map(fr => `${Math.round(fr.timeSec)}s`).join(', ')}]`
+          : '[Analisis video container]';
+
+        files.push({
+          name: f.name,
+          type: 'video',
+          isVideo: true,
+          badgeIcon: '🎬',
+          badgeMeta: `${durStr} · ${resStr}`,
+          duration: vidMeta.duration,
+          previewThumb: vidMeta.frames[0]?.dataUrl || null,
+          videoFrames: vidMeta.frames,
+          content: `--- BEGIN VIDEO ATTACHMENT: ${f.name} (Ukuran: ${sizeStr}, Durasi: ${durStr}, Resolusi: ${resStr}) ---\n${frameSummary}\nFormat: ${f.type || 'video'}\n--- END VIDEO ATTACHMENT ---`,
+          data: vidMeta.frames[0]?.dataUrl || ''
+        });
+        renderAttachBar();
+        toast(`✅ Video terlampir: ${f.name} (${durStr})`, 'ok');
+      } catch (err) {
+        console.error('Video analysis failed:', err);
+        const sizeStr = f.size > 1048576 ? `${(f.size / 1048576).toFixed(2)} MB` : `${(f.size / 1024).toFixed(1)} KB`;
+        files.push({
+          name: f.name,
+          type: 'video',
+          isVideo: true,
+          badgeIcon: '🎬',
+          badgeMeta: sizeStr,
+          content: `--- BEGIN VIDEO ATTACHMENT: ${f.name} (Ukuran: ${sizeStr}) ---\nFormat: ${f.type || 'video'}\n--- END VIDEO ATTACHMENT ---`,
+          data: ''
+        });
+        renderAttachBar();
+        toast(`✅ Video terlampir: ${f.name}`, 'ok');
+      }
+      continue;
+    }
+
+    if (isAud) {
+      toast(`🎵 Menganalisis audio: ${f.name}...`, 'info');
+      try {
+        const audMeta = await extractAudioWaveformAndMeta(f);
+        const durSec = Math.round(audMeta.duration || 0);
+        const durStr = durSec > 0 ? `${Math.floor(durSec / 60)}:${String(durSec % 60).padStart(2, '0')}` : 'Audio';
+        const sizeStr = f.size > 1048576 ? `${(f.size / 1048576).toFixed(2)} MB` : `${(f.size / 1024).toFixed(1)} KB`;
+        const ext = f.name.split('.').pop().toUpperCase() || 'AUDIO';
+
+        files.push({
+          name: f.name,
+          type: 'audio',
+          isAudio: true,
+          badgeIcon: '🎵',
+          badgeMeta: `${durStr} · ${ext}`,
+          duration: audMeta.duration,
+          waveform: audMeta.peaks || [],
+          content: `--- BEGIN AUDIO ATTACHMENT: ${f.name} (Ukuran: ${sizeStr}, Durasi: ${durStr}, Format: ${ext}) ---\nSample Rate: ${audMeta.sampleRate || 44100} Hz (${audMeta.channels === 1 ? 'Mono' : 'Stereo'})\nKarakteristik Audio: Dinamika gelombang suara terdeteksi aktif.\n--- END AUDIO ATTACHMENT ---`,
+          data: ''
+        });
+        renderAttachBar();
+        toast(`✅ Audio terlampir: ${f.name} (${durStr})`, 'ok');
+      } catch (err) {
+        console.error('Audio analysis failed:', err);
+        const sizeStr = f.size > 1048576 ? `${(f.size / 1048576).toFixed(2)} MB` : `${(f.size / 1024).toFixed(1)} KB`;
+        files.push({
+          name: f.name,
+          type: 'audio',
+          isAudio: true,
+          badgeIcon: '🎵',
+          badgeMeta: sizeStr,
+          content: `--- BEGIN AUDIO ATTACHMENT: ${f.name} (Ukuran: ${sizeStr}) ---\nFormat: ${f.type || 'audio'}\n--- END AUDIO ATTACHMENT ---`,
+          data: ''
+        });
+        renderAttachBar();
+        toast(`✅ Audio terlampir: ${f.name}`, 'ok');
       }
       continue;
     }
@@ -759,6 +982,13 @@ function renderAttachBar() {
   bar.innerHTML = files.map((f, i) => {
     if (f.type === 'image' || (typeof f.content === 'string' && f.content.startsWith('data:image/'))) {
       return `<div class="fchip"><img src="${f.data || f.content}" class="fchip-img"> <span>${esc(f.name)}</span><button onclick="removeFile(${i})">×</button></div>`;
+    }
+    if (f.isVideo) {
+      const thumbHtml = f.previewThumb ? `<img src="${f.previewThumb}" class="fchip-img">` : '🎬';
+      return `<div class="fchip">${thumbHtml} <span>${esc(f.name)} (${f.badgeMeta || 'Video'})</span><button onclick="removeFile(${i})">×</button></div>`;
+    }
+    if (f.isAudio) {
+      return `<div class="fchip"><span>🎵 ${esc(f.name)} (${f.badgeMeta || 'Audio'})</span><button onclick="removeFile(${i})">×</button></div>`;
     }
     if (f.isPdf) {
       return `<div class="fchip"><span>📑 ${esc(f.name)} (${f.pageCount || 1}p)</span><button onclick="removeFile(${i})">×</button></div>`;
@@ -1841,37 +2071,54 @@ async function sendOrStop() {
   }
   
   const imageFiles = currentFiles.filter(f => f.type === 'image' || (typeof f.content === 'string' && f.content.startsWith('data:image/')));
-  const textFiles = currentFiles.filter(f => !imageFiles.includes(f));
+  const videoFiles = currentFiles.filter(f => f.isVideo && Array.isArray(f.videoFrames) && f.videoFrames.length > 0);
+  const otherFiles = currentFiles.filter(f => !imageFiles.includes(f) && !videoFiles.includes(f));
   
   let userPrompt = text;
-  if (textFiles.length) {
-    userPrompt += '\n\n[ATTACHED DOCUMENTS]:\n' + textFiles.map(f => `${f.content}`).join('\n\n');
+  if (otherFiles.length) {
+    userPrompt += '\n\n[ATTACHED MEDIA & DOCUMENTS]:\n' + otherFiles.map(f => `${f.content}`).join('\n\n');
   }
   
-  // UI Display: show only user's typed prompt text + images (document text is sent to LLM cleanly without clogging UI)
+  // UI Display: show only user's typed prompt text + images + video preview thumbnails
   let displayContent = text || '';
   if (imageFiles.length) {
     displayContent = imageFiles.map(img => `![${esc(img.name)}](${img.data || img.content})\n\n`).join('') + displayContent;
   }
+  if (videoFiles.length) {
+    displayContent = videoFiles.filter(v => v.previewThumb).map(vid => `![Video: ${esc(vid.name)}](${vid.previewThumb})\n\n`).join('') + displayContent;
+  }
   
   const attachedBadges = currentFiles.map(f => ({
     name: f.name,
-    icon: f.badgeIcon || (f.type === 'image' ? '🖼️' : '📎'),
-    meta: f.badgeMeta || (f.type === 'image' ? 'Image' : 'File'),
+    icon: f.badgeIcon || (f.isVideo ? '🎬' : (f.isAudio ? '🎵' : (f.type === 'image' ? '🖼️' : '📎'))),
+    meta: f.badgeMeta || (f.isVideo ? 'Video' : (f.isAudio ? 'Audio' : (f.type === 'image' ? 'Image' : 'File'))),
     isImage: f.type === 'image' || (typeof f.content === 'string' && f.content.startsWith('data:image/'))
   }));
   
+  const allVisionImages = [];
+  imageFiles.forEach(img => {
+    allVisionImages.push({
+      type: 'image_url',
+      image_url: { url: img.data || img.content }
+    });
+  });
+  videoFiles.forEach(vid => {
+    vid.videoFrames.forEach(fr => {
+      allVisionImages.push({
+        type: 'image_url',
+        image_url: { url: fr.dataUrl }
+      });
+    });
+  });
+
   let apiContent;
-  if (imageFiles.length) {
+  if (allVisionImages.length) {
     if (selectedModel.toLowerCase().includes('mercury')) {
-      toast('⚠️ Model Mercury-2 hanya mendukung teks. Untuk analisis gambar, gunakan model multimodal (seperti GPT-4o / Claude).', 'err');
+      toast('💡 Mengirim cuplikan video/gambar ke router multimodal.', 'info');
     }
     apiContent = [
-      { type: 'text', text: userPrompt || 'Please analyze this image.' },
-      ...imageFiles.map(img => ({
-        type: 'image_url',
-        image_url: { url: img.data || img.content }
-      }))
+      { type: 'text', text: userPrompt || 'Mohon analisis visual dan detail dari berkas ini secara mendalam.' },
+      ...allVisionImages
     ];
   } else {
     apiContent = userPrompt;

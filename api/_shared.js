@@ -215,8 +215,65 @@ function getNextRoundRobinIndex(length) {
 // ========================================================
 // 9ROUTER OBSERVABILITY, TELEMETRY & COST ENGINE
 // ========================================================
+const LOGS_PATH = path.join(process.cwd(), 'data', 'request_logs.json');
 const MAX_LOGS = 500;
-const requestLogs = [];
+let requestLogs = [];
+let saveLogsTimeout = null;
+
+const metricsStats = {
+  totalRequests: 0,
+  successfulRequests: 0,
+  failedRequests: 0,
+  totalTokens: 0,
+  totalLatencyMs: 0,
+  providerHits: {},
+  modelHits: {}
+};
+
+function loadPersistedLogs() {
+  try {
+    if (fs.existsSync(LOGS_PATH)) {
+      const raw = fs.readFileSync(LOGS_PATH, 'utf8');
+      const data = JSON.parse(raw);
+      if (Array.isArray(data)) {
+        requestLogs = data.slice(0, MAX_LOGS);
+        // Re-hydrate metricsStats
+        requestLogs.forEach(logItem => {
+          metricsStats.totalRequests++;
+          if (logItem.status >= 200 && logItem.status < 400) {
+            metricsStats.successfulRequests++;
+          } else {
+            metricsStats.failedRequests++;
+          }
+          metricsStats.totalTokens += (logItem.totalTokens || logItem.tokens || 0);
+          metricsStats.totalLatencyMs += (logItem.latencyMs || 0);
+          const prov = logItem.provider || 'unknown';
+          metricsStats.providerHits[prov] = (metricsStats.providerHits[prov] || 0) + 1;
+          const mod = logItem.model || 'unknown';
+          metricsStats.modelHits[mod] = (metricsStats.modelHits[mod] || 0) + 1;
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('[Telemetry] Error loading request_logs.json:', e.message);
+  }
+}
+loadPersistedLogs();
+
+function savePersistedLogs() {
+  if (saveLogsTimeout) clearTimeout(saveLogsTimeout);
+  saveLogsTimeout = setTimeout(() => {
+    try {
+      const dataDir = path.join(process.cwd(), 'data');
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+      }
+      fs.writeFileSync(LOGS_PATH, JSON.stringify(requestLogs.slice(0, MAX_LOGS), null, 2), 'utf8');
+    } catch (e) {
+      console.warn('[Telemetry] Error saving request_logs.json:', e.message);
+    }
+  }, 500);
+}
 
 // Standard Market Pricing (USD per 1 Million Tokens: [Input, Output, Cached])
 const MODEL_PRICING = {
@@ -265,15 +322,6 @@ function calculateCost(modelName, inTok = 0, outTok = 0, cacheTok = 0) {
   };
 }
 
-const metricsStats = {
-  totalRequests: 0,
-  successfulRequests: 0,
-  failedRequests: 0,
-  totalTokens: 0,
-  totalLatencyMs: 0,
-  providerHits: {},
-  modelHits: {}
-};
 const responseCache = new Map();
 
 function logRequest(entry) {
@@ -333,6 +381,7 @@ function logRequest(entry) {
   const mod = logItem.model;
   metricsStats.modelHits[mod] = (metricsStats.modelHits[mod] || 0) + 1;
 
+  savePersistedLogs();
   return logItem;
 }
 
@@ -349,6 +398,7 @@ function clearLogs() {
   metricsStats.totalLatencyMs = 0;
   metricsStats.providerHits = {};
   metricsStats.modelHits = {};
+  savePersistedLogs();
 }
 
 function getMetrics() {
