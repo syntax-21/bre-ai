@@ -221,8 +221,35 @@ document.addEventListener('DOMContentLoaded', () => {
   setupPaste();
   setupSTT();
   setupScrollDetection();
+  initMotivationBanner();
   if (!chats.length) newChat(); else switchChat(chats[0].id);
 });
+
+// 🌅 Motivasi Harian - banner Web Chat (sinkron dengan Telegram, 2x sehari)
+function initMotivationBanner() {
+  const check = async () => {
+    try {
+      const r = await fetch('/api/motivation');
+      if (!r.ok) return;
+      const data = await r.json();
+      if (!data || !data.enabled || !data.lastSent || !data.lastSent.slot) return;
+      const today = new Date();
+      const y = today.getFullYear();
+      const m = String(today.getMonth() + 1).padStart(2, '0');
+      const d = String(today.getDate()).padStart(2, '0');
+      const todayPrefix = `${y}-${m}-${d} `;
+      if (!String(data.lastSent.slot).startsWith(todayPrefix)) return;
+      const seenKey = 'bre_motiv_seen_' + data.lastSent.slot;
+      let seen;
+      try { seen = localStorage.getItem(seenKey); } catch (e) {}
+      if (seen) return;
+      try { localStorage.setItem(seenKey, '1'); } catch (e) {}
+      toast(`🌅 ${data.lastSent.quote}`, 'ok');
+    } catch (e) {}
+  };
+  check();
+  setInterval(check, 5 * 60 * 1000);
+}
 
 function initStyle() {
   const sel = document.getElementById('styleSelect');
@@ -680,6 +707,70 @@ function setupPaste() {
   });
 }
 
+function webFormatBytes(bytes) {
+  if (bytes > 1048576) return `${(bytes / 1048576).toFixed(2)} MB`;
+  if (bytes > 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${bytes} B`;
+}
+
+// Deteksi magic bytes untuk berkas biner apa pun (browser)
+function detectWebFileMagic(buf) {
+  try {
+    const len = Math.min(buf.byteLength, 300);
+    const u8 = new Uint8Array(buf.slice(0, len));
+    const ascii = String.fromCharCode(...u8);
+    const hex4 = Array.from(u8.slice(0, 4)).map(b => b.toString(16).padStart(2, '0')).join('');
+    if (ascii.startsWith('PK\x03\x04') || ascii.startsWith('PK\x05\x06')) return 'ZIP Archive';
+    if (ascii.startsWith('Rar!\x1a\x07')) return 'RAR Archive';
+    if (hex4 === '377abcaf') return '7-Zip Archive';
+    if (u8[0] === 0x1f && u8[1] === 0x8b) return 'GZIP Archive';
+    if (ascii.indexOf('ustar') === 257) return 'TAR Archive';
+    if (ascii.startsWith('%PDF-')) return 'Adobe PDF';
+    if (ascii.startsWith('MZ')) return 'Windows Executable (.exe/.dll)';
+    if (ascii.startsWith('\x7fELF')) return 'Linux Executable (ELF)';
+    if (ascii.startsWith('{\\rtf')) return 'RTF Document';
+    if (ascii.startsWith('\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1')) return 'MS Office Legacy (OLE2)';
+    if (ascii.startsWith('SQLite format 3')) return 'SQLite Database';
+    if (ascii.startsWith('OggS')) return 'OGG Media';
+    if (ascii.startsWith('\x00asm')) return 'WebAssembly';
+    if (ascii.startsWith('#!')) return 'Script Executable (shebang)';
+    if (ascii.startsWith('7z\xbc\xaf')) return '7-Zip Archive';
+  } catch (e) {}
+  return '';
+}
+
+// Daftar isi ZIP via Central Directory (browser)
+function readWebZipEntries(buf, maxEntries = 60) {
+  const entries = [];
+  const dv = new DataView(buf);
+  const totalLen = buf.byteLength;
+  if (totalLen < 22) return entries;
+  let idx = -1;
+  const searchFrom = Math.max(0, totalLen - (22 + 65535 + 4));
+  for (let i = totalLen - 22; i >= searchFrom; i--) {
+    if (dv.getUint32(i, true) === 0x06054b50) { idx = i; break; }
+  }
+  if (idx === -1) return entries;
+  const cdSize = dv.getUint32(idx + 12, true);
+  const cdOffset = dv.getUint32(idx + 16, true);
+  const cdEnd = Math.min(totalLen, Math.max(cdOffset, idx) + cdSize);
+  for (let off = cdOffset; off + 46 <= cdEnd; ) {
+    if (dv.getUint32(off, true) !== 0x02014b50) { off += 4; continue; }
+    const nameLen = dv.getUint16(off + 28, true);
+    const extraLen = dv.getUint16(off + 30, true);
+    const commentLen = dv.getUint16(off + 32, true);
+    const compSize = dv.getUint32(off + 20, true);
+    const uncompSize = dv.getUint32(off + 24, true);
+    let name;
+    try { name = new TextDecoder().decode(new Uint8Array(buf, off + 46, nameLen)); }
+    catch (e) { name = '?'; }
+    entries.push({ name, compSize, uncompSize });
+    off += 46 + nameLen + extraLen + commentLen;
+    if (entries.length >= maxEntries) break;
+  }
+  return entries;
+}
+
 async function handleFiles(list) {
   for (const f of Array.from(list)) {
     const isImg = f.type.startsWith('image/') || /\.(png|jpg|jpeg|gif|webp|svg|bmp|heic|heif)$/i.test(f.name);
@@ -688,7 +779,8 @@ async function handleFiles(list) {
     const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
     const isDocx = /\.docx$/i.test(f.name) || f.type.includes('wordprocessingml');
     const isExcel = /\.(xlsx|xls)$/i.test(f.name) || f.type.includes('spreadsheet') || f.type.includes('excel');
-    const isText = f.type.startsWith('text/') || /\.(js|ts|jsx|tsx|py|html|htm|css|scss|json|md|c|cpp|h|hpp|java|kt|rs|go|sql|sh|bash|txt|prd|csv|xml|yaml|yml|env|ini|cfg|toml)$/i.test(f.name);
+    const isText = f.type.startsWith('text/') || f.type === 'application/json' || f.type === 'application/xml' || f.type === 'application/javascript' || f.type === 'application/x-javascript' || f.type === 'image/svg+xml' ||
+      /\.(js|mjs|cjs|jsx|ts|tsx|py|pyw|pyi|html|htm|css|scss|sass|json|jsonl|md|markdown|mdx|c|cpp|cc|h|hpp|hh|cs|java|kt|kts|rs|go|swift|scala|php|rb|pl|pm|lua|r|m|dart|groovy|v|cob|sh|bash|zsh|fish|bat|cmd|ps1|psm1|vbs|reg|diff|patch|log|sql|tsv|tab|csv|xml|yaml|yml|toml|env|ini|cfg|conf|config|properties|editorconfig|gitignore|gitattributes|dockerfile|gradle|lock|txt|text|textile|rst|adoc|asciidoc|tex|ltx|bib|srt|vtt|gcode|stl|proto|prj|gel|gcode|asm|s|inc|pug|ejs|twig|jinja|hbs|mustache|ftl|sol|vy|cairo|zig|nim|elm|clj|cljs|erl|ex|exs|hs|lhs|fs|fsx|vb|cob)$/i.test(f.name);
 
     if (isImg) {
       toast(`🖼️ Mengoptimalkan gambar: ${f.name}...`, 'info');
@@ -946,19 +1038,64 @@ async function handleFiles(list) {
       };
       reader.readAsText(f);
     } else {
-      // General binary file (ZIP, RAR, EXE, BIN, dll) — Avoid dumping base64 into prompt!
+      // General binary file (ZIP, RAR, EXE, BIN, dll, dll) — selalu DITERIMA & dideskripsikan
       const sizeBytes = f.size || 0;
       const sizeStr = sizeBytes > 1048576 ? `${(sizeBytes / 1048576).toFixed(2)} MB` : `${(sizeBytes / 1024).toFixed(1)} KB`;
-      files.push({
-        name: f.name,
-        type: 'binary',
-        badgeIcon: '📦',
-        badgeMeta: sizeStr,
-        content: `[Lampiran Berkas: "${f.name}" (Ukuran: ${sizeStr}, Tipe: ${f.type || 'file'})]`,
-        data: ''
-      });
-      renderAttachBar();
-      toast(`✅ Berkas terlampir: ${f.name} (${sizeStr})`, 'ok');
+      if (f.size > 60 * 1048576) {
+        // Berkas sangat besar: cukup info metadata (tanpa dump biner)
+        files.push({
+          name: f.name,
+          type: 'binary',
+          badgeIcon: '📦',
+          badgeMeta: sizeStr,
+          content: `[Lampiran Berkas: "${f.name}" (Ukuran: ${sizeStr}, Tipe: ${f.type || 'file biner'})]`,
+          data: ''
+        });
+        renderAttachBar();
+        toast(`✅ Berkas terlampir: ${f.name} (${sizeStr})`, 'ok');
+        continue;
+      }
+      const reader = new FileReader();
+      reader.onload = e => {
+        try {
+          const arr = e.target.result;
+          const magic = detectWebFileMagic(arr);
+          let innerInfo = '';
+          if (magic === 'ZIP Archive') {
+            const entries = readWebZipEntries(arr);
+            if (entries.length) {
+              const shown = entries.slice(0, 40).map(en => {
+                const sz = en.uncompSize ? ` (${webFormatBytes(en.uncompSize)})` : '';
+                return `${en.name}${sz}`;
+              }).join(', ');
+              innerInfo = `\nBerisi ${entries.length} berkas: ${shown}${entries.length > 40 ? '…' : ''}`;
+            }
+          }
+          const typeLabel = magic ? `Tipe Deteksi: ${magic}` : (f.type || 'file biner');
+          files.push({
+            name: f.name,
+            type: 'binary',
+            badgeIcon: '📦',
+            badgeMeta: magic ? magic : sizeStr,
+            content: `[Lampiran Berkas: "${f.name}" (Ukuran: ${sizeStr}, ${typeLabel})]${innerInfo}`,
+            data: ''
+          });
+          renderAttachBar();
+          toast(`✅ Berkas terlampir: ${f.name} (${sizeStr})`, 'ok');
+        } catch (err) {
+          files.push({
+            name: f.name,
+            type: 'binary',
+            badgeIcon: '📦',
+            badgeMeta: sizeStr,
+            content: `[Lampiran Berkas: "${f.name}" (Ukuran: ${sizeStr}, Tipe: ${f.type || 'file biner'})]`,
+            data: ''
+          });
+          renderAttachBar();
+          toast(`✅ Berkas terlampir: ${f.name} (${sizeStr})`, 'ok');
+        }
+      };
+      reader.readAsArrayBuffer(f);
     }
   }
 }
@@ -1616,7 +1753,7 @@ function renderLatexAndMarkdown(text) {
   // 1. Protect existing codeblocks (```...``` and `...`) so math tokens inside code aren't mangled
   const codeBlocks = [];
   str = str.replace(/```[\s\S]*?```|`[^`\n]+`/g, (match) => {
-    const placeholder = `__BRE_CODE_SLOT_${codeBlocks.length}__`;
+    const placeholder = `±BRECODE${codeBlocks.length}±`;
     codeBlocks.push(match);
     return placeholder;
   });
@@ -1656,7 +1793,7 @@ function renderLatexAndMarkdown(text) {
     } else {
       rendered = `<div class="katex-display-fallback">$$\n${esc(trimmed)}\n$$</div>`;
     }
-    const slotKey = `__BRE_MATH_DISPLAY_${mathSlots.length}__`;
+    const slotKey = `±MATHDSP${mathSlots.length}±`;
     mathSlots.push(`<div class="bre-math-block">${rendered}</div>`);
     return `\n\n${slotKey}\n\n`;
   });
@@ -1677,7 +1814,7 @@ function renderLatexAndMarkdown(text) {
     } else {
       rendered = `<span class="katex-inline-fallback">$${esc(trimmed)}$</span>`;
     }
-    const slotKey = `__BRE_MATH_INLINE_${mathSlots.length}__`;
+    const slotKey = `±MATHINL${mathSlots.length}±`;
     mathSlots.push(rendered);
     return `${prefix}${slotKey}`;
   });
@@ -1696,8 +1833,8 @@ function renderLatexAndMarkdown(text) {
 
   // 5. Restore Math Slots (both bare and wrapped in <p>)
   mathSlots.forEach((mathHtml, idx) => {
-    const displaySlot = `__BRE_MATH_DISPLAY_${idx}__`;
-    const inlineSlot = `__BRE_MATH_INLINE_${idx}__`;
+    const displaySlot = `±MATHDSP${idx}±`;
+    const inlineSlot = `±MATHINL${idx}±`;
     html = html.split(`<p>${displaySlot}</p>`).join(mathHtml);
     html = html.split(displaySlot).join(mathHtml);
     html = html.split(inlineSlot).join(mathHtml);
@@ -1705,7 +1842,7 @@ function renderLatexAndMarkdown(text) {
 
   // 6. Restore Code Slots
   codeBlocks.forEach((codeSnippet, idx) => {
-    const codeSlot = `__BRE_CODE_SLOT_${idx}__`;
+    const codeSlot = `±BRECODE${idx}±`;
     let parsedCode = '';
     if (window.marked && typeof window.marked.parse === 'function') {
       try { parsedCode = window.DOMPurify ? DOMPurify.sanitize(window.marked.parse(codeSnippet)) : window.marked.parse(codeSnippet); } catch(e) { parsedCode = `<pre><code>${esc(codeSnippet)}</code></pre>`; }
@@ -1715,6 +1852,9 @@ function renderLatexAndMarkdown(text) {
     html = html.split(`<p>${codeSlot}</p>`).join(parsedCode);
     html = html.split(codeSlot).join(parsedCode);
   });
+
+  // Safety sweep: never let any placeholder token leak into the rendered UI
+  html = html.replace(/\±(?:BRECODE|MATHDSP|MATHINL)\d+±/g, '');
 
   return html;
 }

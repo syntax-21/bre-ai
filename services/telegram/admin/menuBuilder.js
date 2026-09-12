@@ -109,9 +109,12 @@ function buildMainMenuMarkup(cfg) {
         { text: '🛡️ Keamanan & Klien API', callback_data: 'adm_security' },
         { text: `🤖 Bot: ${currentMode}`, callback_data: 'adm_telegram' }
       ],
-      [
+[
         { text: '☁️ Cloud DB & Storage', callback_data: 'adm_cloud' },
         { text: '🧪 Live Model Tester', callback_data: 'adm_tester' }
+      ],
+      [
+        { text: '🌅 Motivasi Harian', callback_data: 'adm_motivation' }
       ],
       [
         { text: '📦 Backup & Maintenance', callback_data: 'adm_backup' },

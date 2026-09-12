@@ -70,6 +70,11 @@ module.exports = async (req, res) => {
       // Sinkronisasi cloud opsional jika tersedia (tidak wajib)
       try { await syncCloudConfig(); } catch (e) {}
 
+      // Cek & kirim motivasi harian yang terjadwal (fire-and-forget, tahan gagal)
+      try {
+        require('../services/motivation').checkAndSendMotivation().catch(() => {});
+      } catch (motErr) {}
+
       const incomingMsg = body.message || body.channel_post;
       if (incomingMsg) {
         await telegramBot.handleMessage(incomingMsg, webhookCtx);

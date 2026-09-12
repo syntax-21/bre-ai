@@ -737,6 +737,50 @@
         </div>
       </div>
 
+      <!-- Telegram Motivasi Harian Card -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">🌅 Motivasi Harian Otomatis</div>
+            <div class="card-subtitle">Kirim kutipan motivasi random 2x sehari ke semua pengguna active Telegram & muncul di Web Chat. Sinkron otomatis dengan panel admin di bot Telegram.</div>
+          </div>
+          <label class="toggle-wrap" style="font-size: 12.5px; color: #e2e8f0; display: flex; align-items: center; gap: 10px; cursor: pointer;">
+            <span class="toggle-switch">
+              <input type="checkbox" id="cfgMotivationEnabled">
+              <span class="toggle-slider"></span>
+            </span>
+            <span>Aktif</span>
+          </label>
+        </div>
+
+        <div class="grid-3" style="margin-bottom: 12px;">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label">🕐 Jam Kirim Pagi</label>
+            <input type="time" id="cfgMotivationTime1" class="input-text" value="08:00">
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label">🌇 Jam Kirim Sore</label>
+            <input type="time" id="cfgMotivationTime2" class="input-text" value="19:00">
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label">📊 Status Penerima</label>
+            <input type="text" id="cfgMotivationStatus" class="input-text" readonly placeholder="—">
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label class="form-label">📝 Kutipan Kustom (opsional — 1 kutipan per baris)</label>
+          <textarea id="cfgMotivationCustom" class="input-textarea" rows="3" placeholder="Jika kosong, Bre AI memakai kutipan motivasi bawaan yang campur emoji & bahasa Indonesia."></textarea>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 4px;">
+          <button class="btn btn-ping" onclick="previewMotivation()">👁️ Lihat Kutipan</button>
+          <button class="btn btn-outline" onclick="sendMotivationNow()">🚀 Kirim Sekarang</button>
+          <div id="motivationResult" class="form-hint" style="margin-top: 8px;"></div>
+        </div>
+        <div id="motivationPreview" style="margin-top: 8px;"></div>
+      </div>
+
       <!-- Telegram User List Management Card -->
       <div class="card">
         <div class="card-header">

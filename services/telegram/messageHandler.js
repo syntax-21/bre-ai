@@ -349,6 +349,11 @@ async function handleMessage(msg, botService, ctx = null) {
             historyDisplaySnippet = forwardInfo
               ? `[PDF Terusan dari ${forwardInfo.sourceName}]: ${fileName} (${sizeStr})`
               : `[PDF ${fileName} (${sizeStr})]: ${caption || 'Analisis PDF'}`;
+          } else if (parsedDoc.type === 'archive') {
+            userQueryPrompt = `${replyPrefix}${forwardPrefix}[Pengguna melampirkan berkas arsip terkompresi: "${fileName}" (Ukuran: ${sizeStr})]:\n=== INFO & DAFTAR ISI ARSIP ===\n${snippet}\n=== AKHIR DAFTAR ISI ARSIP ===\n\nInstruksi/Pertanyaan dari pengguna:\n${caption || 'Evaluasi struktur dan isi arsip ini, jelaskan kegunaan setiap berkas di dalamnya, dan berikan panduan teknis terbaik sebagai Bre AI.'}${forwardGuidance ? '\n' + forwardGuidance : ''}`;
+            historyDisplaySnippet = forwardInfo
+              ? `[Arsip Terusan dari ${forwardInfo.sourceName}]: ${fileName} (${sizeStr})`
+              : `[Arsip ${fileName} (${sizeStr})]: ${caption || 'Analisis Arsip'}`;
           } else {
             // Text or code file
             userQueryPrompt = `${replyPrefix}${forwardPrefix}[Pengguna melampirkan berkas teks/kode: "${fileName}" (Ukuran: ${sizeStr}, Format: .${ext || 'txt'})]:\n\`\`\`${ext || 'text'}\n${snippet}\n\`\`\`\n\nInstruksi/Pertanyaan dari pengguna:\n${caption || 'Analisis dan jelaskan isi berkas ini secara rinci, periksa kualitas/logika/strukturnya, dan berikan evaluasi atau solusi terbaik sebagai Bre AI.'}${forwardGuidance ? '\n' + forwardGuidance : ''}`;
@@ -371,7 +376,8 @@ async function handleMessage(msg, botService, ctx = null) {
             general_file: 'Berkas Data / Dokumen Umum'
           };
           const catLabel = catDescriptions[category] || 'Berkas Dokumen';
-          userQueryPrompt = `${replyPrefix}${forwardPrefix}[Pengguna melampirkan berkas: "${fileName}" (Jenis: ${catLabel}, Format: .${ext || 'file'}, Ukuran: ${sizeStr}, MIME: ${mime}) dengan catatan: "${caption || 'Mohon berikan panduan terkait berkas ini.'}"]. Berikan panduan teknis, jelaskan fungsi/struktur berkas tersebut, dan berikan saran atau evaluasi komprehensif sebagai Bre AI.${forwardGuidance ? '\n' + forwardGuidance : ''}`;
+          const described = (parsedDoc && parsedDoc.text) ? `\n=== INFO TEKNIS BERKAS ===\n${parsedDoc.text}\n` : '';
+          userQueryPrompt = `${replyPrefix}${forwardPrefix}[Pengguna melampirkan berkas: "${fileName}" (Jenis: ${catLabel}, Format: .${ext || 'file'}, Ukuran: ${sizeStr}, MIME: ${mime}) dengan catatan: "${caption || 'Mohon berikan panduan terkait berkas ini.'}"].${described} Berikan panduan teknis, jelaskan fungsi/struktur berkas tersebut, dan berikan saran atau evaluasi komprehensif sebagai Bre AI.${forwardGuidance ? '\n' + forwardGuidance : ''}`;
           historyDisplaySnippet = forwardInfo
             ? `[${catLabel} Terusan dari ${forwardInfo.sourceName}]: ${fileName} (${sizeStr})`
             : `[${catLabel}: ${fileName} (${sizeStr})]: ${caption || 'Panduan Berkas'}`;

@@ -81,6 +81,10 @@ const server = http.createServer((req, res) => {
   if (pathname === '/api/test')     return test(req, wres);
   if (pathname === '/api/search')   return search(req, wres);
   if (pathname === '/api/telegram') return telegram(req, wres);
+  if (pathname === '/api/motivation') {
+    const motivation = require('./services/motivation');
+    return wres.json({ ok: true, ...motivation.previewMotivation(), lastSent: motivation.getLastMotivation() });
+  }
   if (pathname === '/admin')        return serve(res, path.join(PUBLIC, 'admin.html'));
 
   let fp = path.join(PUBLIC, pathname === '/' ? 'index.html' : pathname);
@@ -111,4 +115,11 @@ server.listen(PORT, () => {
   } catch (err) {
     console.error('[TelegramBot] Init error:', err.message);
   }
+
+  // Motivasi Harian scheduler (Local/Polling Mode) — cek setiap 30 detik
+  setInterval(() => {
+    try { require('./services/motivation').checkAndSendMotivation().catch(() => {}); }
+    catch (e) {}
+  }, 30000);
+  try { require('./services/motivation').checkAndSendMotivation().catch(() => {}); } catch (e) {}
 });

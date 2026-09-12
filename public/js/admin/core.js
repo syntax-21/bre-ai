@@ -143,7 +143,7 @@ function restoreFullConfigFromLocalStorage(c) {
     ['endpoints','blacklist','telegramUsers'].forEach(f => {
       if ((!c[f] || !c[f].length) && s[f] && Array.isArray(s[f]) && s[f].length) c[f] = s[f];
     });
-    const tgFields = ['telegramBotToken','telegramOwnerId','telegramDomain','telegramAccessMode','telegramModel','telegramStyle','defaultStyle'];
+    const tgFields = ['telegramBotToken','telegramOwnerId','telegramDomain','telegramAccessMode','telegramModel','telegramStyle','defaultStyle','motivationEnabled','motivationTimes','motivationCustom'];
     tgFields.forEach(f => { if (s[f] && !c[f]) c[f] = s[f]; });
   } catch(e){}
   return c;
@@ -189,8 +189,16 @@ setVal('cfgDefaultStyle', c.defaultStyle || 'santai');
     const tgMode = document.getElementById('cfgTelegramAccessMode');
     if(tgMode) tgMode.value = c.telegramAccessMode === 'whitelist' ? 'diizinkan' : (c.telegramAccessMode || 'public');
     setVal('cfgTelegramDomain', c.telegramDomain || (window.location.host || ''));
-    setVal('cfgTelegramStyle', c.telegramStyle || 'santai');
+setVal('cfgTelegramStyle', c.telegramStyle || 'santai');
     setVal('cfgTelegramLanguage', c.telegramLanguage || 'id');
+
+    // Motivasi Harian
+    const motivEl = document.getElementById('cfgMotivationEnabled'); if(motivEl) motivEl.checked = !!c.motivationEnabled;
+    const mTimes = Array.isArray(c.motivationTimes) && c.motivationTimes.length ? c.motivationTimes : ['08:00', '19:00'];
+    setVal('cfgMotivationTime1', mTimes[0] || '08:00');
+    setVal('cfgMotivationTime2', mTimes[1] || '19:00');
+    setVal('cfgMotivationCustom', c.motivationCustom || '');
+    if (typeof updateMotivationStatus === 'function') updateMotivationStatus();
 
     restoreTelegramFromLocalStorage();
     telegramUsers = Array.isArray(c.telegramUsers) ? c.telegramUsers : [];

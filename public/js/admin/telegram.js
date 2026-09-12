@@ -300,3 +300,58 @@ function deleteTelegramUser(idx) {
   renderTelegramUsersTable(); saveAllConfig();
   toast('Pengguna dihapus dari daftar', 'ok');
 }
+
+// 🌅 Motivasi Harian (Web Admin)
+async function updateMotivationStatus() {
+  if (!adminToken) return;
+  try {
+    const r = await fetch('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken }, body: JSON.stringify({ action: 'get_motivation' }) });
+    if (!r.ok) return;
+    const data = await r.json();
+    const stEl = document.getElementById('cfgMotivationStatus');
+    if (!stEl) return;
+    if (data.ok && data.enabled) {
+      const times = Array.isArray(data.times) ? data.times.join(' & ') : '—';
+      const last = data.lastSent ? ` · Terakhir: ${new Date(data.lastSent.ts).toLocaleTimeString('id-ID', {hour:'2-digit',minute:'2-digit'})}` : ' · Belum terkirim';
+      stEl.value = `🟢 AKTIF · ${times} · ${data.recipients} chat${last}`;
+    } else {
+      stEl.value = data && data.enabled === false ? '🔴 Nonaktif (nyalakan toggle di atas)' : '—';
+    }
+  } catch(e) { console.error('updateMotivationStatus error:', e); }
+}
+
+async function previewMotivation() {
+  if (!adminToken) return toast('Admin token tidak ditemukan.', 'err');
+  const custom = (document.getElementById('cfgMotivationCustom')?.value || '').trim();
+  toast('🔄 Mengambil contoh kutipan...', 'ok');
+  try {
+    const body = { action: 'preview_motivation' };
+    if (custom) body.customText = custom;
+    const r = await fetch('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken }, body: JSON.stringify(body) });
+    const data = await r.json();
+    const box = document.getElementById('motivationPreview');
+    if (!box) return;
+    if (data.ok) {
+      box.innerHTML = `<div class="card" style="background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.25);padding:12px 14px;border-radius:12px;font-size:13.5px;color:#fde68a;line-height:1.6;">🌅 “${escapeHtml(data.quote)}”</div>`;
+    } else { box.innerHTML = ''; toast(`Gagal: ${data.error}`, 'err'); }
+  } catch(e) { toast(`Error: ${e.message}`, 'err'); }
+}
+
+async function sendMotivationNow() {
+  if (!adminToken) return toast('Admin token tidak ditemukan.', 'err');
+  const custom = (document.getElementById('cfgMotivationCustom')?.value || '').trim();
+  if (!confirm('Kirim motivasi SEKARANG ke semua penerima aktif?')) return;
+  toast('🚀 Mengirim motivasi sekarang...', 'ok');
+  try {
+    const body = { action: 'send_motivation_now' };
+    if (custom) body.customText = custom;
+    const r = await fetch('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken }, body: JSON.stringify(body) });
+    const data = await r.json();
+    const resEl = document.getElementById('motivationResult');
+    if (data.ok) {
+      if(resEl) resEl.textContent = `✅ Terkirim ke ${data.delivered}/${data.recipients || 0} chat · ${new Date().toLocaleTimeString('id-ID')}`;
+      toast(`✅ Motivasi terkirim ke ${data.delivered} chat!`, 'ok');
+      updateMotivationStatus();
+    } else { if(resEl) resEl.textContent = `❌ ${data.error || 'Gagal'} `; toast(`❌ Gagal kirim: ${data.error}`, 'err'); }
+  } catch(e) { toast(`Error: ${e.message}`, 'err'); }
+}

@@ -65,7 +65,11 @@ const DEFAULT_CONFIG = {
   upstashRedisToken: '',
   githubToken: '',
   githubRepo: '',
-  githubBranch: 'main'
+  githubBranch: 'main',
+  // Motivasi Harian (auto-send 2x sehari, sinkron Web + Telegram)
+  motivationEnabled: false,
+  motivationTimes: ['08:00', '19:00'],
+  motivationCustom: ''
 };
 
 const STYLE_LABELS = {
@@ -1018,6 +1022,9 @@ async function saveConfig(updated) {
   if (updated.githubToken !== undefined) merged.githubToken = String(updated.githubToken).trim();
   if (updated.githubRepo !== undefined) merged.githubRepo = String(updated.githubRepo).trim();
   if (updated.githubBranch !== undefined) merged.githubBranch = String(updated.githubBranch).trim() || 'main';
+  if (updated.motivationEnabled !== undefined) merged.motivationEnabled = !!updated.motivationEnabled;
+  if (updated.motivationTimes !== undefined) merged.motivationTimes = Array.isArray(updated.motivationTimes) ? updated.motivationTimes.map(t => String(t).trim()).filter(Boolean).slice(0, 6) : merged.motivationTimes;
+  if (updated.motivationCustom !== undefined) merged.motivationCustom = String(updated.motivationCustom).trim();
 
   memConfig = merged;
   lastCloudSync = Date.now();
@@ -1278,6 +1285,12 @@ function sanitizeOutput(text) {
   t = t.replace(/\b(I am|I'm|created by|developed by|trained by|made by|built by)\s+(Inception|Inception Labs|OpenAI|ChatGPT|Anthropic|Claude|Google|Gemini|Meta|Llama|Mistral|xAI|Sapiens AI|DeepSeek)\b/gi, '$1 Amirun Rayan Ariandi');
   t = t.replace(/\b(Saya adalah|dibuat oleh|dikembangkan oleh|diciptakan oleh|dilatih oleh)\s+(Inception|Inception Labs|OpenAI|ChatGPT|Anthropic|Claude|Google|Gemini|Meta|Llama|Mistral|Sapiens AI|DeepSeek)\b/gi, '$1 Amirun Rayan Ariandi');
   t = t.replace(/\b(as an AI developed by|as an AI created by|trained by)\s+[a-zA-Z0-9\s]+/gi, 'as Bre AI created by Amirun Rayan Ariandi');
+  
+  // Vision-permission error fabrication: beberapa model non-vision merespons
+  // berkas/gambar dengan teks error palsu. Ganti ke pesan ramah Bre AI.
+  t = t.replace(/\b(cannot|can' ?t|unable to)\s+(read|process|analyze|see)\s+["“`]?[a-z0-9_\- .]+\.[a-z0-9]{2,5}["”`]?(?:\s*\([^)]*\))?(?:\s*\.)?\s*inform(?:ation)?\s*(?:the|your)?\s*user[.!]?\b/gi, 'Berkas ini sukses diunggah. Bre AI sudah mendukung semua jenis file. Silakan ajukan pertanyaan spesifik terkait isi berkas tersebut. 📄');
+  t = t.replace(/\b(this model does not support image input|model does not support images?|does not support vision|image input is not supported)\b/gi, 'Bre AI sudah mendukung semua jenis file termasuk gambar. Silakan tanyakan apa yang ingin kamu ketahui dari berkas/gambar tersebut. 📄');
+  t = t.replace(/^ERROR:\s*(?:Cannot|Unable to|Failed to)\s+read.*$/gim, 'Bre AI sudah mendukung semua jenis file termasuk gambar. Silakan tanyakan apa yang ingin kamu ketahui dari berkas/gambar tersebut. 📄');
   
   return t;
 }

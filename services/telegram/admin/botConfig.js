@@ -4,9 +4,11 @@
 // ========================================================
 const {
   getConfig,
-  saveConfig
+  saveConfig,
+  STYLE_LABELS
 } = require('../../../api/_shared');
 const api = require('../api');
+const { LANGUAGE_LABELS } = require('./menuBuilder');
 
 function editTelegramMessage(...args) { return api.editTelegramMessage(...args); }
 function answerCallback(...args) { return api.answerCallback(...args); }
@@ -25,6 +27,7 @@ async function handle(cq, botService, router = null) {
     const activeStyle = STYLE_LABELS[cfg.telegramStyle || cfg.defaultStyle || 'santai'] || '✨ Santai & Friendly';
     const activeLang = LANGUAGE_LABELS[cfg.telegramLanguage || 'id'] || '🇮🇩 Indonesia';
     const usersCount = Array.isArray(cfg.telegramUsers) ? cfg.telegramUsers.length : 0;
+    const motivStatus = cfg.motivationEnabled ? '🟢' : '🔴';
 
     const text = `🤖 *Pengaturan Bot Telegram & Akses Serverless*\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
@@ -52,10 +55,11 @@ async function handle(cq, botService, router = null) {
           { text: '🔄 Set Webhook', callback_data: 'adm_setup_webhook' }
         ],
         [
-          { text: '♻️ Restart Service Bot', callback_data: 'adm_restart_bot' },
-          { text: '🛑 Stop Service Bot', callback_data: 'adm_stop_bot' }
+          { text: `${motivStatus} Motivasi Harian`, callback_data: 'adm_motivation' },
+          { text: '♻️ Restart Service Bot', callback_data: 'adm_restart_bot' }
         ],
         [
+          { text: '🛑 Stop Service Bot', callback_data: 'adm_stop_bot' },
           { text: '⬅️ Menu Utama', callback_data: 'adm_main' }
         ]
       ]
@@ -73,7 +77,7 @@ async function handle(cq, botService, router = null) {
     }
     const webhookUrl = `https://${domain}/api/telegram?t=${encodeURIComponent(cfg.telegramBotToken || '')}&o=${encodeURIComponent(cfg.telegramOwnerId || '')}`;
     try {
-      await apiCall('setWebhook', { url: webhookUrl }, token);
+      await api.apiCall('setWebhook', { url: webhookUrl }, token);
       await answerCallback(cq.id, `✅ Webhook 24/7 berhasil dipasang ke https://${domain}/api/telegram`, true, token);
     } catch (e) {
       await answerCallback(cq.id, `❌ Gagal pasang webhook: ${e.message}`, true, token);
@@ -84,7 +88,7 @@ async function handle(cq, botService, router = null) {
 
   if (data === 'adm_del_webhook') {
     try {
-      await apiCall('deleteWebhook', { drop_pending_updates: false }, token);
+      await api.apiCall('deleteWebhook', { drop_pending_updates: false }, token);
       await answerCallback(cq.id, '✅ Webhook dihapus (Mode Polling Aktif)', true, token);
     } catch (e) {
       await answerCallback(cq.id, `Gagal hapus webhook: ${e.message}`, true, token);
@@ -118,6 +122,65 @@ async function handle(cq, botService, router = null) {
   // ----------------------------------------------------
   // 8. CLOUD STORAGE & PERSISTENCE
   // ----------------------------------------------------
+
+  // ----------------------------------------------------
+  // 9. MOTIVASI HARIAN (otomatis 2x sehari, sinkron Web+Telegram)
+  // ----------------------------------------------------
+  if (data === 'adm_motivation' || data === 'adm_motiv_status') {
+    await answerCallback(cq.id, null, false, token);
+    const motivation = require('../../../../services/motivation');
+    const preview = motivation.previewMotivation();
+    const lastSent = motivation.getLastMotivation();
+    const timeStr = preview.times.length ? preview.times.join(' & ') : '—';
+    const status = preview.enabled ? '🟢 AKTIF' : '🔴 NONAKTIF';
+    const lastStr = lastSent ? new Date(lastSent.ts).toLocaleString('id-ID') : 'Belum pernah terkirim';
+
+    const text = `🌅 *Motivasi Harian Otomatis*\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `• *Status:* ${status}\n` +
+      `• *Jadwal (2x sehari):* ${timeStr}\n` +
+      `• *Penerima aktif:* ${preview.recipients} chat\n` +
+      `• *Terakhir dikirim:* ${lastStr}\n` +
+      `• *Kutipan besok:* _${preview.quote.slice(0, 90)}…_\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `_Ubah jadwal & kutipan di Web Admin → Tab Telegram → Kartu Motivasi Harian. Pengaturan tersinkron otomatis._`;
+
+    const markup = {
+      inline_keyboard: [
+        [
+          { text: preview.enabled ? '⏸️ Nonaktifkan' : '▶️ Aktifkan', callback_data: 'adm_motiv_toggle' },
+          { text: '🚀 Kirim Sekarang', callback_data: 'adm_motiv_now' }
+        ],
+        [
+          { text: '⬅️ Kembali', callback_data: 'adm_telegram' }
+        ]
+      ]
+    };
+    await editTelegramMessage(chatId, messageId, text, markup, token);
+    return;
+  }
+
+  if (data === 'adm_motiv_toggle') {
+    const cfg = getConfig();
+    const newState = !cfg.motivationEnabled;
+    saveConfig({ motivationEnabled: newState });
+    await answerCallback(cq.id, newState ? '✅ Motivasi Harian diaktifkan' : '⏸️ Motivasi Harian dinonaktifkan', true, token);
+    cq.data = 'adm_motiv_status';
+    return (router ? router(cq, botService) : handle(cq, botService, router));
+  }
+
+  if (data === 'adm_motiv_now') {
+    await answerCallback(cq.id, 'Mengirim motivasi sekarang…', false, token);
+    try {
+      const motivation = require('../../../../services/motivation');
+      const result = await motivation.sendMotivationNow();
+      await answerCallback(cq.id, `✅ Motivasi terkirim ke ${result.delivered} chat`, true, token);
+    } catch (err) {
+      await answerCallback(cq.id, `❌ Gagal kirim: ${err.message}`, true, token);
+    }
+    cq.data = 'adm_motiv_status';
+    return (router ? router(cq, botService) : handle(cq, botService, router));
+  }
 
   return false;
 }

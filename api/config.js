@@ -203,6 +203,27 @@ module.exports = async (req, res) => {
       return res.json({ ok: true, status: getCloudStorageInfo() });
     }
 
+    // Motivasi Harian Actions (Web Admin)
+    if (body.action === 'get_motivation') {
+      const motivation = require('../services/motivation');
+      return res.json({ ok: true, ...motivation.previewMotivation(), lastSent: motivation.getLastMotivation() });
+    }
+
+    if (body.action === 'preview_motivation') {
+      const motivation = require('../services/motivation');
+      return res.json({ ok: true, ...motivation.previewMotivation() });
+    }
+
+    if (body.action === 'send_motivation_now') {
+      const motivation = require('../services/motivation');
+      try {
+        const result = await motivation.sendMotivationNow(body.customText || null);
+        return res.json(result);
+      } catch (err) {
+        return res.status(500).json({ ok: false, error: err.message });
+      }
+    }
+
     // Auto-Detect Models from /v1/models endpoint
     if (body.action === 'detect_models') {
       const currentCfg = getConfig();
