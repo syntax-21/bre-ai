@@ -565,46 +565,6 @@
       </div>
     </div>
 
-    <!-- Transkripsi Audio / Voice Note Card -->
-    <div class="card">
-      <div class="card-header">
-        <div>
-          <div class="card-title">🎙️ Transkripsi Audio / Voice Note (Whisper)</div>
-          <div class="card-subtitle">Ubah voice note &amp; berkas audio Telegram menjadi teks otomatis (STT) via API OpenAI-compatible. Jika Endpoint &amp; Key dikosongkan, Bre AI otomatis memakai endpoint + key dari provider pertama yang aktif.</div>
-        </div>
-        <label class="toggle-wrap" style="font-size: 12.5px; color: #e2e8f0; display: flex; align-items: center; gap: 10px; cursor: pointer;">
-          <span class="toggle-switch">
-            <input type="checkbox" id="cfgTranscriptionEnabled">
-            <span class="toggle-slider"></span>
-          </span>
-          <span>Aktif</span>
-        </label>
-      </div>
-
-      <div class="grid-2" style="margin-bottom: 12px;">
-        <div class="form-group" style="margin-bottom: 0;">
-          <label class="form-label">🔗 Endpoint Transkripsi (Opsional)</label>
-          <input type="text" id="cfgTranscriptionEndpoint" class="input-text" placeholder="https://api.example.com/v1/audio/transcriptions">
-          <div class="form-hint">Kosongkan untuk auto-detect dari provider aktif.</div>
-        </div>
-        <div class="form-group" style="margin-bottom: 0;">
-          <label class="form-label">🔑 API Key (Opsional)</label>
-          <input type="password" id="cfgTranscriptionKey" class="input-text" placeholder="Kosongkan untuk memakai key provider aktif">
-        </div>
-      </div>
-
-      <div class="grid-2" style="margin-bottom: 4px;">
-        <div class="form-group" style="margin-bottom: 0;">
-          <label class="form-label">🧠 Model Transkripsi</label>
-          <input type="text" id="cfgTranscriptionModel" class="input-text" placeholder="whisper-1">
-        </div>
-        <div class="form-group" style="margin-bottom: 0;">
-          <label class="form-label">🌐 Bahasa (auto / id / en, dll)</label>
-          <input type="text" id="cfgTranscriptionLanguage" class="input-text" placeholder="auto">
-        </div>
-      </div>
-    </div>
-
     <!-- TAB 6: SECURITY & ACCESS CONTROL -->
     <div id="tabSecurity" class="tab-content" style="display: none;">
       <div class="card">
@@ -762,6 +722,46 @@
           <div id="motivationResult" class="form-hint" style="margin-top: 8px;"></div>
         </div>
         <div id="motivationPreview" style="margin-top: 8px;"></div>
+      </div>
+
+      <!-- Transkripsi Audio / Voice Note Card -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">🎙️ Transkripsi Audio / Voice Note (Whisper)</div>
+            <div class="card-subtitle">Ubah voice note &amp; berkas audio Telegram menjadi teks otomatis (STT) via API OpenAI-compatible. Jika Endpoint &amp; Key dikosongkan, Bre AI otomatis memakai endpoint + key dari provider pertama yang aktif.</div>
+          </div>
+          <label class="toggle-wrap" style="font-size: 12.5px; color: #e2e8f0; display: flex; align-items: center; gap: 10px; cursor: pointer;">
+            <span class="toggle-switch">
+              <input type="checkbox" id="cfgTranscriptionEnabled">
+              <span class="toggle-slider"></span>
+            </span>
+            <span>Aktif</span>
+          </label>
+        </div>
+
+        <div class="grid-2" style="margin-bottom: 12px;">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label">🔗 Endpoint Transkripsi (Opsional)</label>
+            <input type="text" id="cfgTranscriptionEndpoint" class="input-text" placeholder="https://api.example.com/v1/audio/transcriptions">
+            <div class="form-hint">Kosongkan untuk auto-detect dari provider aktif.</div>
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label">🔑 API Key (Opsional)</label>
+            <input type="password" id="cfgTranscriptionKey" class="input-text" placeholder="Kosongkan untuk memakai key provider aktif">
+          </div>
+        </div>
+
+        <div class="grid-2" style="margin-bottom: 4px;">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label">🧠 Model Transkripsi</label>
+            <input type="text" id="cfgTranscriptionModel" class="input-text" placeholder="whisper-1">
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label">🌐 Bahasa (auto / id / en, dll)</label>
+            <input type="text" id="cfgTranscriptionLanguage" class="input-text" placeholder="auto">
+          </div>
+        </div>
       </div>
 
       <!-- Advanced Telegram Settings -->
