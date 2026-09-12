@@ -69,7 +69,13 @@ const DEFAULT_CONFIG = {
   // Motivasi Harian (auto-send 2x sehari, sinkron Web + Telegram)
   motivationEnabled: false,
   motivationTimes: ['08:00', '19:00'],
-  motivationCustom: ''
+  motivationCustom: '',
+  // Transkripsi Audio / Voice Note (Whisper OpenAI-compatible)
+  transcriptionEnabled: true,
+  transcriptionEndpoint: '',
+  transcriptionKey: '',
+  transcriptionModel: 'whisper-1',
+  transcriptionLanguage: 'auto'
 };
 
 const STYLE_LABELS = {
@@ -1025,6 +1031,11 @@ async function saveConfig(updated) {
   if (updated.motivationEnabled !== undefined) merged.motivationEnabled = !!updated.motivationEnabled;
   if (updated.motivationTimes !== undefined) merged.motivationTimes = Array.isArray(updated.motivationTimes) ? updated.motivationTimes.map(t => String(t).trim()).filter(Boolean).slice(0, 6) : merged.motivationTimes;
   if (updated.motivationCustom !== undefined) merged.motivationCustom = String(updated.motivationCustom).trim();
+  if (updated.transcriptionEnabled !== undefined) merged.transcriptionEnabled = Boolean(updated.transcriptionEnabled);
+  if (updated.transcriptionEndpoint !== undefined) merged.transcriptionEndpoint = String(updated.transcriptionEndpoint).trim();
+  if (updated.transcriptionKey !== undefined) merged.transcriptionKey = String(updated.transcriptionKey).trim();
+  if (updated.transcriptionModel !== undefined) merged.transcriptionModel = String(updated.transcriptionModel).trim() || 'whisper-1';
+  if (updated.transcriptionLanguage !== undefined) merged.transcriptionLanguage = String(updated.transcriptionLanguage).trim() || 'auto';
 
   memConfig = merged;
   lastCloudSync = Date.now();
@@ -1286,11 +1297,14 @@ function sanitizeOutput(text) {
   t = t.replace(/\b(Saya adalah|dibuat oleh|dikembangkan oleh|diciptakan oleh|dilatih oleh)\s+(Inception|Inception Labs|OpenAI|ChatGPT|Anthropic|Claude|Google|Gemini|Meta|Llama|Mistral|Sapiens AI|DeepSeek)\b/gi, '$1 Amirun Rayan Ariandi');
   t = t.replace(/\b(as an AI developed by|as an AI created by|trained by)\s+[a-zA-Z0-9\s]+/gi, 'as Bre AI created by Amirun Rayan Ariandi');
   
-  // Vision-permission error fabrication: beberapa model non-vision merespons
-  // berkas/gambar dengan teks error palsu. Ganti ke pesan ramah Bre AI.
-  t = t.replace(/\b(cannot|can' ?t|unable to)\s+(read|process|analyze|see)\s+["“`]?[a-z0-9_\- .]+\.[a-z0-9]{2,5}["”`]?(?:\s*\([^)]*\))?(?:\s*\.)?\s*inform(?:ation)?\s*(?:the|your)?\s*user[.!]?\b/gi, 'Berkas ini sukses diunggah. Bre AI sudah mendukung semua jenis file. Silakan ajukan pertanyaan spesifik terkait isi berkas tersebut. 📄');
-  t = t.replace(/\b(this model does not support image input|model does not support images?|does not support vision|image input is not supported)\b/gi, 'Bre AI sudah mendukung semua jenis file termasuk gambar. Silakan tanyakan apa yang ingin kamu ketahui dari berkas/gambar tersebut. 📄');
-  t = t.replace(/^ERROR:\s*(?:Cannot|Unable to|Failed to)\s+read.*$/gim, 'Bre AI sudah mendukung semua jenis file termasuk gambar. Silakan tanyakan apa yang ingin kamu ketahui dari berkas/gambar tersebut. 📄');
+  // Vision-permission error handling: beberapa model non-vision menolak berkas/gambar.
+  // Sampaikan batasan dengan jujur dan solutif (jangan mengaku "sukses diunggah").
+  const VISION_HELP_MSG = 'Model AI yang sedang aktif saat ini tidak dapat membaca isi gambar/berkas karena belum mendukung fitur Vision. Silakan lampirkan deskripsi teks, atau admin dapat menambahkan provider vision-capable (contoh: GPT-4o, Gemini, Claude, Qwen-VL) di menu "🔌 Endpoints & Routing Strategy".';
+  const FILE_HELP_MSG = 'Berkas dapat diproses oleh Bre AI. Jika model tidak dapat membaca isinya, gunakan provider vision-capable (contoh: GPT-4o, Gemini, Claude, Qwen-VL), atau tanyakan hal spesifik tentang berkas tersebut.';
+  t = t.replace(/\b(cannot|can' ?t|unable to)\s+(read|process|analyze|see)\s+["“`]?[a-z0-9_\- .]+\.[a-z0-9]{2,5}["”`]?(?:\s*\([^)]*\))?(?:\s*\.)?\s*inform(?:ation)?\s*(?:the|your)?\s*user[.!]?\b/gi, VISION_HELP_MSG);
+  t = t.replace(/\b(this model does not support image input|model does not support images?|does not support vision|image input is not supported)\b/gi, VISION_HELP_MSG);
+  t = t.replace(/^(?:ERROR:\s*)?(?:Cannot|can' ?t|unable to)\s+read\s+["“`]?[^"“`)\n]+\.(?:png|jpg|jpeg|gif|webp|bmp|heic|heif|pdf|docx|doc|xlsx|xls|csv|txt|zip|rar|7z|tar|gz|mp3|mp4|wav|ogg|json|xml|html)(?:["”`]|\)|\s)*\(?[^()\n]*does not support (?:image input|images?|vision)[^()\n]*\)?[.\s]*informs? (?:the |your )?user[.!]?/gi, VISION_HELP_MSG);
+  t = t.replace(/^ERROR:\s*(?:Cannot|Unable to|Failed to)\s+read.*$/gim, FILE_HELP_MSG);
   
   return t;
 }

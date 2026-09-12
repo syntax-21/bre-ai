@@ -565,7 +565,45 @@
       </div>
     </div>
 
+    <!-- Transkripsi Audio / Voice Note Card -->
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">🎙️ Transkripsi Audio / Voice Note (Whisper)</div>
+          <div class="card-subtitle">Ubah voice note &amp; berkas audio Telegram menjadi teks otomatis (STT) via API OpenAI-compatible. Jika Endpoint &amp; Key dikosongkan, Bre AI otomatis memakai endpoint + key dari provider pertama yang aktif.</div>
+        </div>
+        <label class="toggle-wrap" style="font-size: 12.5px; color: #e2e8f0; display: flex; align-items: center; gap: 10px; cursor: pointer;">
+          <span class="toggle-switch">
+            <input type="checkbox" id="cfgTranscriptionEnabled">
+            <span class="toggle-slider"></span>
+          </span>
+          <span>Aktif</span>
+        </label>
+      </div>
 
+      <div class="grid-2" style="margin-bottom: 12px;">
+        <div class="form-group" style="margin-bottom: 0;">
+          <label class="form-label">🔗 Endpoint Transkripsi (Opsional)</label>
+          <input type="text" id="cfgTranscriptionEndpoint" class="input-text" placeholder="https://api.example.com/v1/audio/transcriptions">
+          <div class="form-hint">Kosongkan untuk auto-detect dari provider aktif.</div>
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+          <label class="form-label">🔑 API Key (Opsional)</label>
+          <input type="password" id="cfgTranscriptionKey" class="input-text" placeholder="Kosongkan untuk memakai key provider aktif">
+        </div>
+      </div>
+
+      <div class="grid-2" style="margin-bottom: 4px;">
+        <div class="form-group" style="margin-bottom: 0;">
+          <label class="form-label">🧠 Model Transkripsi</label>
+          <input type="text" id="cfgTranscriptionModel" class="input-text" placeholder="whisper-1">
+        </div>
+        <div class="form-group" style="margin-bottom: 0;">
+          <label class="form-label">🌐 Bahasa (auto / id / en, dll)</label>
+          <input type="text" id="cfgTranscriptionLanguage" class="input-text" placeholder="auto">
+        </div>
+      </div>
+    </div>
 
     <!-- TAB 6: SECURITY & ACCESS CONTROL -->
     <div id="tabSecurity" class="tab-content" style="display: none;">
@@ -682,6 +720,50 @@
         <input type="text" id="cfgTelegramWhitelist" style="display: none;">
       </div>
 
+      <!-- Telegram Motivasi Harian Card -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">🌅 Motivasi Harian Otomatis</div>
+            <div class="card-subtitle">Kirim kutipan motivasi <b>random berbeda setiap hari</b> sesuai jadwal (default 2x sehari) ke semua pengguna aktif Telegram & muncul di Web Chat. Sinkron otomatis dengan panel admin di bot Telegram (menu 🌅 Motivasi Harian).</div>
+          </div>
+          <label class="toggle-wrap" style="font-size: 12.5px; color: #e2e8f0; display: flex; align-items: center; gap: 10px; cursor: pointer;">
+            <span class="toggle-switch">
+              <input type="checkbox" id="cfgMotivationEnabled">
+              <span class="toggle-slider"></span>
+            </span>
+            <span>Aktif</span>
+          </label>
+        </div>
+
+        <div class="grid-3" style="margin-bottom: 12px;">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label">🕐 Jam Kirim Pagi</label>
+            <input type="time" id="cfgMotivationTime1" class="input-text" value="08:00">
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label">🌇 Jam Kirim Sore</label>
+            <input type="time" id="cfgMotivationTime2" class="input-text" value="19:00">
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label">📊 Status Penerima</label>
+            <input type="text" id="cfgMotivationStatus" class="input-text" readonly placeholder="—">
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label class="form-label">📝 Kutipan Kustom (opsional — 1 kutipan per baris)</label>
+          <textarea id="cfgMotivationCustom" class="input-textarea" rows="3" placeholder="Jika kosong, Bre AI memakai kutipan motivasi bawaan yang campur emoji & bahasa Indonesia."></textarea>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 4px;">
+          <button class="btn btn-ping" onclick="previewMotivation()">👁️ Lihat Kutipan</button>
+          <button class="btn btn-outline" onclick="sendMotivationNow()">🚀 Kirim Sekarang</button>
+          <div id="motivationResult" class="form-hint" style="margin-top: 8px;"></div>
+        </div>
+        <div id="motivationPreview" style="margin-top: 8px;"></div>
+      </div>
+
       <!-- Advanced Telegram Settings -->
       <div class="card">
         <div class="card-header" style="margin-bottom: 12px;">
@@ -735,50 +817,6 @@
             </select>
           </div>
         </div>
-      </div>
-
-      <!-- Telegram Motivasi Harian Card -->
-      <div class="card">
-        <div class="card-header">
-          <div>
-            <div class="card-title">🌅 Motivasi Harian Otomatis</div>
-            <div class="card-subtitle">Kirim kutipan motivasi random 2x sehari ke semua pengguna active Telegram & muncul di Web Chat. Sinkron otomatis dengan panel admin di bot Telegram.</div>
-          </div>
-          <label class="toggle-wrap" style="font-size: 12.5px; color: #e2e8f0; display: flex; align-items: center; gap: 10px; cursor: pointer;">
-            <span class="toggle-switch">
-              <input type="checkbox" id="cfgMotivationEnabled">
-              <span class="toggle-slider"></span>
-            </span>
-            <span>Aktif</span>
-          </label>
-        </div>
-
-        <div class="grid-3" style="margin-bottom: 12px;">
-          <div class="form-group" style="margin-bottom: 0;">
-            <label class="form-label">🕐 Jam Kirim Pagi</label>
-            <input type="time" id="cfgMotivationTime1" class="input-text" value="08:00">
-          </div>
-          <div class="form-group" style="margin-bottom: 0;">
-            <label class="form-label">🌇 Jam Kirim Sore</label>
-            <input type="time" id="cfgMotivationTime2" class="input-text" value="19:00">
-          </div>
-          <div class="form-group" style="margin-bottom: 0;">
-            <label class="form-label">📊 Status Penerima</label>
-            <input type="text" id="cfgMotivationStatus" class="input-text" readonly placeholder="—">
-          </div>
-        </div>
-
-        <div class="form-group" style="margin-bottom: 12px;">
-          <label class="form-label">📝 Kutipan Kustom (opsional — 1 kutipan per baris)</label>
-          <textarea id="cfgMotivationCustom" class="input-textarea" rows="3" placeholder="Jika kosong, Bre AI memakai kutipan motivasi bawaan yang campur emoji & bahasa Indonesia."></textarea>
-        </div>
-
-        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 4px;">
-          <button class="btn btn-ping" onclick="previewMotivation()">👁️ Lihat Kutipan</button>
-          <button class="btn btn-outline" onclick="sendMotivationNow()">🚀 Kirim Sekarang</button>
-          <div id="motivationResult" class="form-hint" style="margin-top: 8px;"></div>
-        </div>
-        <div id="motivationPreview" style="margin-top: 8px;"></div>
       </div>
 
       <!-- Telegram User List Management Card -->

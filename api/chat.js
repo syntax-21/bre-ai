@@ -104,18 +104,8 @@ module.exports = async (req, res) => {
   const requestedLang = (req.headers['x-custom-language'] || body.language || cfg.telegramLanguage || 'id').trim().toLowerCase();
   const stream = cfg.forceStream === true ? true : (cfg.forceStream === false ? false : (body.stream !== undefined ? Boolean(body.stream) : cfg.streamEnabled !== false));
 
-const KNOWN_VISION_PATTERNS = [
-  'gemini', 'claude', 'gpt-4o', 'gpt-4-turbo', 'gpt-4-vision', 'gpt-5.4-mini', 'gpt-5.6-sol', 'gpt-6-astra',
-  'qwen-vl', 'qwen2-vl', 'qwen2.5-vl', 'qwen3.7-plus', 'qwen3.8-max', 'glm-4v', 'pixtral', 'vision', 'vl'
-];
-
 function isVisionCapableModel(modelName) {
-  if (!modelName) return false;
-  const m = String(modelName).toLowerCase();
-  if (m.includes('minimax') || m.includes('kimi-k2') || m.includes('mercury') || m.includes('deepseek-v4') || m.includes('gpt-5.3-codex') || m.includes('glm-5.1') || m.includes('glm-5.2') || m.includes('glm-5.3') || m.includes('hy3') || m.includes('hy4') || m.includes('grok-4.5') || m.includes('grok-4.6')) {
-    return false;
-  }
-  return KNOWN_VISION_PATTERNS.some(pat => m.includes(pat));
+  return true;
 }
 
 function prepareMessagesForModel(messages, modelName, forceText = false) {

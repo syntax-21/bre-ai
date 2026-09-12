@@ -45,9 +45,10 @@ function switchTab(tabId, btn) {
   }
   if (tabId === 'tabDetails') load9RouterDetails();
   if (tabId === 'tabTester') updateTestModelDropdown();
-  if (tabId === 'tabTelegram') {
+if (tabId === 'tabTelegram') {
     loadTelegramStatus();
     if (typeof updateTelegramModelDropdown === 'function') updateTelegramModelDropdown(document.getElementById('cfgTelegramModel')?.value);
+    if (typeof updateMotivationStatus === 'function') updateMotivationStatus();
   }
   if (tabId === 'tabCloud') loadCloudStorageStatus();
 }
@@ -199,6 +200,13 @@ setVal('cfgTelegramStyle', c.telegramStyle || 'santai');
     setVal('cfgMotivationTime2', mTimes[1] || '19:00');
     setVal('cfgMotivationCustom', c.motivationCustom || '');
     if (typeof updateMotivationStatus === 'function') updateMotivationStatus();
+
+    // Transkripsi Audio
+    const trEnabledEl = document.getElementById('cfgTranscriptionEnabled'); if(trEnabledEl) trEnabledEl.checked = c.transcriptionEnabled !== false;
+    setVal('cfgTranscriptionEndpoint', c.transcriptionEndpoint || '');
+    setVal('cfgTranscriptionKey', c.transcriptionKey || '');
+    setVal('cfgTranscriptionModel', c.transcriptionModel || 'whisper-1');
+    setVal('cfgTranscriptionLanguage', c.transcriptionLanguage || 'auto');
 
     restoreTelegramFromLocalStorage();
     telegramUsers = Array.isArray(c.telegramUsers) ? c.telegramUsers : [];

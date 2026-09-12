@@ -41,6 +41,8 @@ const MOTIVATION_QUOTES = [
 
 let sentSlots = new Set();
 let lastMotivation = null;
+let usedQuotesToday = new Set();
+let usedQuotesDate = todayKey();
 
 function loadLog() {
   try {
@@ -75,12 +77,28 @@ function parseSlotTime(hhmm) {
   return minutes;
 }
 
-function pickQuote(customText = '') {
+function pickQuote(customText = '', avoid = null) {
+  let pool = MOTIVATION_QUOTES;
   if (customText && String(customText).trim()) {
     const lines = String(customText).split(/\n+/).map(l => l.trim()).filter(Boolean);
-    if (lines.length) return lines[Math.floor(Math.random() * lines.length)];
+    if (lines.length) pool = lines;
   }
-  return MOTIVATION_QUOTES[Math.floor(Math.random() * MOTIVATION_QUOTES.length)];
+  const avoidSet = (avoid && avoid.size) ? avoid : null;
+  let candidates = pool;
+  if (avoidSet) {
+    const remaining = pool.filter(q => !avoidSet.has(q));
+    if (remaining.length) candidates = remaining;
+  }
+  return candidates[Math.floor(Math.random() * candidates.length)];
+}
+
+function trackUsedQuote(quote) {
+  const tk = todayKey();
+  if (usedQuotesDate !== tk) {
+    usedQuotesDate = tk;
+    usedQuotesToday = new Set();
+  }
+  if (quote) usedQuotesToday.add(quote);
 }
 
 function buildMotivationText(quote, slotLabel) {
@@ -128,9 +146,10 @@ async function deliver(text) {
 
 // Kirim motivasi SEKARANG (test manual / tombol "Kirim Sekarang")
 async function sendMotivationNow(customText = null) {
-  const quote = pickQuote(customText !== null ? customText : getConfig().motivationCustom);
+  const quote = pickQuote(customText !== null ? customText : getConfig().motivationCustom, usedQuotesToday);
   const text = buildMotivationText(quote, '');
   const result = await deliver(text);
+  trackUsedQuote(quote);
   lastMotivation = { quote, text, ts: Date.now(), slot: `${todayKey()} manual` };
   return { ok: true, quote, text, ...result };
 }
@@ -154,10 +173,11 @@ async function checkAndSendMotivation() {
     const slotKey = `${tk} ${String(t)}`;
     if (sentSlots.has(slotKey)) continue;
 
-    const quote = pickQuote(cfg.motivationCustom);
+    const quote = pickQuote(cfg.motivationCustom, usedQuotesToday);
     const text = buildMotivationText(quote, String(t));
     try {
       const result = await deliver(text);
+      trackUsedQuote(quote);
       sentSlots.add(slotKey);
       saveLog();
       lastMotivation = { quote, text, ts: Date.now(), slot: slotKey };
