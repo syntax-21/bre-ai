@@ -137,6 +137,7 @@ _• 「Bre、こんにちは」 → Bre AI returns in Japanese 🇯🇵_
 • \`/contact [nomor] [Nama Depan] [Nama Belakang]\` - Kirim kartu kontak
 
 ⚡ *Perintah Pintas & Fitur Baru:*
+🌅 /motivasi [topik] — Dapatkan kutipan motivasi orisinil dari Bre AI
 ⚡ /remind [pesan] dalam X menit — Pengingat otomatis
 ⏰ /listremind — Lihat daftar pengingat aktif
 ❌ /cancelreminder [ID] — Batalkan pengingat

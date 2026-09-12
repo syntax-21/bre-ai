@@ -633,6 +633,19 @@ async function handle(ctx) {
     return true;
   }
 
+  // /motivasi [topik opsional] or /quote [topik opsional]
+  if (lowerText === '/motivasi' || lowerText.startsWith('/motivasi ') || lowerText === '/quote' || lowerText.startsWith('/quote ')) {
+    const customTopic = text.replace(/^\/(motivasi|quote)\S*\s*/i, '').trim();
+    try {
+      const motivation = require('../../motivation');
+      const quote = await motivation.generateMotivationQuote({ customTheme: customTopic });
+      const responseText = motivation.buildMotivationText(quote, '');
+      await api.sendTelegramMessage(chatId, responseText, null, null, token);
+    } catch (e) {
+      await api.sendTelegramMessage(chatId, `⚠️ Gagal menghasilkan motivasi AI: ${e.message}`, null, null, token);
+    }
+    return true;
+  }
 
   return false;
 }

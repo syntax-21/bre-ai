@@ -1,48 +1,23 @@
 // ========================================================
 // Bre AI v3.0 - Motivasi Harian Engine
-// Otomatis mengirim kutipan motivasi 2x sehari (sesuai jam),
+// 100% Bersumber dari Kecerdasan Buatan (Bre AI Core Router)
+// Otomatis membuat & mengirim kutipan motivasi orisinil 2x sehari,
 // sinkron untuk Web chat & Telegram Bot.
 // Created by Amirun Rayan Ariandi
 // ========================================================
 const fs = require('fs');
 const path = require('path');
+const EventEmitter = require('events');
 const { getConfig, saveConfig } = require('../api/_shared');
 const api = require('./telegram/api');
 
 const LOG_PATH = path.join(process.cwd(), 'data', 'motivation_log.json');
 
-const MOTIVATION_QUOTES = [
-  'Kegagalan bukanlah akhir dari segalanya. Ia hanyalah jeda singkat sebelum kamu bangkit lebih kuat lagi. 💪',
-  'Jangan menunggu untuk menjadi sempurna. Mulailah dari sekarang, dan perbaikilah seiring perjalananmu. 🚀',
-  'Kamu lebih kuat dari yang kamu kira, lebih berani dari yang kamu rasa, dan lebih mampu dari yang kamu bayangkan. ✨',
-  'Setiap langkah kecil yang kamu ambil hari ini adalah bagian dari perjalanan menuju impian besar besok. 🌱',
-  'Orang sukses bukan mereka yang tidak pernah gagal, melainkan mereka yang tidak pernah menyerah. 👑',
-  'Dirimu hari ini adalah hasil dari keputusan kemarin. Dirimu esok adalah hasil dari pilihan hari ini. 🌅',
-  'Fokuslah pada tujuanmu, bukan pada rasa takutmu. Satu langkah maju lebih baik daripada seribu mimpi diam. 🎯',
-  'Hidup bukan tentang menunggu badai berlalu, melainkan belajar menari di tengah hujan. 💃',
-  'Kesuksesan dimulai ketika kamu berhenti bertanya "mengapa aku harus?" dan mulai berkata "coba saja dulu!". 🔥',
-  'Jangan bandingkan bab 1mu dengan bab 20 milik orang lain. Tulis cerita terbaikmu sendiri. 📖',
-  'Disiplin adalah jembatan antara tujuan dan pencapaian. Teruslah melangkah. 🏗️',
-  'Saat kamu lelah, ingatlah: bintang paling terang membutuhkan langit paling gelap. 🌟',
-  'Waktumu terbatas. Jangan habiskan untuk hidup dalam bayangan orang lain. Buatlah karyamu sendiri. 🎨',
-  'Belajarlah dari kemarin, hiduplah untuk hari ini, dan berharaplah untuk hari esok. 🌤️',
-  'Kesabaran itu pahit, tapi buahnya manis sekali. Tetaplah berproses. 🍯',
-  'Jangan takut melangkah pelan, takutlah hanya berdiri diam tanpa arah. 🧭',
-  'Kekuatanmu tidak datang dari kemampuan fisik, melainkan dari kemauan yang tak pernah padam. ⚡',
-  'Setiap kali kamu ragu, ingat sejauh apa kamu telah melangkah. Kamu sudah hebat! 🏆',
-  'Ide-ide hebat lahir dari pikiran yang berani bermimpi dan tangan yang berani bekerja. 💡',
-  'Hari ini adalah kesempatan bagus untuk menjadi versi terbaik dari dirimu. Manfaatkan selagi bisa! 🌈',
-  'Sesulit apa pun hidup, selalu ada yang bisa kamu lakukan dan berhasil. Tetaplah mencoba. 🛶',
-  'Jangan remehkan kekuatan rutinitas kecil. Sedikit demi sedikit, lama-lama menjadi bukit. 🐢',
-  'Sukses bukan kunci kebahagiaan. Kebahagiaan adalah kunci kesuksesan. Lakukan yang kamu cintai. 😊',
-  'Yang membuatmu berbeda adalah keberanianmu mencoba hal-hal baru. Jangan berhenti berinovasi. 🧪',
-  'Teriakkanlah mimpimu kepada dunia melalui karyamu, bukan hanya melalui kata-kata. 🗣️'
-];
+// Backward compatibility alias (tidak lagi memakai array hardcoded)
+const MOTIVATION_QUOTES = [];
 
 let sentSlots = new Set();
 let lastMotivation = null;
-let usedQuotesToday = new Set();
-let usedQuotesDate = todayKey();
 
 function loadLog() {
   try {
@@ -77,34 +52,175 @@ function parseSlotTime(hhmm) {
   return minutes;
 }
 
-function pickQuote(customText = '', avoid = null) {
-  let pool = MOTIVATION_QUOTES;
-  if (customText && String(customText).trim()) {
-    const lines = String(customText).split(/\n+/).map(l => l.trim()).filter(Boolean);
-    if (lines.length) pool = lines;
+/**
+ * Membersihkan respons teks motivasi yang dihasilkan oleh AI
+ * @param {string} rawText
+ * @returns {string} Cleaned quote string
+ */
+function sanitizeAiQuote(rawText) {
+  if (!rawText || typeof rawText !== 'string') return '';
+  let text = rawText.trim();
+
+  // Buang catatan Standby Engine jika ada (> 💡 *Bre AI Standby Engine:* ...)
+  const standbyIdx = text.indexOf('> 💡 *Bre AI Standby Engine:*');
+  if (standbyIdx !== -1) {
+    text = text.slice(0, standbyIdx).trim();
   }
-  const avoidSet = (avoid && avoid.size) ? avoid : null;
-  let candidates = pool;
-  if (avoidSet) {
-    const remaining = pool.filter(q => !avoidSet.has(q));
-    if (remaining.length) candidates = remaining;
+  const standbyIdx2 = text.indexOf('> 💡 Bre AI Standby Engine:');
+  if (standbyIdx2 !== -1) {
+    text = text.slice(0, standbyIdx2).trim();
   }
-  return candidates[Math.floor(Math.random() * candidates.length)];
+
+  // Bersihkan baris markdown blockquote (misal: > "...")
+  text = text.replace(/^>\s*/gm, '').trim();
+
+  // Bersihkan prefix pengantar AI seperti "Kutipan:", "Motivasi Hari Ini:", "Berikut kutipan:", dll
+  text = text.replace(/^(kutipan|motivasi|quote|inspirasi|pesan motivasi)(\s*(hari ini|harian|pagi|sore|malam))?\s*[:：\-–—]\s*/i, '');
+  text = text.replace(/^(berikut\s+(adalah\s+)?(kutipan|motivasi|kata\s+bijak|pesan)\s*[:：\-–—]?\s*)/i, '');
+  text = text.replace(/^(tentu,\s*(ini|berikut)?\s*(kutipan|motivasi)?\s*[:：\-–—]?\s*)/i, '');
+
+  // Bersihkan tanda petik pembuka dan penutup di awal & akhir
+  text = text.replace(/^["'“”«»]+|["'“”«»]+$/g, '').trim();
+
+  return text;
 }
 
-function trackUsedQuote(quote) {
-  const tk = todayKey();
-  if (usedQuotesDate !== tk) {
-    usedQuotesDate = tk;
-    usedQuotesToday = new Set();
+/**
+ * Menghasilkan kutipan motivasi orisinil langsung dari Bre AI Router
+ * @param {object} options
+ * @param {string} [options.customTheme] - Arahan tema kustom dari Admin
+ * @param {string} [options.slotLabel] - Label jam/slot (misal: '08:00', '19:00')
+ * @returns {Promise<string>} Teks kutipan motivasi AI
+ */
+async function generateMotivationQuote({ customTheme = '', slotLabel = '' } = {}) {
+  const cfg = getConfig();
+  const chatHandler = require('../api/chat');
+
+  // 1. Tentukan konteks waktu (Pagi / Siang / Sore / Malam)
+  let timeContext = '';
+  let hour = new Date().getHours();
+  if (slotLabel) {
+    const parts = String(slotLabel).split(':');
+    const parsedH = parseInt(parts[0], 10);
+    if (!isNaN(parsedH)) hour = parsedH;
   }
-  if (quote) usedQuotesToday.add(quote);
+
+  if (hour >= 4 && hour < 11) {
+    timeContext = 'Waktu Pengiriman: PAGI HARI. Fokus energi: Membakar semangat menyambut fajar baru, keberanian mengambil langkah pertama, antusiasme peluang, dan produktivitas tinggi.';
+  } else if (hour >= 11 && hour < 17) {
+    timeContext = 'Waktu Pengiriman: SIANG / SORE HARI. Fokus energi: Menjaga konsistensi, pantang menyerah di tengah keletihan, daya juang, dan keteguhan menyelesaikan target hari ini.';
+  } else {
+    timeContext = 'Waktu Pengiriman: MALAM HARI. Fokus energi: Refleksi bijak, apresiasi atas perjuangan hari ini, ketenangan batin, kedamaian pikiran, dan optimisme menyongsong hari esok.';
+  }
+
+  // 2. Variasi tema inspirasi agar setiap kutipan memiliki keunikan mendalam
+  const VARIETY_ANGLES = [
+    'filosofi ketekunan bertahap dan konsistensi jangka panjang',
+    'keberanian keluar dari zona nyaman dan mengambil keputusan besar',
+    'ketenangan batin serta ketegaran mental saat menghadapi tantangan',
+    'menghargai potensi diri dan bertumbuh melampaui keraguan',
+    'fokus pada aksi nyata daripada rasa takut yang belum tentu terjadi',
+    'mengubah hambatan atau kegagalan menjadi bahan bakar keberhasilan',
+    'kekuatan disiplin diri sehari-hari yang membentuk masa depan',
+    'kebijaksanaan hidup, kebaikan hati, dan dampak positif bagi sekitar'
+  ];
+  const chosenAngle = VARIETY_ANGLES[Math.floor(Math.random() * VARIETY_ANGLES.length)];
+
+  // 3. Susun User Prompt & System Prompt untuk Bre AI
+  let userPrompt = `Buatkan 1 kutipan motivasi harian orisinil dari Bre AI.\n${timeContext}\nSudut Pandang Eksplorasi: ${chosenAngle}.`;
+  
+  const adminTheme = (customTheme !== null && customTheme !== undefined ? String(customTheme) : (cfg.motivationCustom || '')).trim();
+  if (adminTheme) {
+    userPrompt += `\nArahan / Tema Khusus dari Admin: "${adminTheme}" (Harap prioritaskan arahan ini).`;
+  }
+
+  const systemPrompt = `Kamu adalah Bre AI Engine — Pencipta Motivasi Harian Cerdas, Orisinil, dan Menginspirasi Jiwa.
+Tugasmu adalah merangkai 1 kutipan motivasi yang berbobot, bernyawa, segar, mendalam, dan membakar semangat hidup.
+
+ATURAN WAJIB:
+1. Bahasa: Bahasa Indonesia yang indah, elegan, mengalir alami, dan modern (tidak klise atau kaku).
+2. Panjang: 1 sampai 2 kalimat padat (antara 15 - 35 kata).
+3. Emoji: Wajib sertakan 1 atau 2 emoji yang pas dan berenergi positif di dalam atau di akhir kalimat.
+4. Format: HANYA tulis teks kutipan itu sendiri. DILARANG menggunakan tanda petik pembuka/penutup (" atau ').
+5. DILARANG menulis kata pengantar atau penutup seperti "Berikut kutipannya:", "Tentu,", "Semoga hari ini berkah:", dll. Langsung cetak teks motivasinya.`;
+
+  const mockReq = Object.assign(new EventEmitter(), {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-client-channel': 'Bre AI Motivasi Engine'
+    },
+    body: {
+      provider: cfg.telegramModel ? '' : '',
+      model: cfg.telegramModel || cfg.model || 'auto',
+      messages: [{ role: 'user', content: userPrompt }],
+      stream: false,
+      customSystemPrompt: systemPrompt
+    },
+    socket: { remoteAddress: '127.0.0.1' }
+  });
+
+  return new Promise(resolve => {
+    const timeout = setTimeout(() => {
+      // Fallback cerdas berbasis waktu jika AI upstream mengalami timeout
+      resolve(getDynamicFallbackQuote(hour));
+    }, 15000);
+
+    const mockRes = {
+      statusCode: 200,
+      setHeader: () => {},
+      writeHead: (code) => { mockRes.statusCode = code; },
+      status: (code) => { mockRes.statusCode = code; return mockRes; },
+      end: (data) => {
+        clearTimeout(timeout);
+        resolve(getDynamicFallbackQuote(hour));
+      },
+      json: (data) => {
+        clearTimeout(timeout);
+        if (data?.choices?.[0]?.message?.content) {
+          const cleaned = sanitizeAiQuote(data.choices[0].message.content);
+          if (cleaned && cleaned.length >= 10) {
+            return resolve(cleaned);
+          }
+        }
+        resolve(getDynamicFallbackQuote(hour));
+      }
+    };
+
+    try {
+      chatHandler(mockReq, mockRes).catch(err => {
+        clearTimeout(timeout);
+        resolve(getDynamicFallbackQuote(hour));
+      });
+    } catch (e) {
+      clearTimeout(timeout);
+      resolve(getDynamicFallbackQuote(hour));
+    }
+  });
+}
+
+function getDynamicFallbackQuote(hour) {
+  if (hour >= 4 && hour < 11) {
+    return 'Awali pagimu dengan keyakinan penuh bahwa setiap detik hari ini membawa peluang baru untuk bertumbuh dan menciptakan karya terbaikmu. 🌅🚀';
+  } else if (hour >= 11 && hour < 17) {
+    return 'Daya juang di saat lelah adalah pembeda nyata antara mereka yang sekadar bermimpi dan yang mewujudkannya menjadi kenyataan. Tetap melangkah! 🔥💪';
+  } else {
+    return 'Hargai setiap perjuangan dan langkah yang telah kamu lalui hari ini. Beristirahatlah dengan tenang, tenangkan pikiran, dan esok kita taklukkan hal-hal lebih besar. 🌙✨';
+  }
+}
+
+/**
+ * Alias pickQuote untuk kompatibilitas ke belakang (mengembalikan Promise<string>)
+ */
+async function pickQuote(customText = '') {
+  return await generateMotivationQuote({ customTheme: customText });
 }
 
 function buildMotivationText(quote, slotLabel) {
   const now = new Date();
   const dateStr = now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-  return `🌅 *MOTIVASI HARIAN* ${slotLabel ? `(${slotLabel})` : ''}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"${quote}"\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n— ${dateStr} · ✨ Bre AI by Amirun Rayan Ariandi`;
+  const labelSuffix = slotLabel ? ` (${slotLabel})` : '';
+  return `🌅 *MOTIVASI HARIAN BRE AI*${labelSuffix}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"${quote}"\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n— ${dateStr} · ✨ Dihasilkan oleh Bre AI`;
 }
 
 // Ambil daftar penerima chat_id Telegram yang valid (numeric)
@@ -146,11 +262,12 @@ async function deliver(text) {
 
 // Kirim motivasi SEKARANG (test manual / tombol "Kirim Sekarang")
 async function sendMotivationNow(customText = null) {
-  const quote = pickQuote(customText !== null ? customText : getConfig().motivationCustom, usedQuotesToday);
+  const cfg = getConfig();
+  const theme = customText !== null ? customText : cfg.motivationCustom;
+  const quote = await generateMotivationQuote({ customTheme: theme, slotLabel: '' });
   const text = buildMotivationText(quote, '');
   const result = await deliver(text);
-  trackUsedQuote(quote);
-  lastMotivation = { quote, text, ts: Date.now(), slot: `${todayKey()} manual` };
+  lastMotivation = { quote, text, ts: Date.now(), slot: `${todayKey()} manual`, aiGenerated: true };
   return { ok: true, quote, text, ...result };
 }
 
@@ -173,18 +290,17 @@ async function checkAndSendMotivation() {
     const slotKey = `${tk} ${String(t)}`;
     if (sentSlots.has(slotKey)) continue;
 
-    const quote = pickQuote(cfg.motivationCustom, usedQuotesToday);
-    const text = buildMotivationText(quote, String(t));
     try {
+      const quote = await generateMotivationQuote({ customTheme: cfg.motivationCustom, slotLabel: String(t) });
+      const text = buildMotivationText(quote, String(t));
       const result = await deliver(text);
-      trackUsedQuote(quote);
       sentSlots.add(slotKey);
       saveLog();
-      lastMotivation = { quote, text, ts: Date.now(), slot: slotKey };
-      console.log(`[Motivasi] Terkirim slot ${slotKey} -> ${result.delivered}/${result.recipients} penerima`);
+      lastMotivation = { quote, text, ts: Date.now(), slot: slotKey, aiGenerated: true };
+      console.log(`[Motivasi AI] Terkirim slot ${slotKey} -> ${result.delivered}/${result.recipients} penerima`);
       triggered = true;
     } catch (e) {
-      console.warn('[Motivasi] Gagal mengirim slot', slotKey, e.message);
+      console.warn('[Motivasi AI] Gagal mengirim slot', slotKey, e.message);
     }
   }
   return { triggered };
@@ -194,14 +310,16 @@ function getLastMotivation() {
   return lastMotivation ? { ...lastMotivation } : null;
 }
 
-function previewMotivation() {
+async function previewMotivation(customText = null) {
   const cfg = getConfig();
-  const todayQuote = pickQuote(cfg.motivationCustom);
+  const theme = customText !== null ? customText : cfg.motivationCustom;
+  const aiQuote = await generateMotivationQuote({ customTheme: theme });
   return {
     enabled: !!cfg.motivationEnabled,
     times: Array.isArray(cfg.motivationTimes) ? cfg.motivationTimes : [],
-    quote: todayQuote,
-    recipients: collectRecipients().length
+    quote: aiQuote,
+    recipients: collectRecipients().length,
+    aiGenerated: true
   };
 }
 
@@ -209,6 +327,7 @@ loadLog();
 
 module.exports = {
   MOTIVATION_QUOTES,
+  generateMotivationQuote,
   pickQuote,
   buildMotivationText,
   checkAndSendMotivation,

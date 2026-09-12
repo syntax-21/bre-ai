@@ -724,8 +724,8 @@
       <div class="card">
         <div class="card-header">
           <div>
-            <div class="card-title">🌅 Motivasi Harian Otomatis</div>
-            <div class="card-subtitle">Kirim kutipan motivasi <b>random berbeda setiap hari</b> sesuai jadwal (default 2x sehari) ke semua pengguna aktif Telegram & muncul di Web Chat. Sinkron otomatis dengan panel admin di bot Telegram (menu 🌅 Motivasi Harian).</div>
+            <div class="card-title">🌅 Motivasi Harian Otomatis (Bre AI Engine)</div>
+            <div class="card-subtitle">Kirim kutipan motivasi <b>100% orisinil yang diciptakan langsung oleh Bre AI</b> sesuai jadwal (default 2x sehari) ke semua pengguna aktif Telegram &amp; muncul di Web Chat. Kutipan menyesuaikan konteks waktu (Pagi/Sore/Malam) dan arahan tema kustom.</div>
           </div>
           <label class="toggle-wrap" style="font-size: 12.5px; color: #e2e8f0; display: flex; align-items: center; gap: 10px; cursor: pointer;">
             <span class="toggle-switch">
@@ -752,12 +752,12 @@
         </div>
 
         <div class="form-group" style="margin-bottom: 12px;">
-          <label class="form-label">📝 Kutipan Kustom (opsional — 1 kutipan per baris)</label>
-          <textarea id="cfgMotivationCustom" class="input-textarea" rows="3" placeholder="Jika kosong, Bre AI memakai kutipan motivasi bawaan yang campur emoji & bahasa Indonesia."></textarea>
+          <label class="form-label">📝 Arahan / Topik Motivasi AI (opsional)</label>
+          <textarea id="cfgMotivationCustom" class="input-textarea" rows="3" placeholder="Contoh: Fokus pada pantang menyerah, memulai bisnis, disiplin kerja, atau kedamaian hati. Jika kosong, Bre AI akan otomatis menciptakan tema motivasi inspiratif secara mandiri."></textarea>
         </div>
 
         <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 4px;">
-          <button class="btn btn-ping" onclick="previewMotivation()">👁️ Lihat Kutipan</button>
+          <button class="btn btn-ping" onclick="previewMotivation()">👁️ Lihat Kutipan AI</button>
           <button class="btn btn-outline" onclick="sendMotivationNow()">🚀 Kirim Sekarang</button>
           <div id="motivationResult" class="form-hint" style="margin-top: 8px;"></div>
         </div>

@@ -58,7 +58,7 @@ function wrapRes(res) {
   return res;
 }
 
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
   const parsed   = url.parse(req.url, true);
   const pathname = parsed.pathname;
 
@@ -83,7 +83,8 @@ const server = http.createServer((req, res) => {
   if (pathname === '/api/telegram') return telegram(req, wres);
   if (pathname === '/api/motivation') {
     const motivation = require('./services/motivation');
-    return wres.json({ ok: true, ...motivation.previewMotivation(), lastSent: motivation.getLastMotivation() });
+    const preview = await motivation.previewMotivation();
+    return wres.json({ ok: true, ...preview, lastSent: motivation.getLastMotivation() });
   }
   if (pathname === '/admin')        return serve(res, path.join(PUBLIC, 'admin.html'));
 

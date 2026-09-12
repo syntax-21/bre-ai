@@ -206,12 +206,14 @@ module.exports = async (req, res) => {
     // Motivasi Harian Actions (Web Admin)
     if (body.action === 'get_motivation') {
       const motivation = require('../services/motivation');
-      return res.json({ ok: true, ...motivation.previewMotivation(), lastSent: motivation.getLastMotivation() });
+      const preview = await motivation.previewMotivation();
+      return res.json({ ok: true, ...preview, lastSent: motivation.getLastMotivation() });
     }
 
     if (body.action === 'preview_motivation') {
       const motivation = require('../services/motivation');
-      return res.json({ ok: true, ...motivation.previewMotivation() });
+      const preview = await motivation.previewMotivation(body.customText || null);
+      return res.json({ ok: true, ...preview });
     }
 
     if (body.action === 'send_motivation_now') {

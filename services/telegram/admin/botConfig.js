@@ -129,21 +129,22 @@ async function handle(cq, botService, router = null) {
   if (data === 'adm_motivation' || data === 'adm_motiv_status') {
     await answerCallback(cq.id, null, false, token);
     const motivation = require('../../motivation');
-    const preview = motivation.previewMotivation();
+    const preview = await motivation.previewMotivation();
     const lastSent = motivation.getLastMotivation();
     const timeStr = preview.times.length ? preview.times.join(' & ') : '—';
     const status = preview.enabled ? '🟢 AKTIF' : '🔴 NONAKTIF';
     const lastStr = lastSent ? new Date(lastSent.ts).toLocaleString('id-ID') : 'Belum pernah terkirim';
+    const previewSample = preview.quote ? preview.quote.slice(0, 90) : '—';
 
-    const text = `🌅 *Motivasi Harian Otomatis*\n` +
+    const text = `🌅 *Motivasi Harian Otomatis (Bre AI)*\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
       `• *Status:* ${status}\n` +
       `• *Jadwal (2x sehari):* ${timeStr}\n` +
       `• *Penerima aktif:* ${preview.recipients} chat\n` +
       `• *Terakhir dikirim:* ${lastStr}\n` +
-      `• *Kutipan besok:* _${preview.quote.slice(0, 90)}…_\n` +
+      `• *Contoh Kutipan AI:* _${previewSample}…_\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-      `_Ubah jadwal & kutipan di Web Admin → Tab Telegram → Kartu Motivasi Harian. Pengaturan tersinkron otomatis._`;
+      `_Kutipan dibuat langsung oleh kecerdasan buatan Bre AI. Atur jadwal & topik di Web Admin → Tab Telegram → Kartu Motivasi Harian._`;
 
     const markup = {
       inline_keyboard: [
