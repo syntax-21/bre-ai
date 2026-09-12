@@ -128,7 +128,7 @@ async function handle(cq, botService, router = null) {
   // ----------------------------------------------------
   if (data === 'adm_motivation' || data === 'adm_motiv_status') {
     await answerCallback(cq.id, null, false, token);
-    const motivation = require('../../../../services/motivation');
+    const motivation = require('../../motivation');
     const preview = motivation.previewMotivation();
     const lastSent = motivation.getLastMotivation();
     const timeStr = preview.times.length ? preview.times.join(' & ') : '—';
@@ -172,7 +172,7 @@ async function handle(cq, botService, router = null) {
   if (data === 'adm_motiv_now') {
     await answerCallback(cq.id, 'Mengirim motivasi sekarang…', false, token);
     try {
-      const motivation = require('../../../../services/motivation');
+      const motivation = require('../../motivation');
       const result = await motivation.sendMotivationNow();
       await answerCallback(cq.id, `✅ Motivasi terkirim ke ${result.delivered} chat`, true, token);
     } catch (err) {
