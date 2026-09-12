@@ -17,10 +17,20 @@ function cleanTelegramText(text) {
   if (!text || typeof text !== 'string') return '';
   let cleaned = text;
 
-  // 1. Ganti tag <br>, <br/>, <br /> dengan baris baru asli (\n)
+  // 1. Bersihkan tag internal reasoning / thinking (<think>, <thought>, <reasoning>) & monolog internal
+  cleaned = cleaned.replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, '');
+  cleaned = cleaned.replace(/<thought>[\s\S]*?(?:<\/thought>|$)/gi, '');
+  cleaned = cleaned.replace(/<reasoning>[\s\S]*?(?:<\/reasoning>|$)/gi, '');
+  cleaned = cleaned.replace(/^[\s\r\n]*thinking[\s\S]*? response\r?\n\r?\n/gi, '');
+  cleaned = cleaned.replace(/^\[(?:Thinking Process|Reasoning Process|Proses Berpikir)\][\s\S]*?(?:\r?\n\r?\n|$)/gi, '');
+  cleaned = cleaned.replace(/^\*(?:Thinking Process|Reasoning Process|Proses Berpikir)\*[\s\S]*?(?:\r?\n\r?\n|$)/gi, '');
+  cleaned = cleaned.replace(/^(?:Thinking Process|Reasoning Process|Proses Berpikir|thinking):\s*[\s\S]*?(?:\r?\n\r?\n|$)/gi, '');
+  cleaned = cleaned.replace(/^thinking([A-Z\u00C0-\u024F\u1E00-\u1EFF\u0400-\u04FF\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF][^\n]*\n*)/i, '');
+
+  // 2. Ganti tag <br>, <br/>, <br /> dengan baris baru asli (\n)
   cleaned = cleaned.replace(/<br\s*\/?>/gi, '\n');
 
-  // 2. Bersihkan tag script atau tag HTML umum lain yang sering dimasukkan LLM
+  // 3. Bersihkan tag script atau tag HTML umum lain yang sering dimasukkan LLM
   cleaned = cleaned.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
   cleaned = cleaned.replace(/<\/?(p|div|span|strong|b|em|i)[^>]*>/gi, '');
 

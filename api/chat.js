@@ -105,7 +105,49 @@ module.exports = async (req, res) => {
   const stream = cfg.forceStream === true ? true : (cfg.forceStream === false ? false : (body.stream !== undefined ? Boolean(body.stream) : cfg.streamEnabled !== false));
 
 function isVisionCapableModel(modelName) {
-  return true;
+  if (!modelName || typeof modelName !== 'string') return false;
+  const m = modelName.toLowerCase().trim();
+
+  // 1. Explicit vision-capable models & keywords
+  if (
+    m.includes('4o') ||
+    m.includes('vision') ||
+    m.includes('gemini') ||
+    m.includes('claude-3') ||
+    m.includes('claude-3.5') ||
+    m.includes('claude-3.7') ||
+    m.includes('qwen-vl') ||
+    m.includes('qwen2-vl') ||
+    m.includes('qwen2.5-vl') ||
+    m.includes('pixtral') ||
+    m.includes('llava') ||
+    m.includes('vl-') ||
+    m.includes('-vl') ||
+    m.includes('multimodal') ||
+    m.includes('omni')
+  ) {
+    return true;
+  }
+
+  // 2. Explicit text-only models (do not accept pixel image_url payloads)
+  if (
+    m.includes('mercury') ||
+    m.includes('deepseek-chat') ||
+    m.includes('deepseek-coder') ||
+    m.includes('deepseek-r1') ||
+    m.includes('gpt-3.5') ||
+    m.includes('gpt-35') ||
+    m.includes('llama-3.1') ||
+    m.includes('llama-3.3') ||
+    m.includes('llama-3-') ||
+    m.includes('mistral-7b') ||
+    m.includes('mixtral') ||
+    m.includes('command-r')
+  ) {
+    return false;
+  }
+
+  return false;
 }
 
 function prepareMessagesForModel(messages, modelName, forceText = false) {

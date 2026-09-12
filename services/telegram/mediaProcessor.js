@@ -130,7 +130,15 @@ function tryParseJson(str) {
 async function processAndSendOutboundMedia(chatId, rawAnswer, token = null, loadingMsgId = null, userPrompt = '') {
   if (!rawAnswer) return { deliveredText: '', mediaCount: 0 };
 
-  let textToDeliver = String(rawAnswer);
+  let textToDeliver = String(rawAnswer)
+    .replace(/<think>[\s\S]*?(?:<\/think>|$)/gi, '')
+    .replace(/<thought>[\s\S]*?(?:<\/thought>|$)/gi, '')
+    .replace(/<reasoning>[\s\S]*?(?:<\/reasoning>|$)/gi, '')
+    .replace(/^[\s\r\n]*thinking[\s\S]*? response\r?\n\r?\n/gi, '')
+    .replace(/^\[(?:Thinking Process|Reasoning Process|Proses Berpikir)\][\s\S]*?(?:\r?\n\r?\n|$)/gi, '')
+    .replace(/^\*(?:Thinking Process|Reasoning Process|Proses Berpikir)\*[\s\S]*?(?:\r?\n\r?\n|$)/gi, '')
+    .replace(/^(?:Thinking Process|Reasoning Process|Proses Berpikir|thinking):\s*[\s\S]*?(?:\r?\n\r?\n|$)/gi, '')
+    .replace(/^thinking([A-Z\u00C0-\u024F\u1E00-\u1EFF\u0400-\u04FF\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF][^\n]*\n*)/i, '');
   const outboundActions = [];
   const generatedFiles = [];
 

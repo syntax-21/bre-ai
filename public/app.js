@@ -1867,12 +1867,24 @@ function renderContent(raw, isUser) {
     return esc(raw).replace(/\n/g, '<br>');
   }
   let text = raw || '', thHtml = '';
+  // Support both <think>...</think> and also convert any legacy ' thinking... response\n\n'
+  text = text.replace(/^[\s\r\n]*thinking([\s\S]*?) response\r?\n\r?\n/i, (m, thought) => {
+    return `<think>${thought.trim()}</think>\n\n`;
+  });
   const tm = text.match(/<think>([\s\S]*?)(?:<\/think>|$)/i);
   if (tm) {
     const done = text.includes('</think>');
-    thHtml = `<details class="think-box" ${done?'':'open'}><summary>Bre AI Reasoning ${done?'':'...'}</summary><div class="think-content">${esc(tm[1].trim())}</div></details>`;
+    const thoughtBody = tm[1].trim();
+    if (thoughtBody) {
+      thHtml = `<details class="think-box" ${done?'':'open'}><summary>Bre AI Reasoning ${done?'':'...'}</summary><div class="think-content">${esc(thoughtBody)}</div></details>`;
+    }
     text = text.replace(/<think>[\s\S]*?(?:<\/think>|$)/i, '').trim();
   }
+  // Defensive filter: never let raw unparsed thinking monologue leak into the visible text
+  text = text.replace(/^\[(?:Thinking Process|Reasoning Process|Proses Berpikir)\][\s\S]*?(?:\r?\n\r?\n|$)/gi, '');
+  text = text.replace(/^\*(?:Thinking Process|Reasoning Process|Proses Berpikir)\*[\s\S]*?(?:\r?\n\r?\n|$)/gi, '');
+  text = text.replace(/^(?:Thinking Process|Reasoning Process|Proses Berpikir|thinking):\s*[\s\S]*?(?:\r?\n\r?\n|$)/gi, '');
+  text = text.replace(/^thinking([A-Z\u00C0-\u024F\u1E00-\u1EFF\u0400-\u04FF\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF][^\n]*\n*)/i, '');
 
   // Handle rich outbound tags for interactive web rendering
   text = text.replace(/\[TELEGRAM_FILE:\s*([\s\S]*?)\]/gi, (match, body) => {
@@ -2387,7 +2399,7 @@ async function executeBotGeneration(targetBotIdx = null, searchResults = []) {
         buf += dec.decode(value, { stream: true });
         const lines = buf.split('\n');
         buf = lines.pop();
-for (const line of lines) {
+        for (const line of lines) {
           const t = line.trim();
           if (!t || t === 'data: [DONE]') continue;
           if (t.startsWith('data: ')) {
@@ -2395,13 +2407,25 @@ for (const line of lines) {
               const d = JSON.parse(t.slice(6))?.choices?.[0]?.delta;
               if (d) {
                 activeChat.msgs[botIdx].isTyping = false;
-                if (d.reasoning_content) {
-                  const c = activeChat.msgs[botIdx].content;
-                  activeChat.msgs[botIdx].content = c.startsWith(' thinking') ? c + d.reasoning_content : ' thinking' + d.reasoning_content;
+                const rc = d.reasoning_content || d.thought || (d.reasoning ? d.reasoning : null);
+                if (rc) {
+                  let c = activeChat.msgs[botIdx].content || '';
+                  if (!c.startsWith('<think>')) {
+                    activeChat.msgs[botIdx].content = '<think>' + rc;
+                  } else if (!c.includes('</think>')) {
+                    activeChat.msgs[botIdx].content = c + rc;
+                  } else {
+                    const parts = c.split('</think>');
+                    activeChat.msgs[botIdx].content = parts[0] + rc + '</think>' + parts.slice(1).join('</think>');
+                  }
                 }
                 if (d.content) {
-                  const c = activeChat.msgs[botIdx].content;
-                  activeChat.msgs[botIdx].content += (c.startsWith(' thinking') && !c.includes(' response')) ? ' response\n\n' + d.content : d.content;
+                  let c = activeChat.msgs[botIdx].content || '';
+                  if (c.startsWith('<think>') && !c.includes('</think>')) {
+                    activeChat.msgs[botIdx].content = c + '</think>\n\n' + d.content;
+                  } else {
+                    activeChat.msgs[botIdx].content = c + d.content;
+                  }
                 }
                 streamUpdate(botIdx);
               }
@@ -2419,13 +2443,25 @@ for (const line of lines) {
               const d = JSON.parse(t.slice(6))?.choices?.[0]?.delta;
               if (d) {
                 activeChat.msgs[botIdx].isTyping = false;
-                if (d.reasoning_content) {
-                  const c = activeChat.msgs[botIdx].content;
-                  activeChat.msgs[botIdx].content = c.startsWith(' thinking') ? c + d.reasoning_content : ' thinking' + d.reasoning_content;
+                const rc = d.reasoning_content || d.thought || (d.reasoning ? d.reasoning : null);
+                if (rc) {
+                  let c = activeChat.msgs[botIdx].content || '';
+                  if (!c.startsWith('<think>')) {
+                    activeChat.msgs[botIdx].content = '<think>' + rc;
+                  } else if (!c.includes('</think>')) {
+                    activeChat.msgs[botIdx].content = c + rc;
+                  } else {
+                    const parts = c.split('</think>');
+                    activeChat.msgs[botIdx].content = parts[0] + rc + '</think>' + parts.slice(1).join('</think>');
+                  }
                 }
                 if (d.content) {
-                  const c = activeChat.msgs[botIdx].content;
-                  activeChat.msgs[botIdx].content += (c.startsWith(' thinking') && !c.includes(' response')) ? ' response\n\n' + d.content : d.content;
+                  let c = activeChat.msgs[botIdx].content || '';
+                  if (c.startsWith('<think>') && !c.includes('</think>')) {
+                    activeChat.msgs[botIdx].content = c + '</think>\n\n' + d.content;
+                  } else {
+                    activeChat.msgs[botIdx].content = c + d.content;
+                  }
                 }
                 streamUpdate(botIdx);
               }
@@ -2433,10 +2469,21 @@ for (const line of lines) {
           }
         }
       }
+      // Ensure any unclosed <think> tag is sealed once stream finishes
+      let curContent = activeChat.msgs[botIdx].content || '';
+      if (curContent.startsWith('<think>') && !curContent.includes('</think>')) {
+        activeChat.msgs[botIdx].content = curContent + '</think>\n\n';
+      }
     } else {
       const respData = await r.json();
       activeChat.msgs[botIdx].isTyping = false;
-      activeChat.msgs[botIdx].content = respData.choices?.[0]?.message?.content || respData.error || '';
+      let respContent = respData.choices?.[0]?.message?.content || respData.error || '';
+      // If message has separate reasoning_content, wrap in <think>
+      const reasoning = respData.choices?.[0]?.message?.reasoning_content || respData.choices?.[0]?.message?.thought;
+      if (reasoning && !respContent.includes('<think>')) {
+        respContent = `<think>${reasoning.trim()}</think>\n\n` + respContent;
+      }
+      activeChat.msgs[botIdx].content = respContent;
     }
 
     activeChat.msgs[botIdx].isTyping = false;
