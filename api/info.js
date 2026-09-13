@@ -1,8 +1,9 @@
-const { getConfig } = require('./_shared');
+const { syncCloudConfig } = require('./_shared');
+const { apiHandler } = require('../services/httpSecurity');
 
-module.exports = (req, res) => {
+module.exports = apiHandler(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  const cfg = getConfig();
+  const cfg = await syncCloudConfig();
   
   let allModels = [];
   let providers = [];
@@ -38,8 +39,8 @@ module.exports = (req, res) => {
     providers: providers,
     models: [...new Set(allModels)],
     streamEnabled: cfg.streamEnabled !== false,
+    requireAuth: cfg.requireAuth !== false,
     status: 'online',
     serverTime: Date.now()
   });
-};
-
+}, ['GET']);

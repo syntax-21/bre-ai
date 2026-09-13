@@ -204,7 +204,7 @@ async function handle(cq, botService, router = null) {
     await answerCallback(cq.id, 'Memeriksa status webhook...', false, token);
     let webhookInfo = {};
     try {
-      webhookInfo = await apiCall('getWebhookInfo', {}, token);
+      webhookInfo = await api.apiCall('getWebhookInfo', {}, token);
     } catch(e) {
       webhookInfo = { error: e.message };
     }

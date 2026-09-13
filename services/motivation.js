@@ -10,8 +10,9 @@ const path = require('path');
 const EventEmitter = require('events');
 const { getConfig, saveConfig } = require('../api/_shared');
 const api = require('./telegram/api');
+const { internalRequests } = require('./httpSecurity');
 
-const LOG_PATH = path.join(process.cwd(), 'data', 'motivation_log.json');
+const LOG_PATH = path.join(process.env.BRE_DATA_DIR || (process.env.VERCEL ? path.join(require('os').tmpdir(), 'bre-data') : path.join(process.cwd(), 'data')), 'motivation_log.json');
 
 // Backward compatibility alias (tidak lagi memakai array hardcoded)
 const MOTIVATION_QUOTES = [];
@@ -92,6 +93,7 @@ function todayKey(d = new Date()) {
 function parseSlotTime(hhmm) {
   const m = String(hhmm || '').trim().match(/^(\d{1,2}):(\d{2})$/);
   if (!m) return null;
+  if (Number(m[1]) > 23 || Number(m[2]) > 59) return null;
   const minutes = parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
   if (minutes < 0 || minutes > 1439) return null;
   return minutes;
@@ -206,6 +208,7 @@ ATURAN WAJIB:
     },
     socket: { remoteAddress: '127.0.0.1' }
   });
+  internalRequests.add(mockReq);
 
   return new Promise(resolve => {
     const timeout = setTimeout(() => {
@@ -284,12 +287,12 @@ function collectRecipients() {
   };
   if (cfg.telegramOwnerId) add(String(cfg.telegramOwnerId).replace(/^@/, ''));
   if (Array.isArray(cfg.telegramUsers)) {
-    cfg.telegramUsers.forEach(u => add(u.id));
+    cfg.telegramUsers.filter(u => require('./telegram/accessControl').isUserAllowed({ id: u.id })).forEach(u => add(u.id));
   }
   // Plus recent active users dari akses kontrol bot
   try {
     const rec = require('./telegram/accessControl').getRecentUsersList();
-    rec.forEach(u => add(u.id));
+    rec.filter(u => require('./telegram/accessControl').isUserAllowed({ id: u.id })).forEach(u => add(u.id));
   } catch (e) {}
   return Array.from(recipients);
 }
@@ -336,9 +339,10 @@ async function checkAndSendMotivation() {
   for (const t of times) {
     const slotMin = parseSlotTime(t);
     if (slotMin === null) continue;
-    if (nowMinutes < slotMin || nowMinutes - slotMin > 5) continue; // toleransi 5 menit
+    if (nowMinutes < slotMin || nowMinutes - slotMin >= 30) continue;
     const slotKey = `${tk} ${String(t)}`;
     if (sentSlots.has(slotKey)) continue;
+    sentSlots.add(slotKey);
 
     try {
       const quote = await generateMotivationQuote({ customTheme: cfg.motivationCustom, slotLabel: String(t) });
@@ -350,6 +354,7 @@ async function checkAndSendMotivation() {
       console.log(`[Motivasi AI] Terkirim slot ${slotKey} -> ${result.delivered}/${result.recipients} penerima`);
       triggered = true;
     } catch (e) {
+      sentSlots.delete(slotKey);
       console.warn('[Motivasi AI] Gagal mengirim slot', slotKey, e.message);
     }
   }

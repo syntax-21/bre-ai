@@ -6,6 +6,7 @@
 // Created by Amirun Rayan Ariandi
 // ========================================================
 const { getConfig } = require('../api/_shared');
+const { safeFetch: fetch, responseJson } = require('./safeFetch');
 
 function normalizeEndpoint(rawUrl) {
   const u = (rawUrl || '').trim();
@@ -30,7 +31,7 @@ function getTranscriptionConfig() {
     if (ep && ep.url) {
       endpoint = normalizeEndpoint(ep.url);
       const keys = (Array.isArray(ep.keys) ? ep.keys : []).map(k => String(k || '').trim()).filter(Boolean);
-      key = keys[0] || String(ep.apiKey || '').trim();
+      key = key || keys[0] || String(ep.apiKey || '').trim();
     }
   }
 
@@ -48,6 +49,7 @@ async function transcribeAudio(audioBuffer, mimeType = '', filename = 'audio.ogg
   const tc = getTranscriptionConfig();
   if (!tc) return null;
   if (!audioBuffer || !audioBuffer.length) return null;
+  if (audioBuffer.length > 20 * 1024 * 1024) throw new Error('Audio melebihi 20 MB');
 
   const form = new FormData();
   const blob = new Blob([audioBuffer], { type: mimeType || 'application/octet-stream' });
@@ -59,13 +61,14 @@ async function transcribeAudio(audioBuffer, mimeType = '', filename = 'audio.ogg
     const res = await fetch(tc.endpoint, {
       method: 'POST',
       headers: { 'Authorization': tc.key },
-      body: form
+      body: form,
+      signal: AbortSignal.timeout(15000)
     });
     if (!res.ok) {
       console.warn(`[Transcription] Upstream ${res.status}: ${res.statusText}`);
       return null;
     }
-    const data = await res.json();
+    const data = await responseJson(res);
     const text = (data && data.text && String(data.text).trim()) ? String(data.text).trim() : null;
     return text || null;
   } catch (e) {

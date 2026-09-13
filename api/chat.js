@@ -10,99 +10,16 @@ const {
   setCachedResponse,
   getNextRoundRobinIndex,
   buildBreAISystemPrompt,
+  getClientIp,
+  checkClientAuth,
   STYLE_PROMPTS
 } = require('./_shared');
+const crypto = require('crypto');
+const { apiHandler, httpError, internalRequests } = require('../services/httpSecurity');
+const { safeFetch: fetch, responseJson, responseText } = require('../services/safeFetch');
+const { normalizeChatUrl: normalizeUpstreamUrl } = require('../services/safeFetch');
 
 const keyRotations = new Map();
-
-module.exports = async (req, res) => {
-  const reqStartTime = Date.now();
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-custom-endpoint, x-custom-keys, x-custom-model, x-custom-provider, x-custom-style');
-
-  if (req.method === 'OPTIONS') return res.status(204).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-
-  let body = req.body;
-  if (!body) {
-    body = await new Promise(resolve => {
-      let d = ''; req.on('data', c => { d += c; });
-      req.on('end', () => { try { resolve(JSON.parse(d || '{}')); } catch { resolve({}); } });
-      req.on('error', () => resolve({}));
-    });
-  } else if (typeof body === 'string') {
-    try { body = JSON.parse(body); } catch { body = {}; }
-  }
-  body = body || {};
-
-  // 1. IP and Rate Limiting
-  const ip = req.headers?.['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || '127.0.0.1';
-  const clientChannel = (req.headers?.['x-client-channel'] || (req.headers?.['x-custom-provider'] === 'Telegram Bot' ? 'Telegram Bot' : (req.headers?.authorization ? 'API Client' : 'Direct Web'))).trim();
-  const cfg = await syncCloudConfig();
-
-  // Check Rate Limits (Anti-Spam per IP)
-  const chatRate = checkChatRateLimit(ip);
-  if (chatRate.limited) {
-    logRequest({ ip, provider: 'RateLimiter', model: 'n/a', status: 429, latencyMs: 1, error: 'Chat rate limit exceeded', clientKeyName: clientChannel });
-    return res.status(429).json({ error: `Batas kuota request tercapai. Coba lagi dalam ${chatRate.retryAfter} detik.` });
-  }
-  consumeChatRate(ip);
-
-  // 3. Extract Custom Provider and Model Routing
-  const rawCustomProv = (req.headers['x-custom-provider'] || '').trim();
-  const requestedProvider = (rawCustomProv && rawCustomProv !== 'Telegram Bot' ? rawCustomProv : (body.provider || '')).trim();
-  const requestedModel = (req.headers['x-custom-model'] || body.model || body.customModel || cfg.model || '').trim();
-
-  // 4. Build and sanitize dialogue messages
-  let rawMessages = Array.isArray(body.messages) ? body.messages : [];
-  let dialogueTurns = rawMessages
-    .filter(m => m && m.role && m.role !== 'system')
-    .map(m => ({ role: m.role, content: m.content }));
-
-  // Sanitize dialogue sequence so it complies with all LLM provider requirements:
-  // 1. First message must always be 'user' (strip leading 'assistant' if any)
-  while (dialogueTurns.length > 0 && dialogueTurns[0].role !== 'user') {
-    dialogueTurns.shift();
-  }
-
-  // 2. Merge consecutive duplicate roles if any
-  const userMessages = [];
-  for (const turn of dialogueTurns) {
-    const prev = userMessages[userMessages.length - 1];
-    if (prev && prev.role === turn.role) {
-      if (typeof prev.content === 'string' && typeof turn.content === 'string') {
-        prev.content = `${prev.content}\n\n${turn.content}`;
-      } else {
-        userMessages.push(turn);
-      }
-    } else {
-      userMessages.push(turn);
-    }
-  }
-
-  if (userMessages.length === 0) {
-    userMessages.push({ role: 'user', content: 'Halo' });
-  }
-
-  const allUserText = userMessages
-    .filter(m => m.role === 'user')
-    .map(m => typeof m.content === 'string' ? m.content : JSON.stringify(m.content))
-    .join(' ');
-
-  // Content Moderation & Keyword Blacklist
-  if (cfg.blacklist && cfg.blacklist.length > 0) {
-    const blockedWord = checkBlacklist(allUserText, cfg.blacklist);
-    if (blockedWord) {
-      logRequest({ ip, provider: 'Content Filter', model: requestedModel || 'n/a', status: 400, latencyMs: 2, error: `Blacklist keyword matched: "${blockedWord}"` });
-      return res.status(400).json({ error: `Pesan diblokir oleh kebijakan keamanan konten (Terdeteksi kata terlarang: "${blockedWord}").` });
-    }
-  }
-
-  // 5. Language & Style Resolution
-  const requestedStyle = (req.headers['x-custom-style'] || body.style || cfg.defaultStyle || 'santai').trim();
-  const requestedLang = (req.headers['x-custom-language'] || body.language || cfg.telegramLanguage || 'id').trim().toLowerCase();
-  const stream = cfg.forceStream === true ? true : (cfg.forceStream === false ? false : (body.stream !== undefined ? Boolean(body.stream) : cfg.streamEnabled !== false));
 
 function isVisionCapableModel(modelName) {
   if (!modelName || typeof modelName !== 'string') return false;
@@ -172,15 +89,110 @@ function prepareMessagesForModel(messages, modelName, forceText = false) {
 }
 
 function normalizeChatUrl(rawUrl) {
-  let u = (rawUrl || '').trim();
-  if (!u) return '';
-  if (u.endsWith('/chat/completions')) return u;
-  if (u.endsWith('/v1')) return `${u}/chat/completions`;
-  if (u.endsWith('/')) return `${u}v1/chat/completions`;
-  return `${u}/v1/chat/completions`;
+  return normalizeUpstreamUrl(rawUrl);
 }
 
-// 6. Select Candidates for Routing & Auto-Failover
+module.exports = apiHandler(async (req, res) => {
+  const reqStartTime = Date.now();
+
+  let body = req.body;
+  if (!body) {
+    body = await new Promise(resolve => {
+      let d = ''; req.on('data', c => { d += c; });
+      req.on('end', () => { try { resolve(JSON.parse(d || '{}')); } catch { resolve({}); } });
+      req.on('error', () => resolve({}));
+    });
+  } else if (typeof body === 'string') {
+    try { body = JSON.parse(body); } catch { body = {}; }
+  }
+  body = body || {};
+  for (const field of ['model', 'provider', 'customModel', 'style', 'language', 'customSystemPrompt']) {
+    if (body[field] !== undefined && (typeof body[field] !== 'string' || body[field].length > (field === 'customSystemPrompt' ? 30000 : 256))) throw httpError(400, `${field} tidak valid`);
+  }
+  if (!Array.isArray(body.messages) || !body.messages.length || body.messages.length > 100) throw httpError(400, 'messages harus berisi 1–100 pesan');
+  if (body.messages.some(m => !m || !['system', 'user', 'assistant'].includes(m.role) || (typeof m.content !== 'string' && !Array.isArray(m.content)))) throw httpError(400, 'Format pesan tidak valid');
+  for (const m of body.messages) if (Array.isArray(m.content)) {
+    if (m.content.length > 32 || m.content.some(p => !p || !((p.type === 'text' && typeof p.text === 'string') || (p.type === 'image_url' && typeof p.image_url?.url === 'string' && /^(https:\/\/|data:image\/(png|jpeg|webp|gif);base64,)/.test(p.image_url.url))))) throw httpError(400, 'Format lampiran tidak valid');
+  }
+  if (body.stream !== undefined && typeof body.stream !== 'boolean') throw httpError(400, 'stream harus boolean');
+
+  // 1. IP and Rate Limiting
+  const ip = getClientIp(req);
+  const internal = internalRequests.has(req);
+  const clientChannel = internal ? 'Telegram / Internal' : (req.headers.authorization || req.headers['x-api-key'] ? 'API Client' : 'Direct Web');
+  const cfg = await syncCloudConfig();
+
+  // Client Authentication (anti open-proxy) — aktif hanya jika requireAuth=true
+  const clientKeyCheck = internal ? 'internal' : (cfg.requireAuth !== false ? checkClientAuth(req, cfg) : 'open');
+  if (!clientKeyCheck) {
+    logRequest({ ip, provider: 'AuthFilter', model: 'n/a', status: 401, latencyMs: 2, error: 'Missing or invalid API key', clientKeyName: 'Rejected' });
+    return res.status(401).json({ error: 'Unauthorized: API key (x-api-key / Authorization Bearer) valid diperlukan.' });
+  }
+
+  // Check Rate Limits (Anti-Spam per IP)
+  const chatRate = checkChatRateLimit(ip);
+  if (!internal && chatRate.limited) {
+    logRequest({ ip, provider: 'RateLimiter', model: 'n/a', status: 429, latencyMs: 1, error: 'Chat rate limit exceeded', clientKeyName: clientChannel });
+    return res.status(429).json({ error: `Batas kuota request tercapai. Coba lagi dalam ${chatRate.retryAfter} detik.` });
+  }
+  if (!internal) consumeChatRate(ip);
+
+  // 3. Extract Custom Provider and Model Routing
+  const rawCustomProv = (req.headers['x-custom-provider'] || '').trim();
+  const requestedProvider = (rawCustomProv && rawCustomProv !== 'Telegram Bot' ? rawCustomProv : (body.provider || '')).trim();
+  const requestedModel = (req.headers['x-custom-model'] || body.model || body.customModel || cfg.model || '').trim();
+
+  // 4. Build and sanitize dialogue messages
+  let rawMessages = Array.isArray(body.messages) ? body.messages : [];
+  let dialogueTurns = rawMessages
+    .filter(m => m && m.role && m.role !== 'system')
+    .map(m => ({ role: m.role, content: m.content }));
+
+  // Sanitize dialogue sequence so it complies with all LLM provider requirements:
+  // 1. First message must always be 'user' (strip leading 'assistant' if any)
+  while (dialogueTurns.length > 0 && dialogueTurns[0].role !== 'user') {
+    dialogueTurns.shift();
+  }
+
+  // 2. Merge consecutive duplicate roles if any
+  const userMessages = [];
+  for (const turn of dialogueTurns) {
+    const prev = userMessages[userMessages.length - 1];
+    if (prev && prev.role === turn.role) {
+      if (typeof prev.content === 'string' && typeof turn.content === 'string') {
+        prev.content = `${prev.content}\n\n${turn.content}`;
+      } else {
+        userMessages.push(turn);
+      }
+    } else {
+      userMessages.push(turn);
+    }
+  }
+
+  if (userMessages.length === 0) {
+    userMessages.push({ role: 'user', content: 'Halo' });
+  }
+
+  const allUserText = userMessages
+    .filter(m => m.role === 'user')
+    .map(m => typeof m.content === 'string' ? m.content : JSON.stringify(m.content))
+    .join(' ');
+
+  // Content Moderation & Keyword Blacklist
+  if (cfg.blacklist && cfg.blacklist.length > 0) {
+    const blockedWord = checkBlacklist(allUserText, cfg.blacklist);
+    if (blockedWord) {
+      logRequest({ ip, provider: 'Content Filter', model: requestedModel || 'n/a', status: 400, latencyMs: 2, error: `Blacklist keyword matched: "${blockedWord}"` });
+      return res.status(400).json({ error: `Pesan diblokir oleh kebijakan keamanan konten (Terdeteksi kata terlarang: "${blockedWord}").` });
+    }
+  }
+
+  // 5. Language & Style Resolution
+  const requestedStyle = (req.headers['x-custom-style'] || body.style || cfg.defaultStyle || 'santai').trim();
+  const requestedLang = (req.headers['x-custom-language'] || body.language || 'auto').trim().toLowerCase();
+  const stream = internal ? false : (cfg.forceStream === true ? true : (cfg.forceStream === false ? false : (body.stream !== undefined ? body.stream : cfg.streamEnabled !== false)));
+
+    // 6. Select Candidates for Routing & Auto-Failover
   let activeEps = (cfg.endpoints || []).filter(e => {
     const isStatusActive = e.status !== false && e.enabled !== false;
     const hasKeys = (Array.isArray(e.keys) && e.keys.some(k => k && String(k).trim())) || (e.apiKey && String(e.apiKey).trim());
@@ -239,7 +251,7 @@ function normalizeChatUrl(rawUrl) {
     }
 
     if (primaryTarget) {
-      targetModelName = targetModelName || primaryTarget.models?.[0] || 'mercury-2';
+      if (!targetModelName || ['auto', 'bre-ai', 'unified', 'all'].includes(targetModelName.toLowerCase()) || targetModelName === primaryTarget.name) targetModelName = primaryTarget.models?.[0] || 'mercury-2';
       candidates = [primaryTarget];
       if (cfg.autoFailover !== false) {
         activeEps.forEach(e => {
@@ -267,6 +279,10 @@ function normalizeChatUrl(rawUrl) {
       primaryTarget = activeEps[chosenIdx];
       targetModelName = primaryTarget.models?.[0] || requestedModel || 'mercury-2';
       candidates = [primaryTarget, ...activeEps.filter((_, idx) => idx !== chosenIdx)];
+    } else if (routingMode === 'priority') {
+      candidates = [...activeEps];
+      primaryTarget = candidates[0];
+      targetModelName = primaryTarget.models?.[0] || requestedModel;
     } else {
       // Mode AUTO: Rotasi bergantian secara teratur (Round-Robin Sequential) ke semua provider aktif
       const startIdx = getNextRoundRobinIndex(activeEps.length);
@@ -293,12 +309,17 @@ function normalizeChatUrl(rawUrl) {
     }
   }
 
+  if (cfg.autoFailover === false) candidates = candidates.slice(0, 1);
+
   // 7. Response Caching check (only for non-stream requests)
-  const maxTokens = body.max_tokens || cfg.maxTokens || 16384;
-  const temperature = body.temperature !== undefined ? body.temperature : (cfg.temperature || 0.7);
+  const maxTokens = body.max_tokens ?? cfg.maxTokens ?? 16384;
+  const temperature = body.temperature ?? cfg.temperature ?? 0.7;
+  if (!Number.isInteger(maxTokens) || maxTokens < 1 || maxTokens > Math.min(32768, cfg.maxTokens || 16384)) throw httpError(400, 'max_tokens di luar batas konfigurasi');
+  if (!Number.isFinite(temperature) || temperature < 0 || temperature > 2) throw httpError(400, 'temperature harus 0–2');
+  const topP = body.top_p ?? cfg.topP ?? 1;
+  if (!Number.isFinite(topP) || topP < 0 || topP > 1) throw httpError(400, 'top_p harus 0–1');
   const dialogueDigest = userMessages.map(m => `${m.role}:${typeof m.content === 'string' ? m.content : JSON.stringify(m.content)}`).join('|');
-  const sysHash = (body.customSystemPrompt || '').slice(0, 200);
-  const cacheKey = `${primaryTarget.name}:${targetModelName}:${requestedLang}:${requestedStyle}:${maxTokens}:${temperature}:${sysHash.length}:${dialogueDigest}`;
+  const cacheKey = crypto.createHash('sha256').update(JSON.stringify({ endpoint: primaryTarget.url, targetModelName, requestedLang, requestedStyle, maxTokens, temperature, topP, system: cfg.systemPrompt, custom: body.customSystemPrompt, userMessages, client: req.headers.authorization || req.headers['x-api-key'] || ip, reasoning: cfg.reasoningEffort, penalties: [cfg.frequencyPenalty, cfg.presencePenalty] })).digest('hex');
 
   if (cfg.cacheEnabled && !stream && allUserText.trim()) {
     const cachedData = getCachedResponse(cacheKey);
@@ -321,8 +342,10 @@ function normalizeChatUrl(rawUrl) {
 
   let finalError = null;
   const forceTextOnly = new Set();
+  let attempts = 0;
+  const deadline = reqStartTime + 40000;
 
-  for (let cIdx = 0; cIdx < candidates.length; cIdx++) {
+  providerLoop: for (let cIdx = 0; cIdx < candidates.length; cIdx++) {
     const currentTarget = candidates[cIdx];
     const isFailover = cIdx > 0;
     const currApiUrl = normalizeChatUrl(currentTarget.url);
@@ -333,7 +356,7 @@ function normalizeChatUrl(rawUrl) {
 
     // Build ordered list of models to try for this provider
     let providerModels = [];
-    if (targetModelName && !providerModels.includes(targetModelName)) providerModels.push(targetModelName);
+    if (currentTarget === primaryTarget && targetModelName) providerModels.push(targetModelName);
     if (Array.isArray(currentTarget.models)) {
       for (const m of currentTarget.models) {
         if (m && !providerModels.includes(m)) providerModels.push(m);
@@ -356,22 +379,25 @@ function normalizeChatUrl(rawUrl) {
       let startKeyIdx = keyRotations.get(currApiUrl) || 0;
 
       for (let kIdx = 0; kIdx < totalKeys; kIdx++) {
+        if (++attempts > 6 || Date.now() >= deadline) break providerLoop;
         const idx = (startKeyIdx + kIdx) % totalKeys;
         const key = currKeys[idx];
         const auth = key.startsWith('Bearer ') ? key : `Bearer ${key}`;
 
         const targetMessages = prepareMessagesForModel(formattedMessages, currModel, forceTextOnly.has(currModel));
         const payload = { model: currModel, messages: targetMessages, max_tokens: maxTokens, temperature, stream };
-        if (cfg.topP !== undefined) payload.top_p = cfg.topP;
+        payload.top_p = topP;
+        if (cfg.frequencyPenalty !== undefined) payload.frequency_penalty = cfg.frequencyPenalty;
+        if (cfg.presencePenalty !== undefined) payload.presence_penalty = cfg.presencePenalty;
         if (cfg.reasoningEffort && cfg.reasoningEffort !== 'none') payload.reasoning_effort = cfg.reasoningEffort;
 
+        const ctrl = new AbortController();
+        const timeoutMs = Math.max(1, Math.min(isFailover ? 15000 : 20000, deadline - Date.now()));
+        const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+        let disconnected = false;
+        const onClose = () => { if (!res.writableEnded) { disconnected = true; ctrl.abort(); } };
+        if (typeof res.on === 'function') res.on('close', onClose);
         try {
-          const ctrl = new AbortController();
-          const timeoutMs = isFailover ? 18000 : 25000;
-          const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-          let disconnected = false;
-          const onClose = () => { disconnected = true; ctrl.abort(); };
-          if (typeof req.on === 'function') req.on('close', onClose);
 
           const upstream = await fetch(currApiUrl, {
             method: 'POST',
@@ -380,12 +406,6 @@ function normalizeChatUrl(rawUrl) {
             signal: ctrl.signal
           });
 
-          clearTimeout(timer);
-          if (typeof req.removeListener === 'function') {
-            req.removeListener('close', onClose);
-          } else if (typeof req.off === 'function') {
-            req.off('close', onClose);
-          }
           if (disconnected) return;
 
           const latencyMs = Date.now() - reqStartTime;
@@ -394,7 +414,7 @@ function normalizeChatUrl(rawUrl) {
           const upstreamContentType = (upstream.headers.get('content-type') || '').toLowerCase();
           if (upstreamContentType.includes('text/html')) {
             finalError = `Invalid upstream response (HTML page returned by ${currentTarget.name}/${currModel})`;
-            clearTimeout(timer);
+            await upstream.body?.cancel();
             continue;
           }
 
@@ -403,14 +423,14 @@ function normalizeChatUrl(rawUrl) {
 
             const promptTokensEst = Math.max(1, Math.round(allUserText.length / 3.8));
 
-            if (stream && upstream.body) {
+            if (stream && upstream.body && upstreamContentType.includes('text/event-stream')) {
               res.writeHead(200, {
                 'Content-Type': 'text/event-stream; charset=utf-8',
                 'Cache-Control': 'no-cache, no-transform',
                 'Connection': 'keep-alive',
                 'X-Accel-Buffering': 'no',
-                'X-Provider': currentTarget.name,
-                'X-Model': currModel
+                'X-Provider': encodeURIComponent(currentTarget.name),
+                'X-Model': encodeURIComponent(currModel)
               });
 
               const reader = upstream.body.getReader();
@@ -420,19 +440,21 @@ function normalizeChatUrl(rawUrl) {
               let firstChunkTime = null;
               let accumulatedResponse = '';
 
-              req.on('close', () => { closed = true; try { reader.cancel(); } catch {} });
-
               try {
-                while (!closed) {
+                let receivedBytes = 0;
+                while (!closed && !disconnected) {
                   const { done, value } = await reader.read();
                   if (done) break;
                   if (!firstChunkTime) firstChunkTime = Date.now();
                   
                   const chunkStr = dec.decode(value, { stream: true });
+                  receivedBytes += value.byteLength;
+                  if (receivedBytes > 4 * 1024 * 1024) throw new Error('Respons stream terlalu besar');
                   buf += chunkStr;
                   const lines = buf.split('\n'); buf = lines.pop();
                   for (const line of lines) {
-                    res.write(sanitizeOutput(line) + '\n');
+                    // SSE is structured JSON; replacing words in serialized frames corrupts code and metadata.
+                    res.write(line + '\n');
                     if (line.startsWith('data: ') && !line.includes('[DONE]')) {
                       try {
                         const parsed = JSON.parse(line.slice(6));
@@ -443,9 +465,11 @@ function normalizeChatUrl(rawUrl) {
                   }
                 }
                 if (buf) {
-                  res.write(sanitizeOutput(buf) + '\n');
+                  res.write(buf + '\n\n');
                 }
-              } catch (e) {}
+              } catch (e) {
+                if (!disconnected) res.write('data: ' + JSON.stringify({ error: 'Stream upstream terputus' }) + '\n\n');
+              } finally { await reader.cancel().catch(() => {}); }
 
               const endLatencyMs = Date.now() - reqStartTime;
               const ttftMs = firstChunkTime ? (firstChunkTime - reqStartTime) : Math.round(endLatencyMs * 0.3);
@@ -472,7 +496,8 @@ function normalizeChatUrl(rawUrl) {
             } else {
               const latencyMs = Date.now() - reqStartTime;
               const ttftMs = Math.round(latencyMs * 0.75);
-              const data = await upstream.json();
+              const data = await responseJson(upstream);
+              if (typeof data.choices?.[0]?.message?.content !== 'string') throw new Error('Format respons upstream tidak valid');
               if (data.choices?.[0]?.message) {
                 data.choices[0].message.content = enforceBreAIOwnership(data.choices[0].message.content, allUserText, requestedStyle, requestedLang);
               }
@@ -502,20 +527,20 @@ function normalizeChatUrl(rawUrl) {
                 setCachedResponse(cacheKey, data, cfg.cacheTTL || 3600);
               }
 
-              res.setHeader('X-Provider', currentTarget.name);
-              res.setHeader('X-Model', currModel);
+              res.setHeader('X-Provider', encodeURIComponent(currentTarget.name));
+              res.setHeader('X-Model', encodeURIComponent(currModel));
               return res.status(200).json(data);
             }
           } else {
-            const errText = await upstream.text();
-            finalError = `HTTP ${upstream.status} [${currentTarget.name}/${currModel}]: ${errText.slice(0, 200)}`;
+            const errText = await responseText(upstream, 65536);
+            finalError = `HTTP ${upstream.status} [${currentTarget.name}/${currModel}]`;
             if (hasImageAttachment && /does not support image|image input|cannot (read|process) image|image_url|vision|mulmodality|multimodal/i.test(errText)) {
               forceTextOnly.add(currModel);
               finalError = `Model [${currentTarget.name}/${currModel}] tidak mendukung analisis gambar; melanjutkan ke model teks.`;
             }
           }
         } catch (e) {
-          clearTimeout(timer);  // Clean up timer on error
+          if (disconnected) return;
           const errMsg = e.name === 'AbortError' ? `Timeout [${currentTarget.name}/${currModel}]` : e.message;
           if (hasImageAttachment && !errMsg.includes('AbortError') && /does not support image|image input|cannot (read|process) image|vision|mulmodality|multimodal/i.test(errMsg)) {
             forceTextOnly.add(currModel);
@@ -523,6 +548,9 @@ function normalizeChatUrl(rawUrl) {
           } else {
             finalError = errMsg;
           }
+        } finally {
+          clearTimeout(timer);
+          res.removeListener?.('close', onClose);
         }
       } // end key loop
     } // end model loop
@@ -534,16 +562,14 @@ function normalizeChatUrl(rawUrl) {
     ip,
     provider: primaryTarget?.name || 'StandbyEngine',
     model: targetModelName || 'bre-standby',
-    status: 200,
+    status: 502,
     latencyMs: totalMs,
     clientKeyName: clientChannel,
     error: finalError || 'Failed to connect to upstream provider, activated Standby Engine'
   });
 
-  const standbyReply = generateStandbyResponse({ userText: allUserText, style: requestedStyle, lang: requestedLang });
-  const note = `Provider cloud (${primaryTarget?.name || 'Upstream'}) sedang tidak dapat dihubungi (${finalError || 'Offline'}). Bre AI merespons dalam mode lokal. Anda dapat memeriksa konfigurasi di menu Settings (Admin).`;
-  return sendStandbyResponse(res, stream, standbyReply, note);
-};
+  return res.status(502).json({ error: 'Provider AI sedang tidak tersedia. Silakan coba lagi atau periksa konfigurasi provider.' });
+}, ['POST']);
 
 // ========================================================
 // Bre AI Multilingual Ownership & Identity Enforcement Layer

@@ -3,6 +3,7 @@
 // Created by Amirun Rayan Ariandi
 // ========================================================
 const { getConfig } = require('../../../api/_shared');
+const { safeFetch } = require('../../safeFetch');
 const api = require('../api');
 const { processAndSendOutboundMedia } = require('../mediaProcessor');
 const { getUserLanguage, getUserStyle } = require('../constants');
@@ -273,7 +274,7 @@ async function handle(ctx) {
     let webSnippets = '';
     try {
       const ddgUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
-      const searchRes = await fetch(ddgUrl, {
+      const searchRes = await safeFetch(ddgUrl, {
         headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
       });
       if (searchRes.ok) {
@@ -570,7 +571,7 @@ async function handle(ctx) {
     if (cfg.ttsEndpoint && cfg.ttsKey) {
       await api.sendTelegramMessage(chatId, '⏳ Menghasilkan suara...', null, null, token);
       try {
-        const resp = await fetch(cfg.ttsEndpoint, {
+        const resp = await safeFetch(cfg.ttsEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cfg.ttsKey}` },
           body: JSON.stringify({ model: cfg.ttsModel || 'tts-1', input: ttsText.slice(0, 4096), voice: 'alloy', response_format: 'mp3' }),
@@ -602,7 +603,7 @@ async function handle(ctx) {
     if (cfg.imageEndpoint && cfg.imageKey) {
       await api.sendTelegramMessage(chatId, '🎨 Sedang membuat gambar...', null, null, token);
       try {
-        const resp = await fetch(cfg.imageEndpoint, {
+        const resp = await safeFetch(cfg.imageEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cfg.imageKey}` },
           body: JSON.stringify({ model: cfg.imageModel || 'dall-e-3', prompt: prompt.slice(0, 1000), n: 1, size: '1024x1024' }),

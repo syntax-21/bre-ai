@@ -70,6 +70,7 @@ function apiCall(method, payload = {}, customToken = null, fallbackToken = null)
   const cfg = getConfig();
   const token = customToken || fallbackToken || cfg.telegramBotToken;
   if (!token) return Promise.reject(new Error('Telegram Bot Token tidak ditemukan'));
+  if (!/^\d+:[A-Za-z0-9_-]+$/.test(token) || !/^[A-Za-z]+$/.test(method)) return Promise.reject(new Error('Format token/metode Telegram tidak valid'));
 
   const postData = JSON.stringify(payload);
   return new Promise((resolve, reject) => {
@@ -86,7 +87,8 @@ function apiCall(method, payload = {}, customToken = null, fallbackToken = null)
       timeout: 35000
     }, res => {
       let data = '';
-      res.on('data', chunk => data += chunk);
+      res.on('data', chunk => { data += chunk; if (data.length > 2 * 1024 * 1024) req.destroy(new Error('Respons Telegram terlalu besar')); });
+      res.on('error', reject);
       res.on('end', () => {
         try {
           const parsed = JSON.parse(data);
@@ -164,6 +166,7 @@ async function sendTelegramMessage(chatId, text, replyMarkup = null, replyToId =
         if (res) results.push(res);
       } catch (plainErr) {
         console.error('[TelegramBot] Gagal kirim pesan ke', chatId, plainErr.message);
+        throw plainErr;
       }
     }
   }
@@ -213,6 +216,9 @@ async function sendTyping(chatId, token = null) {
 async function downloadTelegramFile(fileId, token = null) {
   const fileInfo = await api.apiCall('getFile', { file_id: fileId }, token);
   if (!fileInfo || !fileInfo.file_path) throw new Error('Berkas tidak ditemukan di Telegram');
+  const maxBytes = 20 * 1024 * 1024;
+  if (fileInfo.file_size > maxBytes) throw new Error('Berkas Telegram melebihi 20 MB');
+  if (!/^[A-Za-z0-9_./-]+$/.test(fileInfo.file_path) || fileInfo.file_path.split('/').includes('..')) throw new Error('Path berkas Telegram tidak valid');
 
   const cfg = getConfig();
   const effectiveToken = token || cfg.telegramBotToken;
@@ -221,10 +227,12 @@ async function downloadTelegramFile(fileId, token = null) {
   return new Promise((resolve, reject) => {
     const req = https.get(fileUrl, { agent: httpsAgent, timeout: 30000 }, res => {
       if (res.statusCode !== 200) {
+        res.resume();
         return reject(new Error(`Gagal mengunduh file: HTTP ${res.statusCode}`));
       }
       const data = [];
-      res.on('data', chunk => data.push(chunk));
+      let size = 0;
+      res.on('data', chunk => { size += chunk.length; if (size > maxBytes) req.destroy(new Error('Berkas melebihi 20 MB')); else data.push(chunk); });
       res.on('end', () => resolve(Buffer.concat(data)));
       res.on('error', err => reject(err));
     });
@@ -317,9 +325,11 @@ async function sendTelegramDocument(chatId, filename, bufferOrString, caption = 
   const cfg = getConfig();
   const effectiveToken = token || cfg.telegramBotToken;
   if (!effectiveToken) return Promise.reject(new Error('Bot token tidak tersedia'));
+  if (!/^\d+:[A-Za-z0-9_-]+$/.test(effectiveToken)) throw new Error('Format token Telegram tidak valid');
 
   const boundary = '----BreAIBoundary' + Math.random().toString(36).substring(2);
   const fileBuf = Buffer.isBuffer(bufferOrString) ? bufferOrString : Buffer.from(String(bufferOrString), 'utf-8');
+  if (fileBuf.length > 20 * 1024 * 1024) throw new Error('Dokumen melebihi 20 MB');
 
   let header = `--${boundary}\r\n`;
   header += `Content-Disposition: form-data; name="chat_id"\r\n\r\n${chatId}\r\n`;
@@ -374,11 +384,10 @@ async function sendTelegramDocument(chatId, filename, bufferOrString, caption = 
 async function testToken(token) {
   if (!token) return { ok: false, error: 'Token kosong' };
   try {
-    const botInfo = await apiCall('getMe', {}, token);
+    const botInfo = await api.apiCall('getMe', {}, token);
     return { ok: true, bot: botInfo };
   } catch (err) {
     return { ok: false, error: err.message };
   }
 }
-
 

@@ -2421,7 +2421,7 @@ async function resetToFactoryDefault() {
     endpoints: [{
       name: "Inception Labs",
       url: "https://api.inceptionlabs.ai/v1/chat/completions",
-      keys: ["sk_5a39b7fd486bf03ef255b475595bd7c9"],
+      keys: [],
       models: ["mercury-2"]
     }],
     temperature: 0.7,

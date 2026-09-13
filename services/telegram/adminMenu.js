@@ -52,6 +52,10 @@ async function handleAdminCallback(cq, botService) {
     await api.answerCallback(cq.id, '⛔ Akses Ditolak: Khusus Pemilik Bot (Owner)', true, token);
     return;
   }
+  if (String(chatId) !== String(fromUser.id)) {
+    await api.answerCallback(cq.id, 'Buka panel admin melalui chat pribadi bot.', true, token);
+    return;
+  }
 
   const cfg = getConfig();
   const senderName = fromUser.first_name || 'Owner';

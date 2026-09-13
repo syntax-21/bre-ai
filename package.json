@@ -6,16 +6,22 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
+    "build": "node scripts/build.js",
+    "prestart": "npm run build",
     "test": "node tests/verify_diagnostics.js && node tests/verify_all_updates.js && node tests/verify_forward_and_files.js && node tests/verify_language_switch.js && node tests/verify_telegram_memory.js && node tests/verify_telegram_modular.js && node tests/verify_telegram_excel_flow.js && node tests/test-9router-and-math.js && node tests/verify_api_integration.js"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.13.0 <25"
   },
   "author": "Amirun Rayan Ariandi",
   "license": "MIT",
   "dependencies": {
     "mammoth": "^1.12.2",
     "pdf-parse": "^2.4.5",
-    "xlsx": "^0.18.5"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
+    "undici": "^7.16.0",
+    "dompurify": "3.4.15",
+    "marked": "18.0.13",
+    "pdfjs-dist": "5.4.296"
   }
 }

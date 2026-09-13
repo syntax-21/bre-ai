@@ -17,34 +17,40 @@ try { pdfParseLib = require('pdf-parse'); } catch (e) {}
  * Fallback pure-Node unzip for XLSX/DOCX if external modules aren't available
  */
 function unzipBuffer(buffer) {
-  const files = {};
-  let offset = 0;
-  while (offset < buffer.length - 4) {
-    const sig = buffer.readUInt32LE(offset);
-    if (sig === 0x04034b50) {
-      const compMethod = buffer.readUInt16LE(offset + 8);
-      const compSize = buffer.readUInt32LE(offset + 18);
-      const nameLen = buffer.readUInt16LE(offset + 26);
-      const extraLen = buffer.readUInt16LE(offset + 28);
-      const filename = buffer.slice(offset + 30, offset + 30 + nameLen).toString('utf8');
-      const dataStart = offset + 30 + nameLen + extraLen;
-
-      if (dataStart + compSize <= buffer.length) {
-        const compData = buffer.slice(dataStart, dataStart + compSize);
-        try {
-          if (compMethod === 8) {
-            files[filename] = zlib.inflateRawSync(compData);
-          } else if (compMethod === 0) {
-            files[filename] = compData;
-          }
-        } catch (e) {}
-      }
-      offset = dataStart + compSize;
-    } else if (sig === 0x02014b50 || sig === 0x06054b50) {
-      break;
-    } else {
-      offset++;
-    }
+  const files = Object.create(null);
+  if (buffer.length < 22) throw new Error('ZIP terpotong');
+  let eocd = -1;
+  for (let i = buffer.length - 22; i >= Math.max(0, buffer.length - 65557); i--) {
+    if (buffer.readUInt32LE(i) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error('ZIP central directory tidak ditemukan');
+  const count = buffer.readUInt16LE(eocd + 10);
+  let offset = buffer.readUInt32LE(eocd + 16);
+  let total = 0;
+  if (count > 2000) throw new Error('ZIP terlalu banyak entri');
+  for (let i = 0; i < count; i++) {
+    if (offset + 46 > eocd || buffer.readUInt32LE(offset) !== 0x02014b50) throw new Error('ZIP tidak valid');
+    const method = buffer.readUInt16LE(offset + 10);
+    const compressed = buffer.readUInt32LE(offset + 20);
+    const expanded = buffer.readUInt32LE(offset + 24);
+    const nameLen = buffer.readUInt16LE(offset + 28);
+    const next = offset + 46 + nameLen + buffer.readUInt16LE(offset + 30) + buffer.readUInt16LE(offset + 32);
+    const local = buffer.readUInt32LE(offset + 42);
+    if (next > eocd || local + 30 > buffer.length || expanded > 8 * 1024 * 1024 || total + expanded > 32 * 1024 * 1024) throw new Error('ZIP melebihi batas dekompresi');
+    if (buffer.readUInt16LE(offset + 8) & 1) throw new Error('ZIP terenkripsi tidak didukung');
+    if (buffer.readUInt32LE(local) !== 0x04034b50) throw new Error('ZIP local header tidak valid');
+    const start = local + 30 + buffer.readUInt16LE(local + 26) + buffer.readUInt16LE(local + 28);
+    if (start + compressed > buffer.length) throw new Error('ZIP terpotong');
+    const name = buffer.toString('utf8', offset + 46, offset + 46 + nameLen);
+    const data = buffer.subarray(start, start + compressed);
+    let result;
+    if (method === 0) result = data;
+    else if (method === 8) result = zlib.inflateRawSync(data, { maxOutputLength: 8 * 1024 * 1024 });
+    else throw new Error('Metode ZIP tidak didukung');
+    if (result.length !== expanded) throw new Error('Ukuran ZIP tidak sesuai');
+    total += result.length;
+    files[name] = result;
+    offset = next;
   }
   return files;
 }
@@ -159,13 +165,14 @@ function parseXlsxFallback(buffer) {
  * @returns {string}
  */
 async function parseSpreadsheet(buffer, fileName = 'data.xlsx') {
+  if (buffer.toString('latin1', 0, 2) === 'PK') unzipBuffer(buffer);
   if (xlsxLib) {
     try {
-      const workbook = xlsxLib.read(buffer, { type: 'buffer' });
+      const workbook = xlsxLib.read(buffer, { type: 'buffer', sheetRows: 1000, dense: true });
       let combined = '';
       const sheetCount = workbook.SheetNames.length;
 
-      workbook.SheetNames.forEach((name, sIdx) => {
+      workbook.SheetNames.slice(0, 20).forEach((name, sIdx) => {
         const sheet = workbook.Sheets[name];
         const rows = xlsxLib.utils.sheet_to_json(sheet, { header: 1, defval: '' });
         if (!rows || !rows.length) return;
@@ -208,6 +215,7 @@ async function parseSpreadsheet(buffer, fileName = 'data.xlsx') {
  * @returns {Promise<string>}
  */
 async function parseWordDocument(buffer) {
+  if (buffer.toString('latin1', 0, 2) === 'PK') unzipBuffer(buffer);
   if (mammothLib) {
     try {
       const res = await mammothLib.extractRawText({ buffer });
@@ -250,14 +258,16 @@ async function parseWordDocument(buffer) {
  */
 async function parsePdfDocument(buffer) {
   if (pdfParseLib) {
+    let parser;
     try {
-      const data = await pdfParseLib(buffer);
+      parser = new pdfParseLib.PDFParse({ data: buffer, isEvalSupported: false });
+      const data = await parser.getText({ first: 20 });
       const text = (data.text || '').trim();
-      const info = `[PDF: ${data.numpages || 1} Halaman]`;
+      const info = `[PDF: ${data.total || 1} Halaman]`;
       return `${info}\n\n${text}`;
     } catch (e) {
       console.warn('[DocParser] PDF parse error:', e.message);
-    }
+    } finally { if (parser) await parser.destroy(); }
   }
   return '';
 }
@@ -359,11 +369,11 @@ function parseVideoMetadata(buffer, fileName = '', mimeType = '') {
     try {
       if (buffer.toString('latin1', 0, 4) === 'RIFF' && buffer.toString('latin1', 8, 12) === 'AVI ') {
         const avihIdx = buffer.indexOf('avih');
-        if (avihIdx !== -1 && avihIdx + 36 <= buffer.length) {
-          const uSecPerFrame = buffer.readUInt32LE(avihIdx + 4);
-          const totalFrames = buffer.readUInt32LE(avihIdx + 16);
-          const w = buffer.readUInt32LE(avihIdx + 32);
-          const h = buffer.readUInt32LE(avihIdx + 36);
+        if (avihIdx !== -1 && avihIdx + 44 <= buffer.length) {
+          const uSecPerFrame = buffer.readUInt32LE(avihIdx + 8);
+          const totalFrames = buffer.readUInt32LE(avihIdx + 24);
+          const w = buffer.readUInt32LE(avihIdx + 40);
+          const h = buffer.readUInt32LE(avihIdx + 44);
           if (w > 0 && h > 0) resolution = `${w}x${h}`;
           if (uSecPerFrame > 0 && totalFrames > 0) {
             duration = Math.round((uSecPerFrame * totalFrames / 1000000) * 10) / 10;
@@ -532,7 +542,7 @@ function parseZipListing(buffer) {
     const compSize = buffer.readUInt32LE(offset + 20);
     const uncompSize = buffer.readUInt32LE(offset + 24);
     const flags = buffer.readUInt16LE(offset + 8);
-    const encSup = (flags & 0x0800) !== 0;
+    const encSup = (flags & 0x0001) !== 0;
     if (!seen.has(name)) {
       seen.add(name);
       entries.push({
@@ -583,6 +593,7 @@ function parseTarListing(buffer) {
     if (!nameBuf && buffer.slice(offset, offset + 512).every(b => b === 0)) break;
     const sizeStr = buffer.slice(offset + 124, offset + 136).toString('utf8').replace(/\0.*$/, '').trim();
     const size = parseInt(sizeStr, 8) || 0;
+    if (size < 0 || !Number.isSafeInteger(size)) break;
     const typeFlag = String.fromCharCode(buffer[offset + 156] || 0);
     const validMagic = buffer.toString('utf8', offset + 257, offset + 265).includes('ustar');
     if (!validMagic) break;
@@ -609,7 +620,7 @@ function parseArchiveListing(buffer, fileName) {
   // 1. TAR.gz / .tgz / .gz — coba gunzip lalu pindai isi
   if (ext === 'gz' || ext === 'tgz' || base.endsWith('.tar.gz')) {
     try {
-      const inflated = zlib.gunzipSync(buffer);
+      const inflated = zlib.gunzipSync(buffer, { maxOutputLength: 32 * 1024 * 1024 });
       const inner = parseTarListing(inflated) || parseZipListing(inflated);
       const innerSize = formatBytes(inflated.length);
       if (inner) return `[ARSIP GZ] "${fileName}" (terkompresi ${sizeStr}, isi ${innerSize})\n${inner}`;
@@ -680,6 +691,7 @@ function hashBuffer(buffer) {
  * @returns {Promise<{ success: boolean, text: string, type: string, summary: string }>}
  */
 async function extractDocumentContent(buffer, fileName = '', mimeType = '') {
+  if (!Buffer.isBuffer(buffer) || buffer.length > 20 * 1024 * 1024) throw new Error('Dokumen melebihi batas 20 MB');
   const ext = fileName.includes('.') ? fileName.split('.').pop().toLowerCase() : '';
   const isExcel = ['xlsx', 'xls', 'csv', 'tsv', 'ods', 'tab'].includes(ext) || mimeType.includes('spreadsheet') || mimeType.includes('excel');
   const isWord = ['docx', 'doc', 'odt', 'rtf'].includes(ext) || mimeType.includes('wordprocessingml') || mimeType.includes('msword');
@@ -782,7 +794,7 @@ async function extractDocumentContent(buffer, fileName = '', mimeType = '') {
 }
 
 module.exports = {
-  extractDocumentContent,
+  extractDocumentContent: require('worker_threads').isMainThread ? require('../documentWorker').parseDocument : extractDocumentContent,
   parseSpreadsheet,
   parseWordDocument,
   parsePdfDocument,

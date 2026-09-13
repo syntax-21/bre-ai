@@ -17,6 +17,7 @@ const { sendAdminPanel } = require('../adminMenu');
 
 // Broadcast announcement to all known users
 async function handleBroadcastCommand(chatId, fromUser, broadcastText, botService) {
+  if (!require('../accessControl').isOwner(fromUser, botService.activeOwnerId)) return false;
   const token = botService.activeToken || null;
   const messageToSend = broadcastText.trim();
   if (!messageToSend) {
@@ -58,6 +59,7 @@ async function handleBroadcastCommand(chatId, fromUser, broadcastText, botServic
   const formattedBroadcast = `📢 *PENGUMUMAN RESMI BRE AI*\n\n${messageToSend}\n\n— _Pesan dari Pengelola Bot_`;
 
   for (const targetId of recipientIds) {
+    if (!require('../accessControl').isUserAllowed({ id: targetId })) continue;
     if (String(targetId) === String(fromUser.id)) continue;
     try {
       await api.sendTelegramMessage(targetId, formattedBroadcast, null, null, token);
@@ -129,8 +131,8 @@ async function handle(ctx) {
       await api.sendTelegramMessage(chatId, `ℹ️ Format: \`/setpassword [password_baru]\``, null, null, token);
       return true;
     }
-    saveConfig({ adminPassword: newPass });
-    await api.sendTelegramMessage(chatId, `✅ Password login Web Admin berhasil diganti!`, null, null, token);
+    const saved = await saveConfig({ adminPassword: newPass });
+    await api.sendTelegramMessage(chatId, saved.ok ? '✅ Password login Web Admin berhasil diganti!' : `❌ ${saved.error}`, null, null, token);
     return true;
   }
 

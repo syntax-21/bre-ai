@@ -15,7 +15,8 @@ async function runMultiProviderBenchmark() {
       const primaryModel = ep.models?.[0] || 'default';
       const start = Date.now();
       try {
-        const r = await fetch('/api/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ customEndpoint: ep.url, customKeys: (ep.keys||[]).join('\n'), customModel: primaryModel, prompt: 'Ping' }) });
+        const adminToken = sessionStorage.getItem('bre_admin_pw') || localStorage.getItem('bre_admin_pw') || '';
+        const r = await fetch('/api/test', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(adminToken ? { 'Authorization': 'Bearer ' + adminToken } : {}) }, body: JSON.stringify({ customEndpoint: ep.url, customKeys: (ep.keys||[]).join('\n'), customModel: primaryModel, prompt: 'Ping' }) });
         const elapsed = Date.now() - start;
         const data = await r.json();
         return { idx: idx+1, name: ep.name||`Provider #${idx+1}`, url: ep.url||'-', model: primaryModel, ok: r.ok && !data.error, status: r.status, latency: data.latencyMs||elapsed, error: data.error||(r.ok?null:'HTTP '+r.status), active: ep.status !== false };

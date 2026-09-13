@@ -1,131 +1,33 @@
-const { syncCloudConfig, parseKeys } = require('./_shared');
+const { syncCloudConfig, parseKeys, verifyAdminPassword, testSingleModel, checkRateLimit, recordFailedAttempt, getClientIp } = require('./_shared');
+const { apiHandler, httpError, consumeLimit } = require('../services/httpSecurity');
 
-module.exports = async (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-  if (req.method === 'OPTIONS') return res.status(204).end();
-
-  let body = req.body;
-  if (!body) {
-    body = await new Promise(resolve => {
-      let d = '';
-      req.on('data', c => { d += c; });
-      req.on('end', () => { try { resolve(JSON.parse(d || '{}')); } catch { resolve({}); } });
-      req.on('error', () => resolve({}));
-    });
-  }
-  body = body || {};
-
+module.exports = apiHandler(async (req, res) => {
   const cfg = await syncCloudConfig();
-
-  // BATCH TEST ALL PROVIDERS
-  if (body.testAll) {
-    const endpoints = (Array.isArray(body.endpoints) && body.endpoints.length) ? body.endpoints : (cfg.endpoints || []);
-    const probes = endpoints.map(async ep => {
-      const firstKey = (Array.isArray(ep.keys) && ep.keys[0]) || ep.apiKey || '';
-      const provName = ep.name || 'Provider';
-      if (!firstKey) {
-        return {
-          name: provName,
-          provider: provName,
-          url: ep.url,
-          status: 'NO_KEY',
-          latencyMs: 9999,
-          error: 'No API Key configured'
-        };
-      }
-
-      const testModel = ep.models?.[0] || 'mercury-2';
-      const start = Date.now();
-      try {
-        const ctrl = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), 12000);
-        const auth = firstKey.startsWith('Bearer ') ? firstKey : `Bearer ${firstKey}`;
-
-        const r = await fetch(ep.url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: auth },
-          body: JSON.stringify({
-            model: testModel,
-            messages: [{ role: 'user', content: 'ping' }],
-            max_tokens: 3,
-            stream: false
-          }),
-          signal: ctrl.signal
-        });
-        clearTimeout(timer);
-        const ms = Date.now() - start;
-
-        if (r.ok) {
-          return {
-            name: provName,
-            provider: provName,
-            url: ep.url,
-            model: testModel,
-            status: 'OK',
-            latencyMs: ms,
-            httpStatus: r.status
-          };
-        } else {
-          const errText = await r.text().then(t => t.slice(0, 100));
-          return {
-            name: provName,
-            provider: provName,
-            url: ep.url,
-            model: testModel,
-            status: 'FAIL',
-            latencyMs: ms,
-            httpStatus: r.status,
-            error: errText
-          };
-        }
-      } catch (err) {
-        return {
-          name: provName,
-          provider: provName,
-          url: ep.url,
-          model: testModel,
-          status: 'FAIL',
-          latencyMs: Date.now() - start,
-          error: err.message
-        };
-      }
-    });
-
-    const results = await Promise.all(probes);
-    results.sort((a, b) => a.latencyMs - b.latencyMs);
-    return res.json({ testAll: true, results });
+  const ip = getClientIp(req);
+  if (checkRateLimit(ip).limited || consumeLimit('test:' + ip, 60, 60000)) throw httpError(429, 'Terlalu banyak pengujian');
+  const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
+  if (!verifyAdminPassword(token, cfg.adminPassword)) { recordFailedAttempt(ip); throw httpError(401, 'Admin authentication required'); }
+  const body = req.body;
+  let endpoints;
+  if (body.testAll) endpoints = body.endpoints || cfg.endpoints;
+  else {
+    const url = body.customEndpoint || cfg.endpoints?.[0]?.url;
+    // Never attach a configured provider's key to a different user-supplied URL.
+    const configured = cfg.endpoints.find(ep => ep.url === url);
+    const keys = parseKeys(body.customKeys || body.keys || body.key || configured?.keys || '');
+    endpoints = keys.map(key => ({ url, keys: [key], models: [body.customModel || cfg.model] }));
   }
-
-  // SINGLE PROVIDER TEST
-  const apiUrl = (body.customEndpoint || cfg.apiUrl || 'https://api.inceptionlabs.ai/v1/chat/completions').trim();
-  const model = (body.customModel || cfg.model || 'mercury-2').trim();
-  let keys = parseKeys(body.customKeys || body.keys || body.key || '');
-  if (!keys.length && cfg.endpoints?.[0]) keys = cfg.endpoints[0].keys || (cfg.endpoints[0].apiKey ? [cfg.endpoints[0].apiKey] : []);
-
+  if (!Array.isArray(endpoints) || endpoints.length > 30 || endpoints.some(ep => !ep || typeof ep !== 'object')) throw httpError(400, 'Daftar endpoint tidak valid (maksimal 30)');
   const results = [];
-  for (let i = 0; i < keys.length; i++) {
-    const key = keys[i];
-    const masked = key.length > 8 ? key.slice(0, 4) + '...' + key.slice(-4) : '****';
-    const start = Date.now();
-    try {
-      const ctrl = new AbortController();
-      setTimeout(() => ctrl.abort(), 15000);
-      const r = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-        body: JSON.stringify({ model, messages: [{ role: 'user', content: 'hi' }], max_tokens: 5, stream: false }),
-        signal: ctrl.signal
-      });
-      const ms = Date.now() - start;
-      if (r.ok) results.push({ keyIndex: i + 1, keyMasked: masked, status: 'OK', latencyMs: ms, httpStatus: r.status });
-      else results.push({ keyIndex: i + 1, keyMasked: masked, status: 'FAIL', latencyMs: ms, httpStatus: r.status, error: await r.text().then(t => t.slice(0, 100)) });
-    } catch (e) {
-      results.push({ keyIndex: i + 1, keyMasked: masked, status: 'FAIL', latencyMs: Date.now() - start, error: e.message });
-    }
+  // Bounded parallelism and timeouts keep probes within the serverless budget.
+  for (let i = 0; i < endpoints.length; i += 10) {
+    results.push(...await Promise.all(endpoints.slice(i, i + 10).map(async (ep, idx) => {
+      const result = await testSingleModel(ep, ep.models?.[0] || cfg.model);
+      return { name: ep.name || 'Provider', provider: ep.name || 'Provider', url: ep.url,
+        model: ep.models?.[0] || cfg.model, keyIndex: i + idx + 1, keyMasked: '••••••••',
+        status: result.ok ? 'OK' : 'FAIL', httpStatus: result.ok ? 200 : 502, ...result };
+    })));
   }
-
-  return res.json({ results, apiUrl, model, totalKeys: keys.length });
-};
+  if (body.testAll) results.sort((a, b) => a.latencyMs - b.latencyMs);
+  return res.json({ testAll: !!body.testAll, results, totalKeys: endpoints.length });
+}, ['POST'], { admin: true });

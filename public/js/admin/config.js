@@ -40,6 +40,24 @@ function setRoutingModeUI(mode) {
   }
 }
 
+// Simpan salinan ke localStorage tanpa rahasia (hapus semua secret agar tidak mengendap di browser)
+function sanitizeForLocalStorage(config) {
+  try {
+    const c = JSON.parse(JSON.stringify(config || {}));
+    delete c.adminPassword; delete c.webhookSecret; delete c.telegramWebhookSecret;
+    delete c.telegramBotToken; delete c.transcriptionKey; delete c.upstashRedisToken;
+    delete c.githubToken; delete c.clientKeys;
+    if (Array.isArray(c.endpoints)) {
+      c.endpoints.forEach(ep => { ep.keys = (ep.keys || []).map(() => ''); });
+    }
+    return c;
+  } catch (e) { return {}; }
+}
+
+function persistConfigCache(config) {
+  try { localStorage.setItem('bre_full_config', JSON.stringify(sanitizeForLocalStorage(config))); } catch(e){}
+}
+
 async function saveAllConfig() {
   syncProvidersFromUI();
   const newPw = document.getElementById('cfgNewPw')?.value.trim();
@@ -84,8 +102,8 @@ telegramDomain: getVal('cfgTelegramDomain').trim(),
     upstashRedisToken: getVal('cfgUpstashToken').trim(),
     forceStream: streamMode === 'true' ? true : (streamMode === 'false' ? false : 'auto')
   };
-  if (newPw) payload.adminPassword = newPw;
-  try { localStorage.setItem('bre_full_config', JSON.stringify(payload)); } catch(e){}
+if (newPw) payload.adminPassword = newPw;
+  persistConfigCache(payload);
   try {
     const r = await fetch('/api/config', {
       method: 'POST',
@@ -96,8 +114,8 @@ telegramDomain: getVal('cfgTelegramDomain').trim(),
       let data = {}; try { data = await r.json(); } catch(e){}
       if (newPw) { adminToken = newPw; try { sessionStorage.setItem('bre_admin_pw', newPw); } catch(e){} }
       const pwEl = document.getElementById('cfgNewPw'); if(pwEl) pwEl.value = '';
-      loadTelegramStatus();
-      try { localStorage.setItem('bre_full_config', JSON.stringify(payload)); } catch(e){}
+loadTelegramStatus();
+      persistConfigCache(payload);
       if (data.cloudStorageInfo) updateStorageBadges(data.cloudStorageInfo, data.cloudStatus);
       if (data.cloudStatus?.synced) toast(`✅ Konfigurasi tersimpan PERMANEN! (${data.cloudStatus.message})`, 'ok');
       else if (data.isReadOnlyFS) toast('⚠️ Disimpan di cache serverless. Hubungkan Vercel KV untuk tersimpan permanen.', 'ok');
@@ -129,8 +147,8 @@ function importConfigFile(e) {
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
         body: JSON.stringify(parsed)
       });
-      if (r.ok) {
-        try { localStorage.setItem('bre_full_config', JSON.stringify(parsed)); } catch(e){}
+if (r.ok) {
+        persistConfigCache(parsed);
         toast('✅ Konfigurasi berhasil dipulihkan dari file!', 'ok');
         await loadConfig();
       } else { toast('Gagal menyimpan file restore', 'err'); }
@@ -141,7 +159,7 @@ function importConfigFile(e) {
 
 async function resetToFactoryDefault() {
   if (!confirm('Reset seluruh konfigurasi ke pengaturan awal?')) return;
-  const def = { endpoints: [{ name: "Inception Labs", url: "https://api.inceptionlabs.ai/v1/chat/completions", keys: ["sk_5a39b7fd486bf03ef255b475595bd7c9"], models: ["mercury-2"] }], temperature: 0.7, topP: 1.0, maxTokens: 16384, rateLimitMax: 5, rateLimitWindow: 30, autoFailover: true, cacheEnabled: false, cacheTTL: 3600, blacklist: [] };
+  const def = { endpoints: [{ name: "Inception Labs", url: "https://api.inceptionlabs.ai/v1/chat/completions", keys: [], models: ["mercury-2"] }], temperature: 0.7, topP: 1.0, maxTokens: 16384, rateLimitMax: 5, rateLimitWindow: 30, autoFailover: true, cacheEnabled: false, cacheTTL: 3600, blacklist: [] };
   const r = await fetch('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken }, body: JSON.stringify(def) });
   if (r.ok) { toast('Pengaturan berhasil direset ke Default', 'ok'); loadConfig(); }
 }

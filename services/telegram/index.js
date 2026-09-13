@@ -1,5 +1,5 @@
 // ========================================================
-// Bre AI v3.0 - Telegram Bot Service Orchestrator
+// Bre v3.0 Telegram Bot Service Orchestrator
 // Clean modular architecture for Telegram operations
 // Created by Amirun Rayan Ariandi
 // ========================================================
@@ -75,28 +75,34 @@ class TelegramBotService {
     this.botInfo = null;
     this.lastError = null;
     this.currentOffset = 0;
-    this.recentUsers = recentUsers;   // shared reference to Map
-    this.MAX_HISTORY = 30;
+    this.recentUsers = recentUsers; // shared reference Map
+    this.conversations = conversationsMap; // shared reference Map for active session tracking
+    this.MAX_HISTORY = DEFAULT_MAX_HISTORY || 30;
+    this.pollingTimer = null;
+    this.reminderTimer = null;
     this.activeToken = null;
     this.activeOwnerId = null;
     this.activeAccessMode = null;
-
-    // Backward-compatible persistent conversation store interface
-    this.conversations = {
-      get: (chatId) => getChatHistory(chatId),
-      set: (chatId, history) => { saveChatHistory(chatId, history); return this.conversations; },
-      delete: (chatId) => clearChatHistory(chatId),
-      clear: () => clearAllHistories(),
-      has: (chatId) => Boolean(getChatHistory(chatId).length > 0),
-      get size() { return getActiveConversationsCount(); },
-      entries: () => conversationsMap.entries(),
-      keys: () => conversationsMap.keys(),
-      values: () => conversationsMap.values(),
-      [Symbol.iterator]: () => conversationsMap[Symbol.iterator]()
-    };
   }
 
-  // Session & Memory Management
+  // Access control delegates
+  recordRecentUser(fromUser, customToken = null) {
+    return recordRecentUser(fromUser, customToken || this.activeToken);
+  }
+
+  getRecentUsersList(customToken = null) {
+    return getRecentUsersList(customToken || this.activeToken);
+  }
+
+  isOwner(fromUser, overrideOwnerId = null) {
+    return isOwner(fromUser, overrideOwnerId || this.activeOwnerId);
+  }
+
+  isUserAllowed(fromUser, overrideOwnerId = null, overrideAccessMode = null) {
+    return isUserAllowed(fromUser, overrideOwnerId || this.activeOwnerId, overrideAccessMode || this.activeAccessMode);
+  }
+
+  // Session & conversation history delegates
   getChatHistory(chatId) {
     return getChatHistory(chatId);
   }
@@ -170,303 +176,327 @@ class TelegramBotService {
     return sendTelegramLocation(chatId, latitude, longitude, customToken || this.activeToken);
   }
 
-  sendTelegramVenue(chatId, latitude, longitude, title, address = '', customToken = null) {
+  sendTelegramVenue(chatId, latitude, longitude, title, address, customToken = null) {
     return sendTelegramVenue(chatId, latitude, longitude, title, address, customToken || this.activeToken);
   }
 
-  sendTelegramContact(chatId, phoneNumber, firstName, lastName = '', vcard = '', customToken = null) {
-    return sendTelegramContact(chatId, phoneNumber, firstName, lastName, vcard, customToken || this.activeToken);
+  sendTelegramContact(chatId, phoneNumber, firstName, lastName = '', customToken = null) {
+    return sendTelegramContact(chatId, phoneNumber, firstName, lastName, '', customToken || this.activeToken);
   }
 
-  sendTelegramPhoto(chatId, photoUrl, caption = '', customToken = null) {
-    return sendTelegramPhoto(chatId, photoUrl, caption, customToken || this.activeToken);
+  sendTelegramPhoto(chatId, photoBufferOrUrl, caption = '', replyMarkup = null, customToken = null) {
+    return sendTelegramPhoto(chatId, photoBufferOrUrl, caption, customToken || this.activeToken);
   }
 
-  // Delegated Access Control
-  isOwner(fromUser) {
-    return isOwner(fromUser, this.activeOwnerId);
+  // Delegated UI / Menu
+  buildMainMenuMarkup(chatId, isOwnerUser = false) {
+    return buildMainMenuMarkup(chatId, isOwnerUser);
   }
 
-  isUserAllowed(fromUser) {
-    return isUserAllowed(fromUser, this.activeOwnerId, this.activeAccessMode);
+  getMainMenuText(senderName, activeSessionsCount = 0) {
+    return getMainMenuText(senderName, activeSessionsCount);
   }
 
-  // Delegated Admin UI
-  buildMainMenuMarkup() {
-    return buildMainMenuMarkup(getConfig());
+  sendAdminPanel(chatId, senderName, activeSessionsCount = 0, customToken = null) {
+    return sendAdminPanel(chatId, senderName, activeSessionsCount, customToken || this.activeToken);
   }
 
-  getMainMenuText(senderName) {
-    return getMainMenuText(senderName, this.conversations.size);
+  handleAdminCallback(cq, botService) {
+    return handleAdminCallback(cq, botService || this);
   }
 
-  sendAdminPanel(chatId, senderName) {
-    return sendAdminPanel(chatId, senderName, this.conversations.size, this.activeToken);
-  }
-
-  // Delegated AI Routing
   queryBreAIRouter(...args) {
     return queryBreAIRouter(...args);
   }
 
-  async handleCallbackQuery(cq, ctx = null) {
-    if (ctx) {
-      if (ctx.token) this.activeToken = ctx.token;
-      if (ctx.ownerId) this.activeOwnerId = ctx.ownerId;
-      if (ctx.accessMode) this.activeAccessMode = ctx.accessMode;
-    }
+  handleBroadcastCommand(chatId, fromUser, broadcastText) {
+    return handleBroadcastCommand(chatId, fromUser, broadcastText, this);
+  }
 
-    // Handle language selection callbacks (available to all users, not just admin)
-    const data = cq.data || '';
+  handleCallbackQuery(query) { return this.handleUpdate({ callback_query: query }); }
+  handleMessage(message) { return this.handleUpdate({ message }); }
+  async restart() { this.stop(); return this.init(); }
 
+  async handleUpdate(u, webhookCtx = {}) {
+    if (!u) return;
 
-    // Handle style selection callbacks (owner-only, saves globally)
-    if (data.startsWith('set_style:')) {
-      const parts = data.split(':');
-      const styleCode = parts[2];
-      const token = this.activeToken || null;
+    // Set contextual config for request scope if passed from webhook
+    const cfg = getConfig();
+    this.activeToken = cfg.telegramBotToken || null;
+    this.activeOwnerId = cfg.telegramOwnerId || null;
+    this.activeAccessMode = cfg.telegramAccessMode || 'public';
+    const token = this.activeToken;
 
-      if (styleCode === 'close') {
-        try {
-          await apiCall('deleteMessage', {
-            chat_id: cq.message?.chat?.id,
-            message_id: cq.message?.message_id
-          }, token);
-        } catch (e) {
-          await editTelegramMessage(cq.message?.chat?.id, cq.message?.message_id, '\ud83c\udfad Menu gaya bahasa ditutup. Kirim /style untuk membuka kembali.', null, token);
+    // Handle interactive callback queries
+    if (u.callback_query) {
+      const cq = u.callback_query;
+      const data = cq.data || '';
+      if (!this.isUserAllowed(cq.from)) return this.answerCallback(cq.id, 'Akses Ditolak', true, token);
+
+      if (cq.from) {
+        this.recordRecentUser(cq.from, token);
+      }
+
+      // Check admin panel callbacks
+      if (data.startsWith('admin_') || data.startsWith('adm_')) {
+        return this.handleAdminCallback(cq, this);
+      }
+
+      // Handle language selector callback
+      if (data.startsWith('set_lang:')) {
+        const parts = data.split(':');
+        const langCode = parts[2];
+        const targetChatId = cq.message?.chat?.id;
+
+        if (langCode === 'close') {
+          await this.answerCallback(cq.id, 'Menu ditutup', false, token);
+          if (cq.message?.message_id && targetChatId) {
+            await this.editTelegramMessage(targetChatId, cq.message.message_id, 'ℹ️ Menu pemilihan bahasa ditutup.', null, token);
+          }
+          return;
         }
-        await answerCallback(cq.id, 'Menu ditutup', false, token);
+
+        if (LANGUAGE_OPTIONS[langCode] && targetChatId) {
+          saveUserLanguage(targetChatId, langCode);
+          chatLanguages.set(String(targetChatId), langCode);
+          await this.answerCallback(cq.id, `Bahasa diubah ke ${LANGUAGE_OPTIONS[langCode].label}`, false, token);
+          if (cq.message?.message_id) {
+            await this.editTelegramMessage(
+              targetChatId,
+              cq.message.message_id,
+              `✅ *Bahasa Berhasil Diubah!*\n\nBahasa komunikasi bot sekarang diatur ke: *${LANGUAGE_OPTIONS[langCode].label}*`,
+              null,
+              token
+            );
+          }
+        }
         return;
       }
 
-      if (STYLE_LABELS[styleCode]) {
-        // Save globally to config (applies bot-wide to all Indonesian responses)
-        await saveUserStyle(cq.message?.chat?.id, styleCode); // kept for compat but config is primary
-        const cfg = getConfig();
-        await saveConfig({ telegramStyle: styleCode, defaultStyle: styleCode });
-        const selectedLabel = STYLE_LABELS[styleCode];
-        await answerCallback(cq.id, `\u2705 Gaya global diubah ke: ${selectedLabel}`, true, token);
+      // Handle style selector callback
+      if (data.startsWith('set_style:')) {
+        const parts = data.split(':');
+        const styleCode = parts[2];
+        const targetChatId = cq.message?.chat?.id;
 
-        const currentStyle = styleCode;
-        const styleRows = Object.entries(STYLE_LABELS).map(([code, label]) => ([
-          {
-            text: (code === currentStyle ? '\u2705 ' : '') + label,
-            callback_data: `set_style:${cq.message?.chat?.id}:${code}`
+        if (styleCode === 'close') {
+          await this.answerCallback(cq.id, 'Menu ditutup', false, token);
+          if (cq.message?.message_id && targetChatId) {
+            await this.editTelegramMessage(targetChatId, cq.message.message_id, 'ℹ️ Menu pemilihan persona ditutup.', null, token);
           }
-        ]));
-        styleRows.push([{ text: '\u274c Tutup Menu', callback_data: `set_style:${cq.message?.chat?.id}:close` }]);
+          return;
+        }
 
-        const styleText = `\ud83c\udfad *Pilih Gaya Bahasa Global Bre AI*\n\n` +
-          `Gaya aktif: *${selectedLabel}*\n\n` +
-          `Gaya ini berlaku global untuk SEMUA respons Bahasa Indonesia di bot ini.\nPilih gaya lain atau tutup menu:`;
-
-        await editTelegramMessage(cq.message?.chat?.id, cq.message?.message_id, styleText, { inline_keyboard: styleRows }, token);
-      } else {
-        await answerCallback(cq.id, 'Gaya bahasa tidak dikenal', false, token);
+        if (STYLE_LABELS[styleCode] && targetChatId) {
+          saveUserStyle(targetChatId, styleCode);
+          chatStyles.set(String(targetChatId), styleCode);
+          await this.answerCallback(cq.id, `Gaya diubah ke ${STYLE_LABELS[styleCode]}`, false, token);
+          if (cq.message?.message_id) {
+            await this.editTelegramMessage(
+              targetChatId,
+              cq.message.message_id,
+              `🎭 *Persona Berhasil Diubah!*\n\nGaya bicara bot sekarang diatur ke: *${STYLE_LABELS[styleCode]}*`,
+              null,
+              token
+            );
+          }
+        }
+        return;
       }
+
+      // Handle quick menu callbacks
+      if (data.startsWith('menu:')) {
+        const targetChatId = cq.message?.chat?.id;
+        const fromUser = cq.from;
+        const isOwnerUser = this.isOwner(fromUser);
+
+        if (data === 'menu:lang' && targetChatId) {
+          await this.answerCallback(cq.id, 'Pilih bahasa', false, token);
+          const currentLang = getUserLanguage(targetChatId);
+          const langRows = Object.entries(LANGUAGE_OPTIONS).map(([code, name]) => ([{
+            text: (code === currentLang ? '✅ ' : '') + name.label,
+            callback_data: `set_lang:${targetChatId}:${code}`
+          }]));
+          langRows.push([{ text: '❌ Tutup', callback_data: `set_lang:${targetChatId}:close` }]);
+          await this.sendTelegramMessage(targetChatId, '🌐 *Pilih Bahasa Komunikasi:*', { inline_keyboard: langRows }, null, token);
+          return;
+        }
+
+        if (data === 'menu:style' && targetChatId) {
+          await this.answerCallback(cq.id, 'Pilih gaya persona', false, token);
+          const currentStyle = getUserStyle(targetChatId);
+          const styleRows = Object.entries(STYLE_LABELS).map(([code, label]) => ([{
+            text: (code === currentStyle ? '✅ ' : '') + label,
+            callback_data: `set_style:${targetChatId}:${code}`
+          }]));
+          styleRows.push([{ text: '❌ Tutup', callback_data: `set_style:${targetChatId}:close` }]);
+          await this.sendTelegramMessage(targetChatId, '🎭 *Pilih Persona AI:*', { inline_keyboard: styleRows }, null, token);
+          return;
+        }
+
+        if (data === 'menu:reset' && targetChatId) {
+          this.clearChatHistory(targetChatId);
+          await this.answerCallback(cq.id, 'Memori percakapan direset', true, token);
+          await this.sendTelegramMessage(targetChatId, '🧹 *Memori percakapan telah dibersihkan.*', null, null, token);
+          return;
+        }
+
+        if (data === 'menu:status' && targetChatId) {
+          await this.answerCallback(cq.id, 'Status dimuat', false, token);
+          const history = this.getChatHistory(targetChatId);
+          const lang = getUserLanguage(targetChatId);
+          const style = getUserStyle(targetChatId);
+          const statusText = `📊 *Status Chat*\n\n• Sesi Aktif: ${this.getActiveConversationsCount()} pengguna\n• Riwayat Chat Ini: ${history.length} pesan\n• Bahasa: ${LANGUAGE_OPTIONS[lang] || lang}\n• Persona: ${STYLE_LABELS[style] || style}`;
+          await this.sendTelegramMessage(targetChatId, statusText, null, null, token);
+          return;
+        }
+
+        if (data === 'menu:admin' && targetChatId) {
+          if (!isOwnerUser) {
+            await this.answerCallback(cq.id, 'Akses Ditolak: Hanya untuk Owner Bot.', true, token);
+            return;
+          }
+          await this.answerCallback(cq.id, 'Membuka Admin Panel...', false, token);
+          const senderName = [fromUser?.first_name, fromUser?.last_name].filter(Boolean).join(' ') || fromUser?.username || 'Owner';
+          await this.sendAdminPanel(targetChatId, senderName, this.getActiveConversationsCount(), token);
+          return;
+        }
+      }
+
+      await this.answerCallback(cq.id, null, false, token);
       return;
     }
 
-    return handleAdminCallback(cq, this);
+    const incomingMsg = u.message || u.channel_post || u.edited_message;
+    if (incomingMsg) {
+      await handleMessage(incomingMsg, this, webhookCtx);
+    }
   }
 
-  // Delegated Chat & Message Handling
-  async handleMessage(msg, ctx = null) {
-    return handleMessage(msg, this, ctx);
-  }
+  async checkReminders() {
+    const dueList = getDueReminders();
+    if (!dueList || dueList.length === 0) return;
 
-  // Long Polling Loop with callback_query support
-  async poll() {
-    while (this.isRunning) {
+    for (const r of dueList) {
       try {
-        const updates = await this.apiCall('getUpdates', {
-          offset: this.currentOffset,
-          timeout: 25,
-          allowed_updates: ['message', 'edited_message', 'channel_post', 'edited_channel_post', 'callback_query']
-        });
-
-        this.lastError = null;
-
-        if (Array.isArray(updates) && updates.length > 0) {
-          for (const u of updates) {
-            if (!this.isRunning) break;
-            this.currentOffset = u.update_id + 1;
-
-            const incomingMsg = u.message || u.channel_post || u.edited_message || u.edited_channel_post;
-            if (incomingMsg) {
-              this.handleMessage(incomingMsg).catch(err => {
-                console.error('[TelegramBot] Error message:', err);
-              });
-            } else if (u.callback_query) {
-              this.handleCallbackQuery(u.callback_query).catch(err => {
-                console.error('[TelegramBot] Error callback:', err);
-              });
-            }
-          }
-          // Check and send due reminders
-          try {
-            const due = getDueReminders();
-            for (const rem of due) {
-              await apiCall('sendMessage', {
-                chat_id: rem.chatId,
-                text: `⏰ *Pengingat:*\n\n${rem.message}`,
-                parse_mode: 'Markdown'
-              });
-              markReminderSent(rem.id);
-            }
-          } catch (remErr) {}
-        }
-      } catch (err) {
-        if (!this.isRunning) break;
-        this.lastError = err.message;
-        if (err.message && (err.message.includes('webhook') || err.message.includes('409'))) {
-          try { await this.apiCall('deleteWebhook', { drop_pending_updates: false }); } catch (e) {}
-        }
-        await new Promise(r => setTimeout(r, 3000));
+        const text = `⏰ *PENGINGAT ANDA*\n\n"${r.message}"\n\n_Pengingat dijadwalkan untuk sekarang._`;
+        await this.sendTelegramMessage(r.chatId, text);
+        markReminderSent(r.id);
+      } catch (e) {
+        console.warn(`[Reminder Error] Gagal kirim reminder ${r.id}:`, e.message);
       }
     }
   }
 
-  // Start the bot service
-  async start(host = null) {
+  async pollUpdates() {
+    if (!this.isRunning) return;
+
+    try {
+      const updates = await this.apiCall('getUpdates', {
+        offset: this.currentOffset,
+        timeout: 25,
+        allowed_updates: ['message', 'callback_query', 'channel_post', 'edited_message']
+      });
+
+      if (Array.isArray(updates)) {
+        for (const u of updates) {
+          if (u.update_id >= this.currentOffset) {
+            this.currentOffset = u.update_id + 1;
+          }
+          await this.handleUpdate(u);
+        }
+      }
+      this.lastError = null;
+    } catch (e) {
+      this.lastError = e.message;
+      console.warn('[Telegram Polling Warning]:', e.message);
+      await new Promise(r => setTimeout(r, 4000));
+    }
+
+    if (this.isRunning) {
+      this.pollingTimer = setTimeout(() => this.pollUpdates(), 100);
+    }
+  }
+
+  async init() {
     const cfg = getConfig();
     if (!cfg.telegramEnabled) {
-      this.isRunning = false;
-      this.lastError = 'Fitur bot Telegram dinonaktifkan dalam konfigurasi.';
-      return false;
+      this.stop();
+      return { ok: true, status: 'disabled', message: 'Telegram Bot dinonaktifkan di konfigurasi.' };
     }
-    if (!cfg.telegramBotToken) {
-      this.isRunning = false;
-      this.lastError = 'Bot Token Telegram masih kosong. Masukkan token dari @BotFather lalu simpan.';
-      return false;
+
+    const token = (cfg.telegramBotToken || '').trim();
+    if (!token) {
+      this.stop();
+      return { ok: false, error: 'Token bot belum diisi.' };
     }
 
     try {
-      const info = await this.apiCall('getMe');
-      this.botInfo = info;
-      this.lastError = null;
+      const tested = await this.testToken(token);
+      if (!tested.ok) throw new Error(tested.error || 'Token bot tidak valid');
+      const me = tested.bot;
+      this.botInfo = me;
+      this.activeToken = token;
+      this.activeOwnerId = cfg.telegramOwnerId || null;
+      this.activeAccessMode = cfg.telegramAccessMode || 'public';
 
-      const isServerless = Boolean(process.env.VERCEL || process.env.VERCEL_URL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+      await loadReminders();
 
-      // Serverless Mode (Vercel): Gunakan Webhook 24/7, JANGAN hapus webhook & JANGAN jalankan polling!
-      if (isServerless || (host && !host.includes('localhost') && !host.includes('127.0.0.1'))) {
-        if (host) {
-          const webhookUrl = `https://${host}/api/telegram`;
-          try {
-            await this.apiCall('setWebhook', { url: webhookUrl });
-            console.log(`[TelegramBot] 🌐 Webhook serverless 24/7 dipasang ke ${webhookUrl}`);
-          } catch (e) {}
-        }
+      // Check if webhook is set
+      const webhookInfo = await this.apiCall('getWebhookInfo', {}, token).catch(() => ({ url: '' }));
+      if (webhookInfo && webhookInfo.url) {
+        console.log('[Telegram Bot] Terhubung via Webhook');
         this.isRunning = true;
-        console.log(`[TelegramBot] 🟢 Berhasil terhubung sebagai @${info.username} (Mode Serverless Webhook 24/7)`);
-        return true;
+        if (this.reminderTimer) clearInterval(this.reminderTimer);
+        if (!process.env.VERCEL) this.reminderTimer = setInterval(() => this.checkReminders().catch(console.error), 30000);
+        return { ok: true, status: 'webhook_active', bot: me, webhookUrl: webhookInfo.url };
       }
 
-      // Local Development Mode: Gunakan Long-Polling
-      if (this.isRunning) return true;
-
-      // Hapus webhook sebelumnya agar long-polling lokal tidak bentrok
-      try {
-        await this.apiCall('deleteWebhook', { drop_pending_updates: false });
-      } catch (e) {}
-
+      // Start long-polling
+      if (process.env.VERCEL) return { ok: false, error: 'Pasang webhook Telegram untuk mode Vercel.' };
       this.isRunning = true;
-      console.log(`[TelegramBot] 🟢 Berhasil terhubung sebagai @${info.username} (Mode Long-Polling Lokal)`);
-      this.poll();
-      return true;
-    } catch (err) {
+      if (this.pollingTimer) clearTimeout(this.pollingTimer);
+      if (this.reminderTimer) clearInterval(this.reminderTimer);
+
+      this.pollUpdates();
+      this.reminderTimer = setInterval(() => this.checkReminders().catch(console.error), 30000);
+
+      console.log(`[Telegram Bot] Berjalan via Long-Polling sebagai @${me.username}`);
+      return { ok: true, status: 'polling_active', bot: me };
+    } catch (e) {
+      this.lastError = e.message;
       this.isRunning = false;
-      this.lastError = err.message;
-      console.error('[TelegramBot] 🔴 Gagal mengaktifkan bot:', err.message);
-      return false;
+      return { ok: false, error: e.message };
     }
   }
 
-  // Stop polling service
   stop() {
-    if (this.isRunning) {
-      this.isRunning = false;
-      console.log('[TelegramBot] 🛑 Bot service dihentikan');
+    this.isRunning = false;
+    if (this.pollingTimer) {
+      clearTimeout(this.pollingTimer);
+      this.pollingTimer = null;
+    }
+    if (this.reminderTimer) {
+      clearInterval(this.reminderTimer);
+      this.reminderTimer = null;
     }
   }
 
-  // Restart bot service
-  async restart(host = null) {
-    this.stop();
-    await new Promise(r => setTimeout(r, 500));
-    return this.start(host);
-  }
-
-  // Initialize on server boot
-  init() {
-    const cfg = getConfig();
-    if (cfg.telegramEnabled && cfg.telegramBotToken) {
-      this.start().catch(err => {
-        console.error('[TelegramBot] Init error:', err.message);
-      });
-    }
-  }
-
-  // Get current status summary
   getStatus() {
-    const cfg = getConfig();
     return {
-      enabled: !!cfg.telegramEnabled,
-      hasToken: !!cfg.telegramBotToken,
       running: this.isRunning,
+      bot: this.botInfo,
       botInfo: this.botInfo,
-      ownerId: cfg.telegramOwnerId || '',
-      accessMode: cfg.telegramAccessMode || 'public',
-      userCount: Array.isArray(cfg.telegramUsers) ? cfg.telegramUsers.length : 0,
+      accessMode: getConfig().telegramAccessMode,
+      username: this.botInfo?.username || null,
+      mode: this.isRunning ? (this.pollingTimer ? 'polling' : 'webhook') : 'stopped',
       lastError: this.lastError,
-      activeConversations: this.conversations.size
-    };
-  }
-
-  // Get detailed status including Telegram Webhook info
-  async getDetailedStatus(currentHost = null, customToken = null) {
-    const cfg = getConfig();
-    const effectiveToken = customToken || this.activeToken || cfg.telegramBotToken;
-    const hasToken = !!effectiveToken;
-    const isVercel = Boolean(process.env.VERCEL || process.env.VERCEL_URL);
-
-    let webhookInfo = null;
-    let botInfo = this.botInfo || null;
-
-    if (hasToken) {
-      try {
-        botInfo = await this.apiCall('getMe', {}, effectiveToken);
-        this.botInfo = botInfo;
-      } catch (e) {
-        this.lastError = e.message;
-      }
-
-      try {
-        webhookInfo = await this.apiCall('getWebhookInfo', {}, effectiveToken);
-      } catch (e) {}
-    }
-
-    const hasActiveWebhook = Boolean(webhookInfo && webhookInfo.url && webhookInfo.url.length > 0);
-
-    return {
-      enabled: !!cfg.telegramEnabled,
-      hasToken,
-      running: Boolean(hasActiveWebhook || this.isRunning),
-      isVercel,
-      isWebhookActive: hasActiveWebhook,
-      webhookUrl: webhookInfo?.url || '',
-      pendingUpdates: webhookInfo?.pending_update_count || 0,
-      botInfo,
-      ownerId: cfg.telegramOwnerId || '',
-      accessMode: cfg.telegramAccessMode || 'public',
-      userCount: Array.isArray(cfg.telegramUsers) ? cfg.telegramUsers.length : 0,
-      lastError: this.lastError,
-      activeConversations: this.conversations.size
+      activeSessions: this.getActiveConversationsCount(),
+      recentUsersCount: this.recentUsers.size
     };
   }
 }
 
-const telegramBot = new TelegramBotService();
-
-module.exports = telegramBot;
-module.exports.TelegramBotService = TelegramBotService;
+// Singleton instance
+const botService = new TelegramBotService();
+module.exports = botService;

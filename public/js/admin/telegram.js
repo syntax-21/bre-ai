@@ -73,7 +73,8 @@ async function loadTelegramStatus() {
 
 function saveTelegramToLocalStorage() {
   try {
-    const fields = { bre_tg_token: 'cfgTelegramToken', bre_tg_owner: 'cfgTelegramOwner', bre_tg_domain: 'cfgTelegramDomain', bre_tg_mode: 'cfgTelegramAccessMode', bre_tg_style: 'cfgTelegramStyle' };
+    // NOTE: token bot TIDAK disimpan di localStorage untuk keamanan.
+    const fields = { bre_tg_owner: 'cfgTelegramOwner', bre_tg_domain: 'cfgTelegramDomain', bre_tg_mode: 'cfgTelegramAccessMode', bre_tg_style: 'cfgTelegramStyle' };
     Object.entries(fields).forEach(([key, id]) => { const val = document.getElementById(id)?.value?.trim(); if(val) localStorage.setItem(key, val); });
     localStorage.setItem('bre_tg_lang', document.getElementById('cfgTelegramLanguage')?.value || 'id');
     localStorage.setItem('bre_tg_provider', document.getElementById('cfgTelegramModel')?.value || 'auto');
@@ -82,7 +83,8 @@ function saveTelegramToLocalStorage() {
 
 function restoreTelegramFromLocalStorage() {
   try {
-    const fields = { bre_tg_token: 'cfgTelegramToken', bre_tg_owner: 'cfgTelegramOwner', bre_tg_domain: 'cfgTelegramDomain' };
+    // NOTE: token bot tidak dipulihkan dari localStorage — berasal dari konfigurasi server.
+    const fields = { bre_tg_owner: 'cfgTelegramOwner', bre_tg_domain: 'cfgTelegramDomain' };
     Object.entries(fields).forEach(([key, id]) => { const el = document.getElementById(id); const val = localStorage.getItem(key); if(el && !el.value && val) el.value = val; });
     const selMod = document.getElementById('cfgTelegramAccessMode');
     const mod = localStorage.getItem('bre_tg_mode');
@@ -137,12 +139,10 @@ async function setupTelegramWebhookFromDomain() {
   domain = domain.replace(/^https?:\/\//i, '').replace(/\/api\/telegram\/?.*$/i, '').replace(/\/+$/, '');
   const domainInp = document.getElementById('cfgTelegramDomain');
   if(domainInp) domainInp.value = domain;
-  const adminId = document.getElementById('cfgTelegramOwner')?.value.trim();
-  const accessMode = document.getElementById('cfgTelegramAccessMode')?.value || 'public';
   saveTelegramToLocalStorage();
-  let webhookUrl = `https://${domain}/api/telegram?t=${encodeURIComponent(token)}`;
-  if(adminId) webhookUrl += `&o=${encodeURIComponent(adminId)}`;
-  if(accessMode && accessMode !== 'public') webhookUrl += `&m=${encodeURIComponent(accessMode)}`;
+  // Selalu pasang webhook ke URL bersih (tanpa token/owner/mode di query) —
+  // verifikasi dilakukan via secret_token yang dikelola server (x-telegram-bot-api-secret-token).
+  let webhookUrl = `https://${domain}/api/telegram`;
   toast(`🔄 Memasang Webhook ke ${domain}...`, 'ok');
   const enCheck = document.getElementById('cfgTelegramEnabled');
   if(enCheck) enCheck.checked = true;

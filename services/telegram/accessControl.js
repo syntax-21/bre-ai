@@ -19,6 +19,7 @@ function recordRecentUser(fromUser) {
     lastSeen: Date.now(),
     notified: existing ? existing.notified : false
   });
+  if (recentUsers.size > 5000) recentUsers.delete(recentUsers.keys().next().value);
 }
 
 function getRecentUsersList() {
@@ -35,14 +36,11 @@ function isOwner(fromUser, activeOwnerId = null) {
   const uId = typeof fromUser === 'object' && fromUser !== null ? String(fromUser.id || '') : String(fromUser || '');
   const uName = typeof fromUser === 'object' && fromUser !== null ? (fromUser.username || '').toLowerCase().replace(/^@/, '') : '';
 
-  if (ownerId === uId || (uName && ownerId === uName)) return true;
+  if (/^\d+$/.test(ownerId) && ownerId === uId) return true;
 
   // Also check role in telegramUsers array
   if (Array.isArray(cfg.telegramUsers)) {
-    const found = cfg.telegramUsers.find(u =>
-      String(u.id) === uId ||
-      (uName && u.username && u.username.toLowerCase().replace(/^@/, '') === uName)
-    );
+    const found = cfg.telegramUsers.find(u => /^\d+$/.test(String(u.id)) && String(u.id) === uId);
     if (found && found.role === 'owner') return true;
   }
 
@@ -59,7 +57,7 @@ function isUserRegistered(fromUser) {
   if (Array.isArray(cfg.telegramUsers)) {
     return cfg.telegramUsers.some(u =>
       String(u.id) === uId ||
-      (uName && u.username && u.username.toLowerCase().replace(/^@/, '') === uName)
+      (!/^\d+$/.test(String(u.id)) && uName && u.username && u.username.toLowerCase().replace(/^@/, '') === uName)
     );
   }
   return false;
@@ -78,7 +76,7 @@ function isUserAllowed(fromUser, activeOwnerId = null, activeAccessMode = null) 
   if (Array.isArray(cfg.telegramUsers)) {
     const match = cfg.telegramUsers.find(u =>
       String(u.id) === uId ||
-      (uName && u.username && u.username.toLowerCase().replace(/^@/, '') === uName)
+      (!/^\d+$/.test(String(u.id)) && uName && u.username && u.username.toLowerCase().replace(/^@/, '') === uName)
     );
     if (match) {
       if (match.role === 'blocked') return false; // Blocked user always rejected
@@ -165,6 +163,7 @@ async function notifyOwnerNewUser(fromUser, initialText = '', botService = null)
   const uId = fromUser.id;
   if (notifiedUsers.has(uId)) return;
   notifiedUsers.add(uId);
+  if (notifiedUsers.size > 5000) notifiedUsers.delete(notifiedUsers.values().next().value);
 
   const fullName = [fromUser.first_name, fromUser.last_name].filter(Boolean).join(' ') || 'Tanpa Nama';
   const usernameTag = fromUser.username ? `@${fromUser.username}` : '_(tidak ada username)_';

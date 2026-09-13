@@ -2,9 +2,10 @@
 // Bre AI - /v1/models Endpoint (OpenAI-Compatible)
 // Created by Amirun Rayan Ariandi
 // ========================================================
-const { getConfig, syncCloudConfig } = require('./_shared');
+const { getConfig, syncCloudConfig, checkClientAuth } = require('./_shared');
+const { apiHandler, httpError } = require('../services/httpSecurity');
 
-module.exports = async (req, res) => {
+module.exports = apiHandler(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-custom-endpoint, x-custom-keys, x-custom-model, x-custom-provider');
@@ -18,6 +19,7 @@ module.exports = async (req, res) => {
   }
 
   const cfg = await syncCloudConfig();
+  if (cfg.requireAuth !== false && !checkClientAuth(req, cfg)) throw httpError(401, 'API key diperlukan');
 
   // Collect all active models from providers and mapping aliases
   const modelSet = new Set(['bre-ai']); // Master unified model ID
@@ -88,4 +90,4 @@ module.exports = async (req, res) => {
     object: 'list',
     data: modelDetails
   });
-};
+}, ['GET']);

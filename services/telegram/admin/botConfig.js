@@ -75,9 +75,14 @@ async function handle(cq, botService, router = null) {
       await answerCallback(cq.id, 'Domain bot belum disetel di config. Buka Web Admin untuk set domain.', true, token);
       return;
     }
-    const webhookUrl = `https://${domain}/api/telegram?t=${encodeURIComponent(cfg.telegramBotToken || '')}&o=${encodeURIComponent(cfg.telegramOwnerId || '')}`;
+    const webhookUrl = `https://${domain}/api/telegram`;
     try {
-      await api.apiCall('setWebhook', { url: webhookUrl }, token);
+      const parsed = require('../../safeFetch').validateUrl(webhookUrl);
+      if (parsed.search) throw new Error('Domain webhook tidak valid');
+      const secret = cfg.telegramWebhookSecret || cfg.webhookSecret || require('crypto').randomBytes(32).toString('hex');
+      const saved = await saveConfig({ telegramWebhookSecret: secret });
+      if (!saved.ok) throw new Error(saved.error);
+      await api.apiCall('setWebhook', { url: webhookUrl, secret_token: secret }, token);
       await answerCallback(cq.id, `✅ Webhook 24/7 berhasil dipasang ke https://${domain}/api/telegram`, true, token);
     } catch (e) {
       await answerCallback(cq.id, `❌ Gagal pasang webhook: ${e.message}`, true, token);
@@ -110,6 +115,8 @@ async function handle(cq, botService, router = null) {
 
   if (data === 'adm_stop_bot') {
     try {
+      const saved = await saveConfig({ telegramEnabled: false });
+      if (!saved.ok) throw new Error(saved.error);
       botService.stop();
       await answerCallback(cq.id, '🛑 Bot service dihentikan', true, token);
     } catch (e) {

@@ -2,8 +2,11 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
+const { safeFetch: fetch, responseJson, responseText, normalizeChatUrl } = require('../services/safeFetch');
+const { validateConfigUpdate, cleanObject, encryptConfig, decryptConfig, applyEnvironment } = require('../services/configPolicy');
+const { clientIp, safeEqual, trackPending } = require('../services/httpSecurity');
 
-const CONFIG_PATH = path.join(process.cwd(), 'config.json');
+const CONFIG_PATH = process.env.BRE_CONFIG_PATH || path.join(process.cwd(), 'config.json');
 const TMP_CONFIG_PATH = path.join(os.tmpdir(), 'bre_config.json');
 let memConfig = null;
 let lastCloudSync = 0;
@@ -32,7 +35,9 @@ const DEFAULT_CONFIG = {
 
 [INSTRUKSI PEMBUATAN DOKUMEN & FILE]:
 - Jika pengguna meminta dibuatkan file atau dokumen (seperti file .prd, Product Requirement Document, file .md, .txt, script .py, .js, .html, .json, dsb), tuliskan isi dokumen tersebut secara lengkap, detail, dan profesional di dalam blok kode (codeblock) dengan mencantumkan nama/ekstensi file pada baris pertama agar sistem otomatis membuatkan tombol download.`,
-  adminPassword: 'admin',
+  adminPassword: '',
+  requireAuth: true,
+  clientKeys: [],
   maxTokens: 16384,
   temperature: 0.7,
   topP: 1.0,
@@ -145,6 +150,22 @@ const LANGUAGE_OPTIONS = {
     prompt: 'Responlah dalam Bahasa Indonesia GAUL yang santai, luwes, akrab, asik, dan cerdas khas anak muda Indonesia.',
     instruction: 'Anda WAJIB menggunakan Bahasa Indonesia GAUL yang santai, luwes, akrab, asik, dan cerdas khas anak muda Indonesia.'
   },
+  su: {
+    label: '🍃 Basa Sunda',
+    name: 'Sunda',
+    nativeName: 'Basa Sunda',
+    code: 'su',
+    prompt: 'Responlah dengan gaya Bahasa Sunda yang ramah, sopan, dan akrab (someah hade ka semah) sebagai Bre AI.',
+    instruction: 'Anda WAJIB merespons menggunakan Bahasa Sunda (atau Bahasa Indonesia berdialek Sunda) yang ramah, sopan, dan santun.'
+  },
+  jv: {
+    label: '🙏 Basa Jawa',
+    name: 'Jawa',
+    nativeName: 'Basa Jawa',
+    code: 'jv',
+    prompt: 'Responlah dengan gaya Bahasa Jawa (Krama/ngoko sesuai konteks) yang santun dan penuh tata krama sebagai Bre AI.',
+    instruction: 'Anda WAJIB merespons menggunakan Bahasa Jawa (atau Bahasa Indonesia berdialek Jawa) yang santun, halus, dan menghormati lawan bicara.'
+  },
   en: {
     label: '🇺🇸 English',
     name: 'English',
@@ -229,7 +250,7 @@ function getNextRoundRobinIndex(length) {
 // ========================================================
 // 9ROUTER OBSERVABILITY, TELEMETRY & COST ENGINE
 // ========================================================
-const LOGS_PATH = path.join(process.cwd(), 'data', 'request_logs.json');
+const LOGS_PATH = path.join(process.env.BRE_DATA_DIR || (process.env.VERCEL ? path.join(os.tmpdir(), 'bre-data') : path.join(process.cwd(), 'data')), 'request_logs.json');
 const MAX_LOGS = 500;
 let requestLogs = [];
 let saveLogsTimeout = null;
@@ -240,8 +261,8 @@ const metricsStats = {
   failedRequests: 0,
   totalTokens: 0,
   totalLatencyMs: 0,
-  providerHits: {},
-  modelHits: {}
+  providerHits: Object.create(null),
+  modelHits: Object.create(null)
 };
 
 function loadPersistedLogs() {
@@ -278,7 +299,7 @@ function savePersistedLogs() {
   if (saveLogsTimeout) clearTimeout(saveLogsTimeout);
   saveLogsTimeout = setTimeout(() => {
     try {
-      const dataDir = path.join(process.cwd(), 'data');
+      const dataDir = path.dirname(LOGS_PATH);
       if (!fs.existsSync(dataDir)) {
         fs.mkdirSync(dataDir, { recursive: true });
       }
@@ -325,7 +346,7 @@ function calculateCost(modelName, inTok = 0, outTok = 0, cacheTok = 0) {
       break;
     }
   }
-  const inputCost = (inTok / 1_000_000) * pricing.input;
+  const inputCost = (Math.max(0, inTok - cacheTok) / 1_000_000) * pricing.input;
   const outputCost = (outTok / 1_000_000) * pricing.output;
   const cachedCost = (cacheTok / 1_000_000) * pricing.cached;
   const totalCost = inputCost + outputCost + cachedCost;
@@ -411,8 +432,8 @@ function clearLogs() {
   metricsStats.failedRequests = 0;
   metricsStats.totalTokens = 0;
   metricsStats.totalLatencyMs = 0;
-  metricsStats.providerHits = {};
-  metricsStats.modelHits = {};
+  metricsStats.providerHits = Object.create(null);
+  metricsStats.modelHits = Object.create(null);
   savePersistedLogs();
 }
 
@@ -471,7 +492,7 @@ function generateTimelineBuckets(logs, timeRange, now) {
     }
   } else {
     // Daily buckets for 7D / 30D / 60D
-    const days = timeRange === '7d' || timeRange === '7D' ? 7 : (timeRange === '30d' || timeRange === '30D' ? 14 : 20);
+    const days = timeRange.toLowerCase() === '7d' ? 7 : (timeRange.toLowerCase() === '30d' ? 30 : 60);
     const dayMs = 24 * 3600 * 1000;
     for (let i = days - 1; i >= 0; i--) {
       const bStart = now - (i + 1) * dayMs;
@@ -802,7 +823,7 @@ function getCachedResponse(key) {
 }
 
 function setCachedResponse(key, data, ttlSeconds = 3600) {
-  if (responseCache.size > 500) {
+  if (responseCache.size >= 200) {
     const oldest = responseCache.keys().next().value;
     responseCache.delete(oldest);
   }
@@ -823,22 +844,98 @@ function parseKeys(raw) {
   return [];
 }
 
+// ========================================================
+// Security Helpers: hashed admin password, safe client IP,
+// and client API-key authentication
+// ========================================================
+function isValidIp(v) {
+  if (!v || typeof v !== 'string') return false;
+  const s = v.trim();
+  if (!s) return false;
+  // IPv4
+  if (/^(\d{1,3}\.){3}\d{1,3}$/.test(s)) {
+    return s.split('.').every(n => parseInt(n, 10) >= 0 && parseInt(n, 10) <= 255);
+  }
+  // IPv6 (basic structure check)
+  if (/^[0-9a-fA-F:]+$/.test(s) && s.includes(':')) return true;
+  return false;
+}
+
+// Ambil IP klien secara aman: hanya percaya XFF jika berupa IP valid,
+// selain itu gunakan socket remoteAddress sebagai sumber otoritatif.
+function getClientIp(req) {
+  return clientIp(req);
+}
+
+// Format hash scrypt: scrypt$<salt-hex>$<hash-hex>
+function hashAdminPassword(pw) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(String(pw || ''), salt, 32).toString('hex');
+  return `scrypt$${salt}$${hash}`;
+}
+
+function verifyAdminPassword(input, stored) {
+  if (!stored || typeof input !== 'string' || !input || input.length > 256) return false;
+  const s = String(stored);
+  const i = String(input);
+  // Format modern: scrypt hash
+  if (s.startsWith('scrypt$')) {
+    const parts = s.split('$');
+    if (parts.length !== 3 || !/^[a-f0-9]{32}$/i.test(parts[1]) || !/^[a-f0-9]{64}$/i.test(parts[2])) return false;
+    const candidate = crypto.scryptSync(i, parts[1], 32);
+    const expected = Buffer.from(parts[2], 'hex');
+    return candidate.length === expected.length && crypto.timingSafeEqual(candidate, expected);
+  }
+  // Fallback legacy plaintext dengan perbandingan constant-time
+  const a = Buffer.from(i);
+  const b = Buffer.from(s);
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+
+// Validasi API key klien (x-api-key / Authorization: Bearer).
+// Mengembalikan {@link null} jika tidak valid.
+function checkClientAuth(req, cfg) {
+  try {
+    const auth = req.headers.authorization || '';
+    const bearer = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
+    const key = (req.headers['x-api-key'] || bearer || '').trim();
+    if (!key) return null;
+    const ip = getClientIp(req);
+    if (checkRateLimit(ip).limited) return null;
+    const keys = Array.isArray(cfg.clientKeys)
+      ? cfg.clientKeys.map(k => String(k).trim()).filter(Boolean)
+      : [];
+    if (keys.some(k => safeEqual(k, key))) return 'Client';
+    if (verifyAdminPassword(key, cfg.adminPassword)) return 'Admin';
+    recordFailedAttempt(ip);
+    return null;
+  } catch (e) {
+    return null;
+  }
+}
+
 function getConfig() {
   if (memConfig) return memConfig;
-  let cfg = { ...DEFAULT_CONFIG };
-  
-  // 1. Baca konfigurasi bawaan repositori (config.json)
+  let cfg = structuredClone(DEFAULT_CONFIG);
+
+  // 1. Baca konfigurasi bawaan repositori (config.json) — otoritatif saat tersedia.
+  let repoExists = false;
   try {
     if (fs.existsSync(CONFIG_PATH)) {
-      cfg = { ...cfg, ...JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8')) };
+      repoExists = true;
+      cfg = { ...cfg, ...cleanObject(JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'))) };
     }
   } catch (e) {}
 
-  // 2. Baca konfigurasi /tmp (khusus instance serverless Vercel yang writable)
+  // 2. Baca konfigurasi /tmp sebagai fallback SAAT config.json TIDAK ada
+  //    (kondisi serverless Vercel karena config.json tidak ikut ter-deploy).
+  //    Ketika config.json ada, isi repo SELALU menang agar cache tmp basi
+  //    tidak menimpa nilai yang disengaja (mis. password admin yang di-hash).
   try {
-    if (fs.existsSync(TMP_CONFIG_PATH)) {
+    if (!repoExists && fs.existsSync(TMP_CONFIG_PATH)) {
       const tmpData = JSON.parse(fs.readFileSync(TMP_CONFIG_PATH, 'utf-8'));
-      cfg = { ...cfg, ...tmpData };
+      cfg = { ...cfg, ...cleanObject(tmpData) };
     }
   } catch (e) {}
 
@@ -857,7 +954,10 @@ function getConfig() {
   }
   
   // Environment Overrides (For Vercel / Cloud deployments)
-  if (process.env.ADMIN_PASSWORD) cfg.adminPassword = process.env.ADMIN_PASSWORD.trim();
+  if (process.env.ADMIN_PASSWORD) {
+    const rawPw = process.env.ADMIN_PASSWORD.trim();
+    cfg.adminPassword = rawPw.startsWith('scrypt$') ? rawPw : hashAdminPassword(rawPw);
+  }
   if (process.env.TELEGRAM_BOT_TOKEN) {
     cfg.telegramBotToken = process.env.TELEGRAM_BOT_TOKEN.trim();
     cfg.telegramEnabled = true;
@@ -871,6 +971,7 @@ function getConfig() {
   if (process.env.API_KEY || process.env.INCEPTION_API_KEY) {
     const k = (process.env.API_KEY || process.env.INCEPTION_API_KEY).trim();
     if (cfg.endpoints && cfg.endpoints.length > 0) {
+      cfg.endpoints[0].keys = parseKeys(cfg.endpoints[0].keys);
       if (!cfg.endpoints[0].keys.includes(k)) {
         cfg.endpoints[0].keys.unshift(k);
       }
@@ -891,13 +992,24 @@ function getConfig() {
   if (process.env.BRE_CONFIG) {
     try {
       const envObj = JSON.parse(process.env.BRE_CONFIG);
-      cfg = { ...cfg, ...envObj };
+      cfg = { ...cfg, ...cleanObject(envObj) };
     } catch (e) {}
   }
+
+  // Hardening serverless: DILARANG memakai password 'admin' bawaan di produksi.
+  // Di Vercel tanpa ADMIN_PASSWORD/cloud persistence, buat password acak per instance
+  // (bisa dilihat di Vercel Logs) sehingga panel admin tidak terbuka dengan password default.
+  cfg = applyEnvironment(cfg);
+  if (cfg.adminPassword === 'admin') cfg.adminPassword = '';
 
   if (process.env.BRE_CHAT_RATE_MAX) cfg.chatRateLimitMax = parseInt(process.env.BRE_CHAT_RATE_MAX) || 30;
   if (process.env.BRE_CHAT_RATE_WINDOW) cfg.chatRateLimitWindow = parseInt(process.env.BRE_CHAT_RATE_WINDOW) || 60;
   if (process.env.BRE_WEBHOOK_SECRET) cfg.telegramWebhookSecret = process.env.BRE_WEBHOOK_SECRET.trim();
+
+  // Normalisasi penamaan secret webhook (legacy `webhookSecret` -> `telegramWebhookSecret`)
+  if (!cfg.telegramWebhookSecret && cfg.webhookSecret) {
+    cfg.telegramWebhookSecret = cfg.webhookSecret;
+  }
 
   memConfig = cfg;
   return cfg;
@@ -918,7 +1030,7 @@ async function syncCloudConfig(force = false) {
   const ghBranch = (process.env.GITHUB_BRANCH || cfg.githubBranch || 'main').trim();
 
   // 1. Coba muat dari Vercel KV / Upstash Redis (Prioritas Utama - Paling Cepat)
-  if (redisUrl && redisToken && !redisUrl.includes('console.upstash.com')) {
+  if (['auto', 'upstash'].includes(cfg.cloudStorageType) && redisUrl && redisToken && !redisUrl.includes('console.upstash.com')) {
     try {
       const cleanUrl = redisUrl.replace(/\/$/, '');
       const resp = await fetch(`${cleanUrl}/get/bre_ai_config`, {
@@ -927,13 +1039,14 @@ async function syncCloudConfig(force = false) {
       });
       const contentType = resp.headers.get('content-type') || '';
       if (resp.ok && contentType.includes('application/json')) {
-        const data = await resp.json();
+        const data = await responseJson(resp);
         let remoteVal = data.result;
         if (typeof remoteVal === 'string') {
           try { remoteVal = JSON.parse(remoteVal); } catch(e){}
         }
         if (remoteVal && typeof remoteVal === 'object') {
-          memConfig = { ...cfg, ...remoteVal };
+          memConfig = applyEnvironment({ ...cfg, ...cleanObject(remoteVal) });
+          if (memConfig.adminPassword === 'admin') memConfig.adminPassword = '';
           lastCloudSync = now;
           try { fs.writeFileSync(TMP_CONFIG_PATH, JSON.stringify(memConfig, null, 2), 'utf-8'); } catch(e){}
           return memConfig;
@@ -945,9 +1058,9 @@ async function syncCloudConfig(force = false) {
   }
 
   // 2. Coba muat dari GitHub Contents API
-  if (ghToken && ghRepo) {
+   if (['auto', 'github'].includes(cfg.cloudStorageType) && ghToken && /^[\w.-]+\/[\w.-]+$/.test(ghRepo) && process.env.CONFIG_ENCRYPTION_KEY) {
     try {
-      const resp = await fetch(`https://api.github.com/repos/${ghRepo}/contents/config.json?ref=${ghBranch}`, {
+      const resp = await fetch(`https://api.github.com/repos/${ghRepo}/contents/bre-config.enc.json?ref=${encodeURIComponent(ghBranch)}`, {
         headers: {
           'Authorization': `Bearer ${ghToken}`,
           'Accept': 'application/vnd.github.v3+json',
@@ -956,11 +1069,11 @@ async function syncCloudConfig(force = false) {
         signal: AbortSignal.timeout(4000)
       });
       if (resp.ok) {
-        const data = await resp.json();
+        const data = await responseJson(resp);
         if (data.content) {
           const fileStr = Buffer.from(data.content, 'base64').toString('utf-8');
-          const parsed = JSON.parse(fileStr);
-          memConfig = { ...cfg, ...parsed };
+          const parsed = decryptConfig(JSON.parse(fileStr));
+          memConfig = applyEnvironment({ ...cfg, ...parsed });
           lastCloudSync = now;
           try { fs.writeFileSync(TMP_CONFIG_PATH, JSON.stringify(memConfig, null, 2), 'utf-8'); } catch(e){}
           return memConfig;
@@ -976,7 +1089,13 @@ async function syncCloudConfig(force = false) {
 }
 
 // Simpan konfigurasi secara permanen (Local file + /tmp + Upstash Redis + GitHub Commit)
-async function saveConfig(updated) {
+function saveConfig(updated) {
+  return trackPending(persistConfig(updated));
+}
+
+async function persistConfig(updated) {
+  try { updated = validateConfigUpdate(updated); }
+  catch (error) { return { ok: false, error: error.message }; }
   const current = getConfig();
   const merged = { ...current, ...updated };
   
@@ -988,7 +1107,7 @@ async function saveConfig(updated) {
       weight: parseInt(e.weight) || 1,
       models: Array.isArray(e.models) ? e.models : (typeof e.models === 'string' ? e.models.split(',').map(m=>m.trim()).filter(Boolean) : []),
       mapping: Array.isArray(e.mapping) ? e.mapping : (typeof e.mapping === 'string' ? e.mapping.split(',').map(m=>m.trim()).filter(Boolean) : []),
-      keys: parseKeys(e.keys)
+       keys: parseKeys(e.keys || e.apiKey)
     }));
   }
   
@@ -1037,18 +1156,37 @@ async function saveConfig(updated) {
   if (updated.transcriptionModel !== undefined) merged.transcriptionModel = String(updated.transcriptionModel).trim() || 'whisper-1';
   if (updated.transcriptionLanguage !== undefined) merged.transcriptionLanguage = String(updated.transcriptionLanguage).trim() || 'auto';
 
+  // Jangan pernah simpan password admin dalam plaintext — hash saat tersimpan
+  if (updated.adminPassword !== undefined) {
+    const pw = String(updated.adminPassword).trim();
+    if (pw.startsWith('scrypt$')) {
+      merged.adminPassword = pw;
+    } else if (pw) {
+      merged.adminPassword = hashAdminPassword(pw);
+    }
+  }
+
+  // An environment secret is authoritative; a dashboard edit cannot replace it.
+  if (updated.adminPassword !== undefined && process.env.ADMIN_PASSWORD && !verifyAdminPassword(updated.adminPassword, process.env.ADMIN_PASSWORD.trim())) {
+    return { ok: false, error: 'Ubah ADMIN_PASSWORD di Environment Variables Vercel, lalu redeploy.' };
+  }
+  applyEnvironment(merged);
+  if (merged.adminPassword && !merged.adminPassword.startsWith('scrypt$')) merged.adminPassword = hashAdminPassword(merged.adminPassword);
+  clearResponseCache();
+
   memConfig = merged;
   lastCloudSync = Date.now();
 
   // 1. Tulis ke /tmp (selalu berhasil di serverless / Vercel lambda container)
   try {
-    fs.writeFileSync(TMP_CONFIG_PATH, JSON.stringify(merged, null, 2), 'utf-8');
+    fs.writeFileSync(TMP_CONFIG_PATH, JSON.stringify(merged, null, 2), { encoding: 'utf-8', mode: 0o600 });
   } catch (e) {}
 
   // 2. Tulis ke config.json lokal jika diizinkan
   let saveError = null;
   try {
-    fs.writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2), 'utf-8');
+    if (process.env.VERCEL) throw new Error('Serverless filesystem is ephemeral');
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2), { encoding: 'utf-8', mode: 0o600 });
   } catch (e) {
     saveError = e.message;
     console.warn('[Config] Gagal menulis ke config.json (Read-Only FS/Vercel):', e.message);
@@ -1070,7 +1208,7 @@ async function saveConfig(updated) {
   const ghBranch = (process.env.GITHUB_BRANCH || merged.githubBranch || 'main').trim();
 
   // Upstash Redis Save
-  if (redisUrl && redisToken && !redisUrl.includes('console.upstash.com')) {
+  if (['auto', 'upstash'].includes(merged.cloudStorageType) && redisUrl && redisToken && !redisUrl.includes('console.upstash.com')) {
     try {
       const cleanUrl = redisUrl.replace(/\/$/, '');
       const resp = await fetch(`${cleanUrl}/set/bre_ai_config`, {
@@ -1105,11 +1243,13 @@ async function saveConfig(updated) {
   }
 
   // GitHub Auto-Commit Save
-  if (ghToken && ghRepo) {
+  if (['auto', 'github'].includes(merged.cloudStorageType) && ghToken && ghRepo) {
     try {
+      if (!/^[\w.-]+\/[\w.-]+$/.test(ghRepo)) throw new Error('GitHub repo tidak valid');
+      const encrypted = encryptConfig(merged);
       let currentSha = null;
       try {
-        const getRes = await fetch(`https://api.github.com/repos/${ghRepo}/contents/config.json?ref=${ghBranch}`, {
+        const getRes = await fetch(`https://api.github.com/repos/${ghRepo}/contents/bre-config.enc.json?ref=${encodeURIComponent(ghBranch)}`, {
           headers: {
             'Authorization': `Bearer ${ghToken}`,
             'Accept': 'application/vnd.github.v3+json',
@@ -1123,7 +1263,7 @@ async function saveConfig(updated) {
         }
       } catch (e) {}
 
-      const putRes = await fetch(`https://api.github.com/repos/${ghRepo}/contents/config.json`, {
+      const putRes = await fetch(`https://api.github.com/repos/${ghRepo}/contents/bre-config.enc.json`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${ghToken}`,
@@ -1133,7 +1273,7 @@ async function saveConfig(updated) {
         },
         body: JSON.stringify({
           message: 'chore: update Bre AI configuration via Admin Dashboard [skip ci]',
-          content: Buffer.from(JSON.stringify(merged, null, 2), 'utf-8').toString('base64'),
+          content: Buffer.from(JSON.stringify(encrypted), 'utf-8').toString('base64'),
           sha: currentSha || undefined,
           branch: ghBranch
         }),
@@ -1145,14 +1285,20 @@ async function saveConfig(updated) {
         cloudStatus.githubSuccess = true;
         cloudStatus.provider = cloudStatus.upstashSuccess ? 'upstash+github' : 'github';
         cloudStatus.message = (cloudStatus.message ? cloudStatus.message + ' & ' : '') + 'Tersimpan permanen ke GitHub Repository';
-      }
+      } else { cloudStatus.message = `GitHub save gagal: HTTP ${putRes.status}`; }
     } catch (err) {
+      cloudStatus.message = err.message;
       console.warn('[CloudConfig] GitHub commit error:', err.message);
     }
   }
 
   return {
     ...merged,
+    ok: !saveError || cloudStatus.synced,
+    error: saveError && !cloudStatus.synced ? (cloudStatus.message || 'Hubungkan Upstash atau GitHub terenkripsi untuk menyimpan konfigurasi di Vercel.') : null,
+    savedToCloud: cloudStatus.synced,
+    cloudType: cloudStatus.provider,
+    cloudError: !cloudStatus.synced ? cloudStatus.message || null : null,
     _isReadOnlyFS: Boolean(saveError),
     _saveError: saveError,
     _cloudStatus: cloudStatus
@@ -1228,7 +1374,7 @@ function getCloudStorageInfo() {
   const upUrl = (process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || cfg.upstashRedisUrl || '').trim();
   const upToken = (process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || cfg.upstashRedisToken || '').trim();
   const hasUpstash = Boolean(upUrl && upToken && !upUrl.includes('console.upstash.com'));
-  const hasGitHub = Boolean((process.env.GITHUB_TOKEN || cfg.githubToken) && (process.env.GITHUB_REPO || cfg.githubRepo));
+  const hasGitHub = Boolean((process.env.GITHUB_TOKEN || cfg.githubToken) && (process.env.GITHUB_REPO || cfg.githubRepo) && process.env.CONFIG_ENCRYPTION_KEY);
   return {
     upstashActive: hasUpstash,
     githubActive: hasGitHub,
@@ -1258,6 +1404,7 @@ function recordFailedAttempt(ip) {
   const c = loginAttempts.get(ip) || { count: 0, resetAt: now + limitWin };
   if (now > c.resetAt) { c.count = 1; c.resetAt = now + limitWin; } else c.count++;
   loginAttempts.set(ip, c);
+  if (loginAttempts.size > 10000) loginAttempts.delete(loginAttempts.keys().next().value);
 }
 
 function clearLoginAttempts(ip) { loginAttempts.delete(ip); }
@@ -1280,11 +1427,26 @@ function consumeChatRate(ip) {
   const c = chatRateBuckets.get(ip) || { count: 0, resetAt: now + win };
   if (now > c.resetAt) { c.count = 1; c.resetAt = now + win; } else c.count++;
   chatRateBuckets.set(ip, c);
+  if (chatRateBuckets.size > 10000) chatRateBuckets.delete(chatRateBuckets.keys().next().value);
 }
 
 function sanitizeOutput(text) {
   if (!text || typeof text !== 'string') return text;
   let t = text;
+
+  // 0. Lindungi blok kode & inline code dari penggantian identitas/brand
+  //    agar kode yang diminta user tidak rusak (mis. variabel bernama "mercury").
+  const codeStash = [];
+  t = t.replace(/```[\s\S]*?```/g, m => {
+    const ph = `\u0000BRE_CODE_${codeStash.length}\u0000`;
+    codeStash.push(m);
+    return ph;
+  });
+  t = t.replace(/(`[^`\n]{1,500}`)/g, m => {
+    const ph = `\u0000BRE_CODE_${codeStash.length}\u0000`;
+    codeStash.push(m);
+    return ph;
+  });
 
   // 1. Enforce ownership denials & AI disclaimers -> Point to Amirun Rayan Ariandi
   t = t.replace(/\b(saya|aku|gue|kula|abdi)\s+tidak\s+(memiliki|punya)\s+(pemilik|owner)\b[^\n.]*/gi, 'saya diciptakan, dikembangkan, dan dimiliki secara eksklusif oleh Amirun Rayan Ariandi');
@@ -1328,6 +1490,11 @@ function sanitizeOutput(text) {
   t = t.replace(/^(?:Thinking Process|Reasoning Process|Proses Berpikir|thinking):\s*[\s\S]*?(?:\r?\n\r?\n|$)/gi, '');
   t = t.replace(/^thinking([A-Z\u00C0-\u024F\u1E00-\u1EFF\u0400-\u04FF\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF][^\n]*\n*)/i, '');
 
+  // 9. Pulihkan blok kode & inline code yang dilindungi
+  codeStash.forEach((c, i) => {
+    t = t.split(`\u0000BRE_CODE_${i}\u0000`).join(c);
+  });
+
   return t;
 }
 
@@ -1335,12 +1502,13 @@ function sanitizeOutput(text) {
 // Ensures 100% Bre AI Ownership, strict provider override, and dialect/language adaptation
 function buildBreAISystemPrompt({ cfg = {}, style = null, customSystemPrompt = '', language = null, isTelegram = false } = {}) {
   const activeCfg = cfg || getConfig();
+  customSystemPrompt = [activeCfg.systemPrompt || '', customSystemPrompt].filter(Boolean).join('\n\n');
   const effectiveLang = (language || 'auto').toLowerCase().trim();
   const isAuto = effectiveLang === 'auto' || effectiveLang === '' || effectiveLang === 'auto-detect';
   const isIndonesian = effectiveLang === 'id';
 
   // Determine the active style (only applies to Indonesian responses)
-  const effectiveStyle = (style && style !== 'default' && style !== 'standar') ? style : 'jakarta';
+  const effectiveStyle = style || activeCfg.defaultStyle || 'santai';
   const stylePrompt = STYLE_PROMPTS[effectiveStyle] || STYLE_PROMPTS['jakarta'] || '';
   const styleName = STYLE_LABELS[effectiveStyle] || '🗣️ Jakarta / Gaul (Gue-Lu)';
 
@@ -1438,7 +1606,7 @@ async function fetchAvailableModels(endpoint) {
   if (!url) return { ok: false, error: 'URL endpoint kosong', models: [] };
 
   // Derive base URL from chat endpoint (strip /chat/completions, /completions, etc.)
-  const modelsUrl = url
+  const modelsUrl = normalizeChatUrl(url)
     .replace(/\/chat\/completions\/?$/, '/models')
     .replace(/\/completions\/?$/, '/models')
     .replace(/\/models\/?$/, '/models');
@@ -1459,7 +1627,7 @@ async function fetchAvailableModels(endpoint) {
       return { ok: false, error: `HTTP ${resp.status}: ${txt.slice(0, 150)}`, models: [] };
     }
 
-    const data = await resp.json();
+    const data = await responseJson(resp);
     // OpenAI-compatible /v1/models returns { data: [{ id, ... }, ...] }
     let modelIds = [];
     if (Array.isArray(data.data)) {
@@ -1501,7 +1669,7 @@ async function testSingleModel(endpoint, modelName) {
 
   const start = Date.now();
   try {
-    const resp = await fetch(url, {
+    const resp = await fetch(normalizeChatUrl(url), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: auth },
       body: JSON.stringify(dummyPayload),
@@ -1517,11 +1685,11 @@ async function testSingleModel(endpoint, modelName) {
 
     // Try to parse response
     try {
-      const data = await resp.json();
+      const data = await responseJson(resp);
       const content = data?.choices?.[0]?.message?.content || '';
       return { ok: true, latencyMs, model, preview: content.slice(0, 80) };
     } catch (e) {
-      return { ok: true, latencyMs, model, preview: '(Non-JSON response, but HTTP 200)' };
+      return { ok: false, latencyMs, model, error: 'Upstream tidak mengembalikan JSON chat yang valid' };
     }
   } catch (err) {
     const latencyMs = Date.now() - start;
@@ -1540,6 +1708,10 @@ module.exports = {
   testGitHub,
   getCloudStorageInfo,
   parseKeys,
+  hashAdminPassword,
+  verifyAdminPassword,
+  checkClientAuth,
+  getClientIp,
   sanitizeOutput,
   checkChatRateLimit,
   consumeChatRate,

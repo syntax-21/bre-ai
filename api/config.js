@@ -1,354 +1,118 @@
-const {
-  getConfig,
-  syncCloudConfig,
-  saveConfig,
-  testUpstash,
-  testGitHub,
-  getCloudStorageInfo,
-  checkRateLimit,
-  recordFailedAttempt,
-  clearLoginAttempts,
-  getMetrics,
-  getLogs,
-  clearLogs,
-  getRouterOverview,
-  getRouterDetails,
-  fetchAvailableModels,
-  testSingleModel
-} = require('./_shared');
+const crypto = require('crypto');
+const shared = require('./_shared');
+const { apiHandler, httpError, consumeLimit, safeEqual } = require('../services/httpSecurity');
+const { validateUrl } = require('../services/safeFetch');
 
-function getIp(req) { return (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown').split(',')[0].trim(); }
-function getToken(req) { const auth = req.headers.authorization || ''; return auth.startsWith('Bearer ') ? auth.slice(7).trim() : ''; }
+function getToken(req) {
+  const auth = req.headers?.authorization || '';
+  return typeof auth === 'string' ? auth.replace(/^Bearer\s+/i, '').trim() : '';
+}
 
-module.exports = async (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+async function telegramStatus(cfg) {
+  const bot = require('../services/telegramBot');
+  const status = bot.getStatus();
+  if (!cfg.telegramBotToken) return status;
+  const api = require('../services/telegram/api');
+  const [me, webhook] = await Promise.all([
+    api.testToken(cfg.telegramBotToken),
+    api.apiCall('getWebhookInfo', {}, cfg.telegramBotToken).catch(() => ({}))
+  ]);
+  let cleanUrl = '';
+  try { const url = new URL(webhook.url); url.search = ''; cleanUrl = url.href; } catch {}
+  return { ...status, botInfo: me.ok ? me.bot : null, isWebhookActive: !!webhook.url,
+    webhookUrl: cleanUrl, pendingUpdates: webhook.pending_update_count || 0,
+    ownerId: cfg.telegramOwnerId, accessMode: cfg.telegramAccessMode,
+    userCount: cfg.telegramUsers?.length || 0, activeConversations: status.activeSessions };
+}
 
-  if (req.method === 'OPTIONS') return res.status(204).end();
+module.exports = apiHandler(async (req, res) => {
+  const cfg = await shared.syncCloudConfig();
+  const body = req.body || {};
+  const token = getToken(req) || (body.action === 'login' && typeof body.password === 'string' ? body.password : '');
+  const ip = shared.getClientIp(req);
+  // Apply failed-password throttling to EVERY admin action, including authenticated GET.
+  const rate = shared.checkRateLimit(ip);
+  if (rate.limited) { res.setHeader('Retry-After', String(rate.retryAfter)); throw httpError(429, 'Terlalu banyak percobaan login. Coba lagi nanti.'); }
+  const isAdmin = shared.verifyAdminPassword(token, cfg.adminPassword);
+  if (!isAdmin && (req.method === 'POST' || token)) {
+    shared.recordFailedAttempt(ip);
+    throw httpError(401, cfg.adminPassword ? 'Unauthorized: Password admin diperlukan' : 'Admin belum dikonfigurasi. Atur ADMIN_PASSWORD di environment.');
+  }
+  if (req.method === 'GET') {
+    const config = isAdmin ? { ...cfg, adminPassword: cfg.adminPassword ? '••••••••' : '' } : {
+      model: cfg.model, temperature: cfg.temperature, topP: cfg.topP, maxTokens: cfg.maxTokens,
+      reasoningEffort: cfg.reasoningEffort, streamEnabled: cfg.streamEnabled, requireAuth: cfg.requireAuth
+    };
+    return res.json({ ok: true, isAdmin, config, serverTime: Date.now(), ...(isAdmin ? { cloudStorageInfo: shared.getCloudStorageInfo() } : {}) });
+  }
+  if (body.action === 'login') { shared.clearLoginAttempts(ip); return res.json({ ok: true }); }
 
-  // Sinkronisasi cloud agar konfigurasi selalu mutakhir di Vercel Serverless
-  const cfg = await syncCloudConfig();
-  const ip = getIp(req);
-  const token = getToken(req);
-  const isAdmin = token === cfg.adminPassword;
-
-  const publicCfg = {
-    model: cfg.model, temperature: cfg.temperature, topP: cfg.topP,
-    maxTokens: cfg.maxTokens, reasoningEffort: cfg.reasoningEffort, streamEnabled: cfg.streamEnabled
-  };
-
-  if (req.method === 'POST') {
-    let body = req.body;
-    if (!body) {
-      body = await new Promise(resolve => {
-        let d = ''; req.on('data', c => { d += c; });
-        req.on('end', () => { try { resolve(JSON.parse(d || '{}')); } catch { resolve({}); } });
-        req.on('error', () => resolve({}));
-      });
-    }
-    body = body || {};
-
-    if (body.action === 'login') {
-      const rate = checkRateLimit(ip);
-      if (rate.limited) return res.status(429).json({ error: `Terlalu banyak percobaan. Coba lagi dalam ${rate.retryAfter} detik.` });
-      
-      if (!isAdmin) {
-        recordFailedAttempt(ip);
-        return res.status(401).json({ error: 'Password salah' });
-      }
-      clearLoginAttempts(ip);
-      return res.json({ ok: true, message: 'Login berhasil' });
-    }
-
-    if (!isAdmin) {
-      return res.status(401).json({ error: 'Unauthorized: Admin authentication required.' });
-    }
-
-    // 9Router Overview (KPI, Topology, Usage breakdown, Recent requests)
-    if (body.action === 'get_router_overview') {
-      const data = getRouterOverview({
-        timeRange: body.timeRange || body.range || 'today',
-        provider: body.provider || 'all',
-        model: body.model || 'all'
-      });
-      return res.json({ ok: true, overview: data, ...data });
-    }
-
-    // 9Router Details (Filtered Request Logs table)
-    if (body.action === 'get_router_details') {
-      const data = getRouterDetails({
-        provider: body.provider || 'all',
-        model: body.model || 'all',
-        startDate: body.startDate || '',
-        endDate: body.endDate || '',
-        search: body.search || '',
-        page: body.page || 1,
-        limit: body.limit || 50
-      });
-      return res.json({ ok: true, requests: data.requests || [], ...data });
-    }
-
-    if (body.action === 'get_metrics') {
-      return res.json({ ok: true, metrics: getMetrics() });
-    }
-
-    if (body.action === 'get_logs') {
-      return res.json({ ok: true, logs: getLogs() });
-    }
-
-    if (body.action === 'clear_logs') {
-      clearLogs();
-      return res.json({ ok: true, message: 'Logs cleared' });
-    }
-
-    // Telegram Bot Actions
-    if (body.action === 'test_telegram') {
-      let telegramBot;
-      try { telegramBot = require('../services/telegramBot'); } catch(e){}
-      if (!telegramBot) return res.status(500).json({ ok: false, error: 'Telegram service unavailable' });
-      const testRes = await telegramBot.testToken(body.token);
-      if (testRes.ok && body.chatId) {
-        try {
-          const botName = [testRes.bot?.first_name, testRes.bot?.last_name].filter(Boolean).join(' ') || testRes.bot?.first_name || 'Bre AI';
-          const botUsername = testRes.bot?.username ? ` (@${testRes.bot.username})` : '';
-          await telegramBot.apiCall('sendMessage', {
-            chat_id: body.chatId,
-            text: `⚡ *Tes Bot Berhasil!*\n\nHalo Admin! Bot ${botName}${botUsername} berhasil terhubung dan siap melayani percakapan 24/7.`,
-            parse_mode: 'Markdown'
-          }, body.token);
-          testRes.messageSent = true;
-        } catch (mErr) {
-          testRes.messageError = mErr.message;
-        }
-      }
-      return res.json(testRes);
-    }
-
-    if (body.action === 'get_telegram_status') {
-      let telegramBot;
-      try { telegramBot = require('../services/telegramBot'); } catch(e){}
-      const host = req.headers['x-forwarded-host'] || req.headers.host || '';
-      const status = telegramBot ? await telegramBot.getDetailedStatus(host) : { running: false };
-      return res.json({ ok: true, status });
-    }
-
-    if (body.action === 'restart_bot') {
-      let telegramBot;
-      try { telegramBot = require('../services/telegramBot'); } catch(e){}
-      if (!telegramBot) return res.status(500).json({ ok: false, error: 'Telegram service unavailable' });
-      try {
-        const host = req.headers['x-forwarded-host'] || req.headers.host || '';
-        await telegramBot.restart(host || null);
-        const status = await telegramBot.getDetailedStatus(host);
-        return res.json({ ok: true, message: 'Bot berhasil direstart', status });
-      } catch (err) {
-        return res.status(500).json({ ok: false, error: err.message });
-      }
-    }
-
-    if (body.action === 'stop_bot') {
-      let telegramBot;
-      try { telegramBot = require('../services/telegramBot'); } catch(e){}
-      if (!telegramBot) return res.status(500).json({ ok: false, error: 'Telegram service unavailable' });
-      try {
-        telegramBot.stop();
-        return res.json({ ok: true, message: 'Bot berhasil dihentikan' });
-      } catch (err) {
-        return res.status(500).json({ ok: false, error: err.message });
-      }
-    }
-
-    if (body.action === 'setup_webhook') {
-      let telegramBot;
-      try { telegramBot = require('../services/telegramBot'); } catch(e){}
-      if (!telegramBot) return res.status(500).json({ ok: false, error: 'Telegram service unavailable' });
-      const host = body.host || req.headers['x-forwarded-host'] || req.headers.host || '';
-      const webhookUrl = body.url || (host ? `https://${host}/api/telegram` : '');
-      if (!webhookUrl) return res.status(400).json({ ok: false, error: 'URL Webhook tidak valid' });
-
-      try {
-        const tokenToUse = body.token || cfg.telegramBotToken;
-        await telegramBot.apiCall('setWebhook', { url: webhookUrl }, tokenToUse);
-        const status = await telegramBot.getDetailedStatus(host, tokenToUse);
-        return res.json({ ok: true, webhookUrl, status });
-      } catch (err) {
-        return res.status(500).json({ ok: false, error: err.message });
-      }
-    }
-
-    if (body.action === 'delete_webhook') {
-      let telegramBot;
-      try { telegramBot = require('../services/telegramBot'); } catch(e){}
-      if (!telegramBot) return res.status(500).json({ ok: false, error: 'Telegram service unavailable' });
-      try {
-        await telegramBot.apiCall('deleteWebhook', { drop_pending_updates: false });
-        const status = await telegramBot.getDetailedStatus();
-        return res.json({ ok: true, status });
-      } catch (err) {
-        return res.status(500).json({ ok: false, error: err.message });
-      }
-    }
-
-    // Cloud Persistence Actions
-    if (body.action === 'test_upstash') {
-      const resTest = await testUpstash(body.url, body.token);
-      return res.json(resTest);
-    }
-
-    if (body.action === 'test_github') {
-      const resTest = await testGitHub(body.token, body.repo, body.branch);
-      return res.json(resTest);
-    }
-
-    if (body.action === 'get_cloud_status') {
-      return res.json({ ok: true, status: getCloudStorageInfo() });
-    }
-
-    // Motivasi Harian Actions (Web Admin)
-    if (body.action === 'get_motivation') {
-      const motivation = require('../services/motivation');
-      const preview = await motivation.previewMotivation();
-      return res.json({ ok: true, ...preview, lastSent: motivation.getLastMotivation() });
-    }
-
-    if (body.action === 'preview_motivation') {
-      const motivation = require('../services/motivation');
-      const preview = await motivation.previewMotivation(body.customText || null);
-      return res.json({ ok: true, ...preview });
-    }
-
-    if (body.action === 'send_motivation_now') {
-      const motivation = require('../services/motivation');
-      try {
-        const result = await motivation.sendMotivationNow(body.customText || null);
-        return res.json(result);
-      } catch (err) {
-        return res.status(500).json({ ok: false, error: err.message });
-      }
-    }
-
-    // Auto-Detect Models from /v1/models endpoint
-    if (body.action === 'detect_models') {
-      const currentCfg = getConfig();
-      const endpoints = currentCfg.endpoints || [];
-      const targetName = body.providerName || null;
-
-      // Support inline url+keys from admin UI (before saving config)
-      if (body.url && Array.isArray(body.keys) && body.keys.length > 0) {
-        const inlineEp = {
-          name: targetName || body.url,
-          url: body.url,
-          keys: body.keys
-        };
-        const result = await fetchAvailableModels(inlineEp);
-        return res.json({ ok: true, results: [{ provider: inlineEp.name, url: inlineEp.url, ...result }] });
-      }
-
-      // If a specific provider is targeted, only detect for that one
-      const targets = targetName
-        ? endpoints.filter(e => e.name === targetName || e.url === targetName)
-        : endpoints.filter(e => e.status !== false && e.keys?.length > 0);
-
-      if (!targets.length) {
-        return res.json({ ok: false, error: 'Tidak ada provider yang cocok atau tidak ada API Key. Simpan konfigurasi terlebih dahulu atau pastikan API Key sudah diisi.' });
-      }
-
-      const results = await Promise.all(
-        targets.map(async ep => {
-          const result = await fetchAvailableModels(ep);
-          return { provider: ep.name, url: ep.url, ...result };
-        })
-      );
-
-      return res.json({ ok: true, results });
-    }
-
-    // Test a specific model on a specific provider
-    if (body.action === 'test_model') {
-      const cfg = getConfig();
-      const endpoints = cfg.endpoints || [];
-      const providerName = body.providerName || null;
-      const modelName = body.model || null;
-
-      if (!modelName) {
-        return res.status(400).json({ ok: false, error: 'Parameter model wajib diisi.' });
-      }
-
-      // Find target endpoint
-      let targetEp = null;
-      if (providerName) {
-        targetEp = endpoints.find(e => e.name === providerName || e.url === providerName);
-      }
-      // Fallback: find first endpoint that has this model listed
-      if (!targetEp) {
-        targetEp = endpoints.find(e =>
-          Array.isArray(e.models) && e.models.includes(modelName) && e.keys?.length > 0
-        );
-      }
-      // Fallback: use body.url + body.keys if provided (for dynamic testing)
-      if (!targetEp && body.url) {
-        const { parseKeys } = require('./_shared');
-        targetEp = { url: body.url, keys: parseKeys(body.keys || body.apiKey || '') };
-      }
-
-      if (!targetEp) {
-        return res.status(400).json({ ok: false, error: `Tidak ada provider yang memiliki model "${modelName}" atau URL tidak ditemukan.` });
-      }
-
-      const result = await testSingleModel(targetEp, modelName);
-      return res.json({ ok: result.ok, ...result, provider: targetEp.name || 'Manual' });
-    }
-
-    if (body.action === 'restart_telegram') {
-      let telegramBot;
-      try { telegramBot = require('../services/telegramBot'); } catch(e){}
-      if (!telegramBot) return res.status(500).json({ ok: false, error: 'Telegram service unavailable' });
-      const host = req.headers['x-forwarded-host'] || req.headers.host || '';
-      const started = await telegramBot.restart(host);
-      const status = await telegramBot.getDetailedStatus(host);
-      return res.json({ ok: true, running: started, status });
-    }
-
-    // Save config
-    let updatedFields = { ...body };
-    delete updatedFields.action;
-    
-    const updated = await saveConfig(updatedFields);
-
-    // Auto-restart telegram bot if telegram settings changed
-    if (updatedFields.telegramEnabled !== undefined || updatedFields.telegramBotToken !== undefined || updatedFields.telegramAllowedUsers !== undefined) {
-      try {
-        const telegramBot = require('../services/telegramBot');
-        const host = req.headers['x-forwarded-host'] || req.headers.host || '';
-        telegramBot.restart(host).catch(() => {});
-      } catch(e){}
-    }
-
-    return res.json({ 
-      ok: true, 
-      config: updated, 
-      isReadOnlyFS: !!updated._isReadOnlyFS,
-      cloudStatus: updated._cloudStatus || null,
-      cloudStorageInfo: getCloudStorageInfo(),
-      serverTime: Date.now()
-    }); 
+  const action = body.action || 'save_full_config';
+  if (['test_model', 'detect_models', 'fetch_models', 'preview_motivation', 'send_motivation_now', 'test_telegram', 'setup_webhook'].includes(action)) {
+    if (consumeLimit('probe:' + ip, 60, 60000)) throw httpError(429, 'Batas pengujian tercapai');
+  }
+  if (action === 'get_metrics') return res.json({ ok: true, metrics: shared.getMetrics() });
+  if (action === 'get_logs') return res.json({ ok: true, logs: shared.getLogs() });
+  if (action === 'clear_logs') { shared.clearLogs(); return res.json({ ok: true }); }
+  if (action === 'get_router_overview') return res.json({ ok: true, overview: shared.getRouterOverview(body) });
+  if (action === 'get_router_details') return res.json({ ok: true, details: shared.getRouterDetails(body) });
+  if (action === 'get_cloud_status') return res.json({ ok: true, cloudStorageInfo: shared.getCloudStorageInfo() });
+  if (action === 'test_upstash') return res.json(await shared.testUpstash(body.url ?? cfg.upstashRedisUrl, body.token ?? cfg.upstashRedisToken));
+  if (action === 'test_github') return res.json(await shared.testGitHub(body.token ?? cfg.githubToken, body.repo ?? cfg.githubRepo, body.branch ?? cfg.githubBranch));
+  if (['detect_models', 'fetch_models', 'test_model'].includes(action)) {
+    const endpoint = typeof body.endpoint === 'object' ? body.endpoint : {
+      url: body.url || body.endpoint, keys: body.keys || [body.key].filter(Boolean), name: body.providerName || body.provider
+    };
+    if (action === 'test_model') return res.json(await shared.testSingleModel(endpoint, body.model));
+    const result = await shared.fetchAvailableModels(endpoint);
+    return res.json({ ...result, results: [{ provider: endpoint.name, ...result }] });
   }
 
-  // GET
-  if (req.query?.action === 'metrics' || req.url?.includes('action=metrics')) {
-    if (!isAdmin) return res.status(401).json({ error: 'Unauthorized' });
-    return res.json({ ok: true, metrics: getMetrics(), serverTime: Date.now() });
+  if (action === 'get_telegram_status') return res.json({ ok: true, status: await telegramStatus(cfg) });
+  if (['test_telegram', 'test_telegram_token'].includes(action)) {
+    const api = require('../services/telegram/api');
+    const result = await api.testToken(body.token || cfg.telegramBotToken);
+    if (!result.ok) return res.status(400).json(result);
+    let messageSent = false;
+    if (body.chatId && /^\d+$/.test(String(body.chatId))) {
+      await api.apiCall('sendMessage', { chat_id: body.chatId, text: '✅ Koneksi Bre AI berhasil.' }, body.token || cfg.telegramBotToken);
+      messageSent = true;
+    }
+    return res.json({ ...result, messageSent });
   }
-
-  if (req.query?.action === 'logs' || req.url?.includes('action=logs')) {
-    if (!isAdmin) return res.status(401).json({ error: 'Unauthorized' });
-    return res.json({ ok: true, logs: getLogs(), serverTime: Date.now() });
+  if (action === 'setup_webhook') {
+    const url = validateUrl(body.url);
+    if (url.protocol !== 'https:' || url.search || url.pathname !== '/api/telegram') throw httpError(400, 'Gunakan URL HTTPS /api/telegram tanpa query');
+    const botToken = body.token || cfg.telegramBotToken;
+    if (!safeEqual(botToken, cfg.telegramBotToken)) throw httpError(400, 'Simpan token bot terlebih dahulu');
+    const secret = cfg.telegramWebhookSecret || cfg.webhookSecret || crypto.randomBytes(32).toString('hex');
+    if (!/^[A-Za-z0-9_-]{1,256}$/.test(secret)) throw httpError(400, 'Secret webhook tidak valid');
+    const saved = await shared.saveConfig({ telegramWebhookSecret: secret, telegramDomain: url.host, telegramEnabled: true });
+    if (!saved.ok) throw httpError(503, saved.error);
+    await require('../services/telegram/api').apiCall('setWebhook', { url: url.href, secret_token: secret, allowed_updates: ['message', 'callback_query'] }, botToken);
+    return res.json({ ok: true, status: await telegramStatus(shared.getConfig()) });
   }
-
-  return res.json({ 
-    config: isAdmin ? cfg : publicCfg,
-    cloudStorageInfo: getCloudStorageInfo(),
-    serverTime: Date.now()
-  });
-};
+  if (action === 'restart_bot' || action === 'stop_bot') {
+    const enabled = action === 'restart_bot';
+    const saved = await shared.saveConfig({ telegramEnabled: enabled });
+    if (!saved.ok) throw httpError(503, saved.error);
+    const bot = require('../services/telegramBot');
+    if (enabled) return res.json(await bot.init());
+    bot.stop();
+    return res.json({ ok: true, message: 'Bot dihentikan' });
+  }
+  if (['get_motivation', 'preview_motivation', 'send_motivation_now'].includes(action)) {
+    const motivation = require('../services/motivation');
+    if (action === 'get_motivation') return res.json({ ok: true, enabled: cfg.motivationEnabled, times: cfg.motivationTimes, lastSent: motivation.getLastMotivation(), recipients: motivation.collectRecipients().length });
+    const result = action === 'preview_motivation' ? await motivation.previewMotivation(body.customText) : await motivation.sendMotivationNow(body.customText);
+    return res.json({ ok: true, ...result });
+  }
+  if (['save_full_config', 'save_admin_password', 'save_router', 'save_telegram', 'save_cloud'].includes(action)) {
+    const updates = action === 'save_admin_password' ? { adminPassword: body.newPassword } : (body.config || body);
+    const result = await shared.saveConfig(updates);
+    if (!result.ok) throw httpError(400, result.error || 'Gagal menyimpan konfigurasi');
+    return res.json({ ok: true, savedToCloud: result.savedToCloud, cloudType: result.cloudType, cloudError: result.cloudError,
+      cloudStatus: result._cloudStatus, isReadOnlyFS: result._isReadOnlyFS, cloudStorageInfo: shared.getCloudStorageInfo() });
+  }
+  throw httpError(400, 'Action tidak dikenali');
+}, ['GET', 'POST'], { admin: true });

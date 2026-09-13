@@ -11,6 +11,7 @@ const {
 } = require('../../api/_shared');
 
 const api = require('./api');
+const { internalRequests, consumeLimit } = require('../httpSecurity');
 const transcription = require('../transcription');
 const {
   recordRecentUser,
@@ -118,6 +119,7 @@ async function queryBreAIRouter(userContent, history = [], senderInfo = '', lang
     },
     socket: { remoteAddress: '127.0.0.1' }
   });
+  internalRequests.add(mockReq);
 
   return new Promise((resolve, reject) => {
     const mockRes = {
@@ -164,6 +166,20 @@ async function handleMessage(msg, botService, ctx = null) {
   const senderTag = fromUser.username ? `@${fromUser.username}` : `ID:${fromUser.id}`;
   const token = botService.activeToken || null;
   const isOwnerUser = isOwner(fromUser, botService.activeOwnerId);
+  // Reject unauthorized users before downloads, document decompression or paid STT calls.
+  if (!isUserAllowed(fromUser, botService.activeOwnerId, botService.activeAccessMode)) {
+    await notifyOwnerNewUser(fromUser, msg.text || msg.caption || '', botService);
+    await api.sendTelegramMessage(chatId, '🔒 Akses Ditolak: hubungi pemilik bot untuk izin.', null, null, token);
+    return;
+  }
+  if (consumeLimit('telegram:' + fromUser.id, isOwnerUser ? 60 : 30, 60000)) {
+    await api.sendTelegramMessage(chatId, 'Batas permintaan tercapai. Coba lagi sebentar.', null, null, token);
+    return;
+  }
+  if (isOwnerUser && String(chatId) !== String(fromUser.id) && /^\//.test(msg.text || '')) {
+    await api.sendTelegramMessage(chatId, 'Gunakan perintah owner melalui chat pribadi bot.', null, null, token);
+    return;
+  }
 
   // Track user in memory
   recordRecentUser(fromUser);
@@ -495,7 +511,7 @@ async function handleMessage(msg, botService, ctx = null) {
 
   // 4. ALERT OWNER IF NEW USER (First interaction)
   if (!isOwnerUser && !isUserRegistered(fromUser)) {
-    notifyOwnerNewUser(fromUser, historyDisplaySnippet || text || '[Interaksi Baru]', botService).catch(() => {});
+    await notifyOwnerNewUser(fromUser, historyDisplaySnippet || text || '[Interaksi Baru]', botService).catch(() => {});
   }
 
   // 5. CHECK ACCESS PERMISSION (Allowed vs Public)

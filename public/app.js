@@ -5,6 +5,15 @@
 
 let chats = [], activeChat = null, files = [];
 let generating = false, ctrl = null;
+let generationSequence = 0;
+let clientApiKey = sessionStorage.getItem('bre_client_api_key') || '';
+function clientHeaders() { return clientApiKey ? { 'x-api-key': clientApiKey } : {}; }
+function saveClientApiKey() {
+  clientApiKey = document.getElementById('clientApiKey').value.trim();
+  sessionStorage.setItem('bre_client_api_key', clientApiKey);
+  localStorage.removeItem('bre_client_api_key');
+  toast('API key tersimpan untuk sesi tab ini', 'ok');
+}
 let mic = null, recording = false, autoTTS = false;
 let persona = 'default', sandboxCode = '';
 let currentLang = localStorage.getItem('bre_lang') || 'en';
@@ -1228,12 +1237,21 @@ function speakText(text) {
 }
 
 function loadChats() {
-  try { chats = JSON.parse(localStorage.getItem('bre_chats') || '[]'); } catch(e){ chats=[]; }
+  try { chats = normalizeChats(JSON.parse(localStorage.getItem('bre_chats') || '[]')); } catch(e){ chats=[]; }
+}
+
+function normalizeChats(value) {
+  if (!Array.isArray(value)) return [];
+  return value.filter(c => c && Array.isArray(c.msgs)).slice(0, 500).map(c => ({
+    ...c, id: /^[\w-]{1,80}$/.test(c.id) ? c.id : 'c' + crypto.randomUUID(), title: String(c.title || 'Conversation'),
+    msgs: c.msgs.filter(m => m && ['user', 'assistant'].includes(m.role) && typeof m.content === 'string').slice(-500).map(m => ({ ...m, isTyping: false, searchSources: Array.isArray(m.searchSources) ? m.searchSources.filter(s => s && typeof s.url === 'string') : [] }))
+  }));
 }
 
 function saveChats() {
   if (isIncognito) return; // Incognito mode: never save ephemeral chat
-  localStorage.setItem('bre_chats', JSON.stringify(chats));
+  try { localStorage.setItem('bre_chats', JSON.stringify(chats)); }
+  catch { toast('Penyimpanan browser penuh. Ekspor riwayat lalu hapus chat lama.', 'err'); }
 }
 
 function togglePinChat(id, e) {
@@ -1251,6 +1269,7 @@ function newChat() {
   const id = 'c' + Date.now();
   const freshChat = { id, title: 'New Conversation', msgs: [], ts: Date.now() };
   if (isIncognito) {
+    tempIncognitoChat = freshChat;
     activeChat = freshChat;
   } else {
     chats.unshift(freshChat);
@@ -1261,6 +1280,7 @@ function newChat() {
 }
 
 function switchChat(id) {
+  if (generating) stopGen();
   if (isIncognito && tempIncognitoChat && id === tempIncognitoChat.id) {
     activeChat = tempIncognitoChat;
   } else {
@@ -1530,7 +1550,7 @@ function renderMessages() {
         <div class="user-attached-files">
           ${m.attachments.filter(a => !a.isImage).map(att => `
             <div class="user-file-badge">
-              <span class="ufb-icon">${att.icon || '📎'}</span>
+              <span class="ufb-icon">${esc(att.icon || '📎')}</span>
               <span class="ufb-name" title="${esc(att.name)}">${esc(att.name)}</span>
               <span class="ufb-meta">${esc(att.meta || 'File')}</span>
             </div>
@@ -1568,7 +1588,7 @@ function renderMessages() {
 
     let statsHtml = '';
     if (m.stats && !isTypingNow) {
-      statsHtml = `<div class="bot-meta-stats"><span class="tok-speed">⚡ ${m.stats.tokPerSec} tok/s</span> &bull; <span>⏱️ ${m.stats.elapsed}s</span> &bull; <span>${m.stats.tokens} tokens</span></div>`;
+      statsHtml = `<div class="bot-meta-stats"><span class="tok-speed">⚡ ${esc(m.stats.tokPerSec)} tok/s</span> &bull; <span>⏱️ ${esc(m.stats.elapsed)}s</span> &bull; <span>${esc(m.stats.tokens)} tokens</span></div>`;
     }
 
     let searchSourcesHtml = '';
@@ -1580,7 +1600,7 @@ function renderMessages() {
             <span>Real-time Search Sources (${m.searchSources.length})</span>
           </div>
           <div class="search-sources-list">
-            ${m.searchSources.map(s => `<a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer" class="search-source-chip" title="${esc(s.snippet || s.title)}">🔗 ${esc(s.title || s.url)}</a>`).join('')}
+            ${m.searchSources.map(s => `<a href="${esc(safeLink(s.url))}" target="_blank" rel="noopener noreferrer" class="search-source-chip" title="${esc(s.snippet || s.title)}">🔗 ${esc(s.title || s.url)}</a>`).join('')}
           </div>
         </div>
       `;
@@ -1823,7 +1843,7 @@ function renderLatexAndMarkdown(text) {
   let html = '';
   if (window.marked && typeof window.marked.parse === 'function') {
     try {
-      html = window.DOMPurify ? DOMPurify.sanitize(window.marked.parse(str), { ADD_ATTR: ['target', 'class'] }) : window.marked.parse(str);
+      html = window.DOMPurify ? DOMPurify.sanitize(window.marked.parse(str), { ADD_ATTR: ['target', 'class'] }) : esc(str).replace(/\n/g, '<br>');
     } catch (e) {
       html = esc(str).replace(/\n/g, '<br>');
     }
@@ -1845,7 +1865,7 @@ function renderLatexAndMarkdown(text) {
     const codeSlot = `±BRECODE${idx}±`;
     let parsedCode = '';
     if (window.marked && typeof window.marked.parse === 'function') {
-      try { parsedCode = window.DOMPurify ? DOMPurify.sanitize(window.marked.parse(codeSnippet)) : window.marked.parse(codeSnippet); } catch(e) { parsedCode = `<pre><code>${esc(codeSnippet)}</code></pre>`; }
+      try { parsedCode = window.DOMPurify ? DOMPurify.sanitize(window.marked.parse(codeSnippet)) : `<pre><code>${esc(codeSnippet)}</code></pre>`; } catch(e) { parsedCode = `<pre><code>${esc(codeSnippet)}</code></pre>`; }
     } else {
       parsedCode = `<pre><code>${esc(codeSnippet)}</code></pre>`;
     }
@@ -1862,7 +1882,7 @@ function renderLatexAndMarkdown(text) {
 function renderContent(raw, isUser) {
   if (isUser) {
     if (typeof raw === 'string' && raw.includes('![')) {
-      if (window.marked) return marked.parse(raw);
+      if (window.marked && window.DOMPurify) return DOMPurify.sanitize(marked.parse(raw));
     }
     return esc(raw).replace(/\n/g, '<br>');
   }
@@ -1958,6 +1978,7 @@ function afterRender(container) {
     code.classList.forEach(c => {
       if (c.startsWith('language-')) lang = c.slice(9);
     });
+    if (!/^[a-zA-Z0-9_+.-]{1,40}$/.test(lang)) lang = 'text';
     
     const isHtml = /^(html|xml|svg)$/i.test(lang);
     
@@ -2155,8 +2176,12 @@ function openArtifactInNewTab() {
   if (!currentArtifact?.content) return;
   const win = window.open('', '_blank');
   if (win) {
-    win.document.write(currentArtifact.content);
-    win.document.close();
+    win.opener = null;
+    const frame = win.document.createElement('iframe');
+    frame.setAttribute('sandbox', 'allow-scripts');
+    frame.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;border:0';
+    frame.srcdoc = currentArtifact.content;
+    win.document.body.replaceChildren(frame);
   }
 }
 
@@ -2299,7 +2324,9 @@ async function sendOrStop() {
   await executeBotGeneration(null, searchResults);
 }
 
-async function executeBotGeneration(targetBotIdx = null, searchResults = []) {
+async function executeBotGeneration(targetBotIdx = null, searchResults = [], generationChat = activeChat) {
+  const activeChat = generationChat;
+  const sequence = ++generationSequence;
   let botIdx = targetBotIdx;
   if (botIdx === null) {
     botIdx = activeChat.msgs.length;
@@ -2322,7 +2349,7 @@ async function executeBotGeneration(targetBotIdx = null, searchResults = []) {
   
   const genStartTime = performance.now();
   
-  const msgs = activeChat.msgs.slice(0, botIdx).map(m => ({
+  const msgs = activeChat.msgs.slice(0, botIdx).slice(-100).map(m => ({
     role: m.role,
     content: m.apiContent || m.content
   }));
@@ -2358,7 +2385,8 @@ async function executeBotGeneration(targetBotIdx = null, searchResults = []) {
         'x-custom-provider': selectedProvider,
         'x-custom-model': selectedModel,
         'x-custom-style': currentStyle,
-        'x-custom-language': currentLang
+        'x-custom-language': currentLang,
+        ...clientHeaders()
       },
       body: JSON.stringify({
         messages: msgs,
@@ -2427,7 +2455,7 @@ async function executeBotGeneration(targetBotIdx = null, searchResults = []) {
                     activeChat.msgs[botIdx].content = c + d.content;
                   }
                 }
-                streamUpdate(botIdx);
+                streamUpdate(botIdx, activeChat);
               }
             } catch(e){}
           }
@@ -2463,7 +2491,7 @@ async function executeBotGeneration(targetBotIdx = null, searchResults = []) {
                     activeChat.msgs[botIdx].content = c + d.content;
                   }
                 }
-                streamUpdate(botIdx);
+                streamUpdate(botIdx, activeChat);
               }
             } catch(e){}
           }
@@ -2532,16 +2560,17 @@ async function executeBotGeneration(targetBotIdx = null, searchResults = []) {
     if (activeChat?.msgs?.[botIdx]) {
       activeChat.msgs[botIdx].isTyping = false;
     }
-    setBusy(false);
+    if (sequence === generationSequence) { setBusy(false); saveChats(); renderMessages(); }
   }
 }
 
-function streamUpdate(idx) {
-  const m = activeChat.msgs[idx];
+function streamUpdate(idx, chat = activeChat) {
+  const m = chat.msgs[idx];
   if (m) m.isTyping = false;
   if (m && m.versions && typeof m.currentVersion === 'number') {
     m.versions[m.currentVersion] = m.content;
   }
+  if (chat !== activeChat || !m) return;
   const b = document.getElementById('b' + idx);
   if (b) {
     b.innerHTML = renderContent(m.content, false);
@@ -2562,6 +2591,7 @@ function streamUpdate(idx) {
 
 function stopGen() {
   ctrl?.abort();
+  generationSequence++;
   setBusy(false);
 }
 function setBusy(v) {
@@ -2612,6 +2642,7 @@ function openAdmin() {
   initStyle();
   const sel = document.getElementById('langSelect');
   if (sel) sel.value = currentLang;
+  if (document.getElementById('clientApiKey')) document.getElementById('clientApiKey').value = clientApiKey;
 }
 
 
@@ -2659,6 +2690,7 @@ function toast(msg, type='info') {
   setTimeout(() => { t.style.opacity = '0'; setTimeout(()=>t.remove(), 300); }, 3000);
 }
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'); }
+function safeLink(value) { try { const u = new URL(value); return ['https:', 'http:'].includes(u.protocol) ? u.href : '#'; } catch { return '#'; } }
 function gv(id) { return document.getElementById(id)?.value||''; }
 function sv(id, v) { if(document.getElementById(id)) document.getElementById(id).value=v; }
 
@@ -2691,7 +2723,7 @@ function toggleWebSearch() {
 
 async function performWebSearch(query) {
   try {
-    const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+    const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`, { headers: clientHeaders() });
     if (!res.ok) throw new Error('Search HTTP ' + res.status);
     const data = await res.json();
     return Array.isArray(data.results) ? data.results : [];
@@ -2703,6 +2735,7 @@ async function performWebSearch(query) {
 
 // 3. Incognito Mode (Temporary Session)
 function toggleIncognito() {
+  if (generating) stopGen();
   isIncognito = !isIncognito;
   const btn = document.getElementById('btnIncognito');
   const banner = document.getElementById('incognitoBanner');
@@ -2733,6 +2766,7 @@ function toggleIncognito() {
 function importJSON(e) {
   const file = e.target.files?.[0];
   if (!file) return;
+  if (file.size > 4 * 1024 * 1024) return toast('JSON maksimal 4 MB', 'err');
   const reader = new FileReader();
   reader.onload = evt => {
     try {
@@ -2741,7 +2775,7 @@ function importJSON(e) {
         throw new Error('JSON file must contain an array of chat objects.');
       }
       let count = 0;
-      data.forEach(c => {
+      normalizeChats(data).forEach(c => {
         if (c && Array.isArray(c.msgs)) {
           const exists = chats.some(x => x.id === c.id);
           c.id = String(c.id || '').replace(/[<>"'&]/g, '').slice(0, 50) || ('c' + Date.now());
@@ -2777,6 +2811,8 @@ function importJSON(e) {
 function loadCustomPersonas() {
   try {
     customPersonas = JSON.parse(localStorage.getItem('bre_custom_personas') || '[]');
+    if (!Array.isArray(customPersonas)) customPersonas = [];
+    customPersonas = customPersonas.filter(p => p && /^custom_[\w-]+$/.test(p.id) && typeof p.prompt === 'string' && typeof p.name === 'string');
   } catch(e) {
     customPersonas = [];
   }
