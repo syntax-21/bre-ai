@@ -37,11 +37,56 @@ function saveLog() {
   } catch (e) {}
 }
 
+function getJakartaDate(date = new Date()) {
+  try {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Jakarta',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    }).formatToParts(date);
+    const p = {};
+    for (const part of parts) { p[part.type] = part.value; }
+    return {
+      year: parseInt(p.year, 10),
+      month: parseInt(p.month, 10),
+      day: parseInt(p.day, 10),
+      hour: parseInt(p.hour, 10),
+      minute: parseInt(p.minute, 10),
+      second: parseInt(p.second, 10)
+    };
+  } catch(e) {
+    const utc = date.getTime() + (date.getTimezoneOffset() * 60000);
+    const wib = new Date(utc + (7 * 3600000));
+    return {
+      year: wib.getFullYear(),
+      month: wib.getMonth() + 1,
+      day: wib.getDate(),
+      hour: wib.getHours(),
+      minute: wib.getMinutes(),
+      second: wib.getSeconds()
+    };
+  }
+}
+
+function getJakartaHour(date = new Date()) {
+  return getJakartaDate(date).hour;
+}
+
+function getJakartaMinutes(date = new Date()) {
+  const { hour, minute } = getJakartaDate(date);
+  return hour * 60 + minute;
+}
+
 function todayKey(d = new Date()) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  const { year, month, day } = getJakartaDate(d);
+  const mStr = String(month).padStart(2, '0');
+  const dStr = String(day).padStart(2, '0');
+  return `${year}-${mStr}-${dStr}`;
 }
 
 function parseSlotTime(hhmm) {
@@ -75,7 +120,7 @@ function sanitizeAiQuote(rawText) {
   text = text.replace(/^>\s*/gm, '').trim();
 
   // Bersihkan prefix pengantar AI seperti "Kutipan:", "Motivasi Hari Ini:", "Berikut kutipan:", dll
-  text = text.replace(/^(kutipan|motivasi|quote|inspirasi|pesan motivasi)(\s*(hari ini|harian|pagi|sore|malam))?\s*[:：\-–—]\s*/i, '');
+  text = text.replace(/^(kutipan|motivasi|quote|inspirasi|pesan motivasi)(\s*(hari ini|harian|pagi|siang|sore|malam))?\s*[:：\-–—]\s*/i, '');
   text = text.replace(/^(berikut\s+(adalah\s+)?(kutipan|motivasi|kata\s+bijak|pesan)\s*[:：\-–—]?\s*)/i, '');
   text = text.replace(/^(tentu,\s*(ini|berikut)?\s*(kutipan|motivasi)?\s*[:：\-–—]?\s*)/i, '');
 
@@ -96,9 +141,9 @@ async function generateMotivationQuote({ customTheme = '', slotLabel = '' } = {}
   const cfg = getConfig();
   const chatHandler = require('../api/chat');
 
-  // 1. Tentukan konteks waktu (Pagi / Siang / Sore / Malam)
+  // 1. Tentukan konteks waktu berdasarkan Waktu Indonesia Barat (WIB / Asia/Jakarta)
   let timeContext = '';
-  let hour = new Date().getHours();
+  let hour = getJakartaHour();
   if (slotLabel) {
     const parts = String(slotLabel).split(':');
     const parsedH = parseInt(parts[0], 10);
@@ -106,11 +151,13 @@ async function generateMotivationQuote({ customTheme = '', slotLabel = '' } = {}
   }
 
   if (hour >= 4 && hour < 11) {
-    timeContext = 'Waktu Pengiriman: PAGI HARI. Fokus energi: Membakar semangat menyambut fajar baru, keberanian mengambil langkah pertama, antusiasme peluang, dan produktivitas tinggi.';
-  } else if (hour >= 11 && hour < 17) {
-    timeContext = 'Waktu Pengiriman: SIANG / SORE HARI. Fokus energi: Menjaga konsistensi, pantang menyerah di tengah keletihan, daya juang, dan keteguhan menyelesaikan target hari ini.';
+    timeContext = 'Waktu Pengiriman: PAGI HARI (04:00 - 11:00 WIB). Fokus energi: Membakar semangat menyambut fajar baru, keberanian mengambil langkah pertama, antusiasme peluang baru, optimisme ceria, dan produktivitas tinggi.';
+  } else if (hour >= 11 && hour < 15) {
+    timeContext = 'Waktu Pengiriman: SIANG HARI (11:00 - 15:00 WIB). Fokus energi: Menjaga momentum & fokus kerja, daya juang di tengah kesibukan, efisiensi waktu, dan konsistensi langkah.';
+  } else if (hour >= 15 && hour < 19) {
+    timeContext = 'Waktu Pengiriman: SORE HARI (15:00 - 19:00 WIB). Fokus energi: Keteguhan menyelesaikan target hari ini, apresiasi kerja keras, menyambut senja dengan rasa syukur, ketenangan, dan kepuasan atas hasil yang dicapai.';
   } else {
-    timeContext = 'Waktu Pengiriman: MALAM HARI. Fokus energi: Refleksi bijak, apresiasi atas perjuangan hari ini, ketenangan batin, kedamaian pikiran, dan optimisme menyongsong hari esok.';
+    timeContext = 'Waktu Pengiriman: MALAM HARI (19:00 - 04:00 WIB). Fokus energi: Refleksi bijak, apresiasi atas perjuangan hari ini, ketenangan batin, kedamaian pikiran, dan optimisme menyongsong hari esok.';
   }
 
   // 2. Variasi tema inspirasi agar setiap kutipan memiliki keunikan mendalam
@@ -202,8 +249,10 @@ ATURAN WAJIB:
 function getDynamicFallbackQuote(hour) {
   if (hour >= 4 && hour < 11) {
     return 'Awali pagimu dengan keyakinan penuh bahwa setiap detik hari ini membawa peluang baru untuk bertumbuh dan menciptakan karya terbaikmu. 🌅🚀';
-  } else if (hour >= 11 && hour < 17) {
-    return 'Daya juang di saat lelah adalah pembeda nyata antara mereka yang sekadar bermimpi dan yang mewujudkannya menjadi kenyataan. Tetap melangkah! 🔥💪';
+  } else if (hour >= 11 && hour < 15) {
+    return 'Pertahankan fokus dan energimu. Konsistensi kecil yang kamu jaga siang ini adalah pondasi kokoh bagi pencapaian besarmu nanti. ☀️💪';
+  } else if (hour >= 15 && hour < 19) {
+    return 'Daya juang di saat lelah adalah pembeda nyata antara mereka yang sekadar bermimpi dan yang mewujudkannya menjadi kenyataan. Selesaikan harimu dengan bangga! 🌇🔥';
   } else {
     return 'Hargai setiap perjuangan dan langkah yang telah kamu lalui hari ini. Beristirahatlah dengan tenang, tenangkan pikiran, dan esok kita taklukkan hal-hal lebih besar. 🌙✨';
   }
@@ -218,9 +267,11 @@ async function pickQuote(customText = '') {
 
 function buildMotivationText(quote, slotLabel) {
   const now = new Date();
-  const dateStr = now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-  const labelSuffix = slotLabel ? ` (${slotLabel})` : '';
-  return `🌅 *MOTIVASI HARIAN BRE AI*${labelSuffix}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"${quote}"\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n— ${dateStr} · ✨ Dihasilkan oleh Bre AI`;
+  const dateStr = now.toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const labelSuffix = slotLabel ? ` (${slotLabel} WIB)` : '';
+  const hour = getJakartaHour();
+  const icon = hour >= 4 && hour < 11 ? '🌅' : (hour >= 11 && hour < 15 ? '☀️' : (hour >= 15 && hour < 19 ? '🌇' : '🌙'));
+  return `${icon} *MOTIVASI HARIAN BRE AI*${labelSuffix}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"${quote}"\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n— ${dateStr} · ✨ Dihasilkan oleh Bre AI`;
 }
 
 // Ambil daftar penerima chat_id Telegram yang valid (numeric)
@@ -277,9 +328,8 @@ async function checkAndSendMotivation() {
   if (!cfg.motivationEnabled) return { triggered: false, reason: 'disabled' };
   if (!cfg.telegramBotToken) return { triggered: false, reason: 'no-token' };
 
-  const now = new Date();
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
-  const tk = todayKey(now);
+  const nowMinutes = getJakartaMinutes();
+  const tk = todayKey();
   const times = Array.isArray(cfg.motivationTimes) ? cfg.motivationTimes : [];
   let triggered = false;
 
@@ -313,11 +363,19 @@ function getLastMotivation() {
 async function previewMotivation(customText = null) {
   const cfg = getConfig();
   const theme = customText !== null ? customText : cfg.motivationCustom;
+  const hour = getJakartaHour();
+  let timeLabel = 'Malam';
+  if (hour >= 4 && hour < 11) timeLabel = 'Pagi';
+  else if (hour >= 11 && hour < 15) timeLabel = 'Siang';
+  else if (hour >= 15 && hour < 19) timeLabel = 'Sore';
+
   const aiQuote = await generateMotivationQuote({ customTheme: theme });
   return {
     enabled: !!cfg.motivationEnabled,
     times: Array.isArray(cfg.motivationTimes) ? cfg.motivationTimes : [],
     quote: aiQuote,
+    timeContext: timeLabel,
+    currentHourWib: hour,
     recipients: collectRecipients().length,
     aiGenerated: true
   };

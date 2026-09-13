@@ -332,7 +332,9 @@ async function previewMotivation() {
     const box = document.getElementById('motivationPreview');
     if (!box) return;
     if (data.ok) {
-      box.innerHTML = `<div class="card" style="background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.25);padding:12px 14px;border-radius:12px;font-size:13.5px;color:#fde68a;line-height:1.6;">🌅 “${escapeHtml(data.quote)}”</div>`;
+      const timeCtx = data.timeContext || 'Pagi';
+      const icon = timeCtx === 'Pagi' ? '🌅' : (timeCtx === 'Siang' ? '☀️' : (timeCtx === 'Sore' ? '🌇' : '🌙'));
+      box.innerHTML = `<div class="card" style="background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.25);padding:12px 14px;border-radius:12px;font-size:13.5px;color:#fde68a;line-height:1.6;">${icon} <span style="font-size:11px;background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.3);padding:2px 7px;border-radius:6px;margin-right:6px;color:#fef08a;font-weight:600;">Waktu: ${timeCtx}</span> “${escapeHtml(data.quote)}”</div>`;
     } else { box.innerHTML = ''; toast(`Gagal: ${data.error}`, 'err'); }
   } catch(e) { toast(`Error: ${e.message}`, 'err'); }
 }

@@ -110,9 +110,11 @@ module.exports = async (req, res) => {
       const testRes = await telegramBot.testToken(body.token);
       if (testRes.ok && body.chatId) {
         try {
+          const botName = [testRes.bot?.first_name, testRes.bot?.last_name].filter(Boolean).join(' ') || testRes.bot?.first_name || 'Bre AI';
+          const botUsername = testRes.bot?.username ? ` (@${testRes.bot.username})` : '';
           await telegramBot.apiCall('sendMessage', {
             chat_id: body.chatId,
-            text: `⚡ *Tes Bot Berhasil!*\n\nHalo Admin! Bot Bre AI (@${testRes.bot?.username || 'bot'}) berhasil terhubung dan siap melayani percakapan 24/7.`,
+            text: `⚡ *Tes Bot Berhasil!*\n\nHalo Admin! Bot ${botName}${botUsername} berhasil terhubung dan siap melayani percakapan 24/7.`,
             parse_mode: 'Markdown'
           }, body.token);
           testRes.messageSent = true;
