@@ -360,6 +360,14 @@ function calculateCost(modelName, inTok = 0, outTok = 0, cacheTok = 0) {
 
 const responseCache = new Map();
 
+function sanitizeLogSummary(str) {
+  if (!str || typeof str !== 'string') return '';
+  return str
+    .replace(/Bearer\s+[A-Za-z0-9._~+/-]+=*/gi, 'Bearer [REDACTED]')
+    .replace(/(password|passwd|pass|secret|token|api_key|apikey)["']?\s*[:=]\s*["']?[^"'\s,]+/gi, '$1: [REDACTED]')
+    .slice(0, 150);
+}
+
 function logRequest(entry) {
   const inTok = Number(entry.inputTokens || entry.promptTokens || (entry.tokens ? Math.round(entry.tokens * 0.4) : 0)) || 0;
   const outTok = Number(entry.outputTokens || entry.completionTokens || (entry.tokens ? Math.round(entry.tokens * 0.6) : 0)) || 0;
@@ -392,9 +400,9 @@ function logRequest(entry) {
     totalCost: costs.totalCost,
     failover: Boolean(entry.failover),
     cached: Boolean(entry.cached || cacheTok > 0),
-    error: entry.error || null,
-    requestSummary: entry.requestSummary || '',
-    responseSummary: entry.responseSummary || '',
+    error: entry.error ? sanitizeErrorMessage(entry.error) : null,
+    requestSummary: sanitizeLogSummary(entry.requestSummary || ''),
+    responseSummary: sanitizeLogSummary(entry.responseSummary || ''),
     clientKeyName: entry.clientKeyName || 'Direct Web'
   };
 
@@ -422,7 +430,7 @@ function logRequest(entry) {
 }
 
 function getLogs() {
-  return requestLogs;
+  return requestLogs.map(l => ({ ...l }));
 }
 
 function clearLogs() {
@@ -1647,6 +1655,32 @@ async function fetchAvailableModels(endpoint) {
 // ========================================================
 // TEST SINGLE MODEL: Send a minimal dummy chat request
 // ========================================================
+function redactConfigForExport(config) {
+  const secretPattern = /(password|token|key|secret|credential|authorization)/i;
+  const mask = v => {
+    if (Array.isArray(v)) return v.map(mask);
+    if (v && typeof v === 'object') return redact(v);
+    return v ? '[REDACTED]' : v;
+  };
+  const redact = value => {
+    if (Array.isArray(value)) return value.map(redact);
+    if (value && typeof value === 'object') {
+      const out = {};
+      for (const [key, item] of Object.entries(value)) {
+        out[key] = secretPattern.test(key) ? mask(item) : redact(item);
+      }
+      return out;
+    }
+    return value;
+  };
+  return redact(config || {});
+}
+
+function sanitizeErrorMessage(error) {
+  const message = String(error?.message || error || 'Terjadi kesalahan').replace(/https?:\/\/\S+/gi, '[URL]').replace(/Bearer\s+\S+/gi, 'Bearer [REDACTED]');
+  return message.length > 160 ? `${message.slice(0, 157)}...` : message;
+}
+
 async function testSingleModel(endpoint, modelName) {
   const ep = endpoint || {};
   const url = (ep.url || '').trim();
@@ -1732,6 +1766,8 @@ module.exports = {
   buildBreAISystemPrompt,
   getRouterOverview,
   getRouterDetails,
+  redactConfigForExport,
+  sanitizeErrorMessage,
   calculateCost,
   MODEL_PRICING,
   STYLE_LABELS,

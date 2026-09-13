@@ -5,10 +5,13 @@
 const {
   getConfig,
   saveConfig,
-  clearResponseCache
+  clearResponseCache,
+  redactConfigForExport,
+  sanitizeErrorMessage
 } = require('../../../api/_shared');
 const api = require('../api');
 const { getMainMenuText, buildMainMenuMarkup } = require('./menuBuilder');
+const { makeConfirmation, consumeConfirmation } = require('../accessControl');
 
 function editTelegramMessage(...args) { return api.editTelegramMessage(...args); }
 function answerCallback(...args) { return api.answerCallback(...args); }
@@ -53,8 +56,7 @@ async function handle(cq, botService, router = null) {
   // 10a. Export config.json directly to chat
   if (data === 'adm_export_config') {
     await answerCallback(cq.id, '📦 Menyiapkan berkas backup config.json...', false, token);
-    const fullConfig = getConfig();
-    const configStr = JSON.stringify(fullConfig, null, 2);
+    const configStr = JSON.stringify(redactConfigForExport(getConfig()), null, 2);
     const fileName = `bre_ai_config_${new Date().toISOString().slice(0, 10)}.json`;
     const caption = `📦 *Backup Konfigurasi Bre AI*\nTanggal: ${new Date().toLocaleString('id-ID')}\n_Simpan berkas ini untuk pemulihan konfigurasi di masa mendatang._`;
 
@@ -62,7 +64,7 @@ async function handle(cq, botService, router = null) {
       await sendTelegramDocument(chatId, fileName, configStr, caption, token);
       await answerCallback(cq.id, '✅ Berkas config.json berhasil dikirim!', true, token);
     } catch (e) {
-      await answerCallback(cq.id, `Gagal kirim berkas: ${e.message}`, true, token);
+      await answerCallback(cq.id, `Gagal kirim berkas: ${sanitizeErrorMessage(e)}`, true, token);
     }
     return;
   }
@@ -74,10 +76,11 @@ async function handle(cq, botService, router = null) {
       `Apakah Anda yakin ingin mengembalikan SELURUH konfigurasi proxy router ke pengaturan bawaan pabrik?\n\n` +
       `Seluruh endpoint kustom dan API key klien akan direset.`;
 
+    const resetNonce = makeConfirmation('reset', cq);
     const markup = {
       inline_keyboard: [
         [
-          { text: '⚠️ Ya, Reset ke Default', callback_data: 'adm_reset_exec' }
+          { text: '⚠️ Ya, Reset ke Default', callback_data: `adm_reset_exec:${resetNonce}` }
         ],
         [
           { text: '❌ Batalkan', callback_data: 'adm_backup' }
@@ -88,7 +91,11 @@ async function handle(cq, botService, router = null) {
     return;
   }
 
-  if (data === 'adm_reset_exec') {
+  if (data.startsWith('adm_reset_exec:')) {
+    if (!consumeConfirmation(data.split(':')[1], 'reset', cq)) {
+      await answerCallback(cq.id, 'Konfirmasi kedaluwarsa atau tidak valid.', true, token);
+      return;
+    }
     const defConfig = {
       endpoints: [{
         name: "Inception Labs",
@@ -121,10 +128,11 @@ async function handle(cq, botService, router = null) {
     const text = `⚠️ *Konfirmasi Pembersihan Cache RAM & Sesi Chat:*\n\n` +
       `Apakah Anda yakin ingin mengosongkan seluruh respon cache in-memory dan membersihkan riwayat sesi obrolan Telegram?\n\n` +
       `Tindakan ini aman dan langsung membebaskan memori RAM server.`;
+    const flushNonce = makeConfirmation('flush', cq);
     const markup = {
       inline_keyboard: [
         [
-          { text: '🗑️ Ya, Kosongkan Cache RAM & Sesi', callback_data: 'adm_flush_exec' }
+          { text: '🗑️ Ya, Kosongkan Cache RAM & Sesi', callback_data: `adm_flush_exec:${flushNonce}` }
         ],
         [
           { text: '❌ Batalkan', callback_data: 'adm_main' }
@@ -135,7 +143,11 @@ async function handle(cq, botService, router = null) {
     return;
   }
 
-  if (data === 'adm_flush_exec') {
+  if (data.startsWith('adm_flush_exec:')) {
+    if (!consumeConfirmation(data.split(':')[1], 'flush', cq)) {
+      await answerCallback(cq.id, 'Konfirmasi kedaluwarsa atau tidak valid.', true, token);
+      return;
+    }
     clearResponseCache();
     botService.conversations.clear();
     await answerCallback(cq.id, '⚡ Cache RAM & sesi berhasil dibersihkan!', true, token);

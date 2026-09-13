@@ -4,7 +4,7 @@ const { syncCloudConfig, checkClientAuth, getClientIp } = require('./_shared');
 
 module.exports = apiHandler(async (req, res) => {
   const cfg = await syncCloudConfig();
-  if (cfg.requireAuth && !checkClientAuth(req, cfg)) throw httpError(401, 'API key diperlukan');
+  if (cfg.requireAuth !== false && !checkClientAuth(req, cfg)) throw httpError(401, 'API key diperlukan');
   if (consumeLimit('search:' + getClientIp(req), 30, 60000)) throw httpError(429, 'Batas pencarian tercapai');
   const query = (req.query.q || '').trim();
   if (!query || query.length > 1000) throw httpError(400, 'Query q wajib diisi (maksimal 1000 karakter)');

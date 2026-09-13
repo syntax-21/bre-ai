@@ -9,6 +9,8 @@ const {
 } = require('../../../api/_shared');
 const api = require('../api');
 const { LANGUAGE_LABELS } = require('./menuBuilder');
+const { makeConfirmation, consumeConfirmation } = require('../accessControl');
+const { sanitizeErrorMessage } = require('../../../api/_shared');
 
 function editTelegramMessage(...args) { return api.editTelegramMessage(...args); }
 function answerCallback(...args) { return api.answerCallback(...args); }
@@ -56,10 +58,10 @@ async function handle(cq, botService, router = null) {
         ],
         [
           { text: `${motivStatus} Motivasi Harian`, callback_data: 'adm_motivation' },
-          { text: '♻️ Restart Service Bot', callback_data: 'adm_restart_bot' }
+          { text: '♻️ Restart Service Bot', callback_data: 'adm_restart_confirm' }
         ],
         [
-          { text: '🛑 Stop Service Bot', callback_data: 'adm_stop_bot' },
+          { text: '🛑 Stop Service Bot', callback_data: 'adm_stop_confirm' },
           { text: '⬅️ Menu Utama', callback_data: 'adm_main' }
         ]
       ]
@@ -92,35 +94,86 @@ async function handle(cq, botService, router = null) {
   }
 
   if (data === 'adm_del_webhook') {
+    await answerCallback(cq.id, null, false, token);
+    const nonce = makeConfirmation('del_webhook', cq);
+    const markup = {
+      inline_keyboard: [
+        [{ text: '⚠️ Ya, Hapus Webhook', callback_data: `adm_del_webhook_exec:${nonce}` }],
+        [{ text: '❌ Batalkan', callback_data: 'adm_diag' }]
+      ]
+    };
+    await editTelegramMessage(chatId, messageId, '⚠️ *Konfirmasi Hapus Webhook:*\nApakah Anda yakin ingin menghapus webhook?', markup, token);
+    return true;
+  }
+
+  if (data.startsWith('adm_del_webhook_exec:')) {
+    if (!consumeConfirmation(data.split(':')[1], 'del_webhook', cq)) {
+      await answerCallback(cq.id, 'Konfirmasi kedaluwarsa atau tidak valid.', true, token);
+      return true;
+    }
     try {
       await api.apiCall('deleteWebhook', { drop_pending_updates: false }, token);
       await answerCallback(cq.id, '✅ Webhook dihapus (Mode Polling Aktif)', true, token);
     } catch (e) {
-      await answerCallback(cq.id, `Gagal hapus webhook: ${e.message}`, true, token);
+      await answerCallback(cq.id, `Gagal hapus webhook: ${sanitizeErrorMessage(e)}`, true, token);
     }
     cq.data = 'adm_diag';
     return (router ? router(cq, botService) : handle(cq, botService, router));
   }
 
-  if (data === 'adm_restart_bot') {
+  if (data === 'adm_restart_confirm') {
+    await answerCallback(cq.id, null, false, token);
+    const nonce = makeConfirmation('restart_bot', cq);
+    const markup = {
+      inline_keyboard: [
+        [{ text: '♻️ Ya, Restart Bot', callback_data: `adm_restart_exec:${nonce}` }],
+        [{ text: '❌ Batalkan', callback_data: 'adm_telegram' }]
+      ]
+    };
+    await editTelegramMessage(chatId, messageId, '♻️ *Konfirmasi Restart Service Bot:*\nApakah Anda yakin ingin mereboot bot?', markup, token);
+    return true;
+  }
+
+  if (data.startsWith('adm_restart_exec:')) {
+    if (!consumeConfirmation(data.split(':')[1], 'restart_bot', cq)) {
+      await answerCallback(cq.id, 'Konfirmasi kedaluwarsa atau tidak valid.', true, token);
+      return true;
+    }
     try {
       await botService.restart();
       await answerCallback(cq.id, '♻️ Bot service berhasil direstart!', true, token);
     } catch (e) {
-      await answerCallback(cq.id, `Error restart: ${e.message}`, true, token);
+      await answerCallback(cq.id, `Error restart: ${sanitizeErrorMessage(e)}`, true, token);
     }
     cq.data = 'adm_telegram';
     return (router ? router(cq, botService) : handle(cq, botService, router));
   }
 
-  if (data === 'adm_stop_bot') {
+  if (data === 'adm_stop_confirm') {
+    await answerCallback(cq.id, null, false, token);
+    const nonce = makeConfirmation('stop_bot', cq);
+    const markup = {
+      inline_keyboard: [
+        [{ text: '🛑 Ya, Hentikan Service', callback_data: `adm_stop_exec:${nonce}` }],
+        [{ text: '❌ Batalkan', callback_data: 'adm_telegram' }]
+      ]
+    };
+    await editTelegramMessage(chatId, messageId, '🛑 *Konfirmasi Hentikan Layanan Bot Telegram:*\nApakah Anda yakin?', markup, token);
+    return true;
+  }
+
+  if (data.startsWith('adm_stop_exec:')) {
+    if (!consumeConfirmation(data.split(':')[1], 'stop_bot', cq)) {
+      await answerCallback(cq.id, 'Konfirmasi kedaluwarsa atau tidak valid.', true, token);
+      return true;
+    }
     try {
       const saved = await saveConfig({ telegramEnabled: false });
       if (!saved.ok) throw new Error(saved.error);
       botService.stop();
       await answerCallback(cq.id, '🛑 Bot service dihentikan', true, token);
     } catch (e) {
-      await answerCallback(cq.id, `Error stop: ${e.message}`, true, token);
+      await answerCallback(cq.id, `Error stop: ${sanitizeErrorMessage(e)}`, true, token);
     }
     cq.data = 'adm_telegram';
     return (router ? router(cq, botService) : handle(cq, botService, router));

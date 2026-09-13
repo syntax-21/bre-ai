@@ -10,6 +10,7 @@ const {
 } = require('../../../api/_shared');
 const api = require('../api');
 const { PRESET_TEMPLATES } = require('./menuBuilder');
+const { makeConfirmation, consumeConfirmation } = require('../accessControl');
 
 function editTelegramMessage(...args) { return api.editTelegramMessage(...args); }
 function answerCallback(...args) { return api.answerCallback(...args); }
@@ -655,6 +656,29 @@ async function handle(cq, botService, router = null) {
   // 4g. Delete Provider
   if (data.startsWith('adm_prov_del:')) {
     const idx = parseInt(data.split(':')[1]);
+    const endpoints = Array.isArray(cfg.endpoints) ? [...cfg.endpoints] : [];
+    if (endpoints[idx]) {
+      const nonce = makeConfirmation(`prov_del:${idx}`, cq);
+      const removedName = endpoints[idx].name;
+      const markup = {
+        inline_keyboard: [
+          [{ text: '🗑️ Ya, Hapus Provider', callback_data: `adm_prov_del_exec:${idx}:${nonce}` }],
+          [{ text: '❌ Batalkan', callback_data: `adm_prov_det:${idx}` }]
+        ]
+      };
+      await editTelegramMessage(chatId, messageId, `⚠️ *Konfirmasi Hapus Provider:*\nApakah Anda yakin ingin menghapus provider [${removedName}]?`, markup, token);
+    }
+    return true;
+  }
+
+  if (data.startsWith('adm_prov_del_exec:')) {
+    const parts = data.split(':');
+    const idx = parseInt(parts[1]);
+    const nonce = parts[2] || '';
+    if (!consumeConfirmation(nonce, `prov_del:${idx}`, cq)) {
+      await answerCallback(cq.id, 'Konfirmasi kedaluwarsa atau tidak valid.', true, token);
+      return true;
+    }
     const endpoints = Array.isArray(cfg.endpoints) ? [...cfg.endpoints] : [];
     if (endpoints[idx]) {
       const removedName = endpoints[idx].name;

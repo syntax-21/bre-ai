@@ -5,7 +5,7 @@ module.exports = apiHandler(async (req, res) => {
   const cfg = await syncCloudConfig();
   const motivation = require('../services/motivation');
   const action = req.query.action || 'status';
-  if (action === 'status') return res.json({ ok: true, enabled: cfg.motivationEnabled, lastSent: motivation.getLastMotivation() });
+  if (action === 'status') return res.json({ ok: true, enabled: !!cfg.motivationEnabled });
   const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
   const cron = action === 'send' && safeEqual(token, process.env.CRON_SECRET);
   if (!cron && !verifyAdminPassword(token, cfg.adminPassword)) throw httpError(401, 'Unauthorized');
@@ -15,7 +15,10 @@ module.exports = apiHandler(async (req, res) => {
     await require('../services/telegramBot').checkReminders();
     return res.json({ ok: true, ...result });
   }
-  if (action === 'preview') return res.json({ ok: true, ...await motivation.previewMotivation(req.query.theme) });
-  if (action === 'send-now' && req.method === 'POST') return res.json({ ok: true, ...await motivation.sendMotivationNow(req.query.theme) });
+  const theme = typeof req.query.theme === 'string' ? req.query.theme.trim() : '';
+  if (theme.length > 500) throw httpError(400, 'Tema terlalu panjang');
+  if (action === 'preview') return res.json({ ok: true, ...await motivation.previewMotivation(theme) });
+  if (action === 'send-now' && req.method !== 'POST') throw httpError(405, 'Method not allowed');
+  if (action === 'send-now') return res.json({ ok: true, ...await motivation.sendMotivationNow(theme) });
   throw httpError(400, 'Action tidak valid');
 }, ['GET', 'POST']);

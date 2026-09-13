@@ -7,7 +7,7 @@ module.exports = apiHandler(async (req, res) => {
   if (checkRateLimit(ip).limited || consumeLimit('test:' + ip, 60, 60000)) throw httpError(429, 'Terlalu banyak pengujian');
   const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
   if (!verifyAdminPassword(token, cfg.adminPassword)) { recordFailedAttempt(ip); throw httpError(401, 'Admin authentication required'); }
-  const body = req.body;
+  const body = req.body || {};
   let endpoints;
   if (body.testAll) endpoints = body.endpoints || cfg.endpoints;
   else {
@@ -23,9 +23,9 @@ module.exports = apiHandler(async (req, res) => {
   for (let i = 0; i < endpoints.length; i += 10) {
     results.push(...await Promise.all(endpoints.slice(i, i + 10).map(async (ep, idx) => {
       const result = await testSingleModel(ep, ep.models?.[0] || cfg.model);
-      return { name: ep.name || 'Provider', provider: ep.name || 'Provider', url: ep.url,
+      return { ...result, name: ep.name || 'Provider', provider: ep.name || 'Provider', url: ep.url,
         model: ep.models?.[0] || cfg.model, keyIndex: i + idx + 1, keyMasked: '••••••••',
-        status: result.ok ? 'OK' : 'FAIL', httpStatus: result.ok ? 200 : 502, ...result };
+        status: result.ok ? 'OK' : 'FAIL', httpStatus: result.ok ? 200 : 502 };
     })));
   }
   if (body.testAll) results.sort((a, b) => a.latencyMs - b.latencyMs);

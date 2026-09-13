@@ -283,15 +283,25 @@ async function sendTelegramDice(chatId, emoji = '🎲', token = null) {
 
 // Send interactive map location pin
 async function sendTelegramLocation(chatId, latitude, longitude, token = null) {
-  return api.apiCall('sendLocation', { chat_id: chatId, latitude: parseFloat(latitude), longitude: parseFloat(longitude) }, token);
+  const lat = parseFloat(latitude);
+  const lon = parseFloat(longitude);
+  if (isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+    throw new Error('Koordinat lokasi tidak valid (latitude: -90..90, longitude: -180..180)');
+  }
+  return api.apiCall('sendLocation', { chat_id: chatId, latitude: lat, longitude: lon }, token);
 }
 
 // Send interactive venue / place location
 async function sendTelegramVenue(chatId, latitude, longitude, title, address = '', token = null) {
+  const lat = parseFloat(latitude);
+  const lon = parseFloat(longitude);
+  if (isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+    throw new Error('Koordinat venue tidak valid (latitude: -90..90, longitude: -180..180)');
+  }
   return api.apiCall('sendVenue', {
     chat_id: chatId,
-    latitude: parseFloat(latitude),
-    longitude: parseFloat(longitude),
+    latitude: lat,
+    longitude: lon,
     title: title || 'Lokasi',
     address: address || 'Alamat Lokasi'
   }, token);

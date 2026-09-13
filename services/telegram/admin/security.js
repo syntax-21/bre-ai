@@ -11,7 +11,9 @@ const {
   recentUsers,
   getRecentUsersList,
   setUserRole,
-  removeUserRole
+  removeUserRole,
+  makeConfirmation,
+  consumeConfirmation
 } = require('../accessControl');
 
 function editTelegramMessage(...args) { return api.editTelegramMessage(...args); }
@@ -126,6 +128,23 @@ async function handle(cq, botService, router = null) {
   }
 
   if (data === 'adm_clear_blacklist') {
+    await answerCallback(cq.id, null, false, token);
+    const nonce = makeConfirmation('clear_blacklist', cq);
+    const markup = {
+      inline_keyboard: [
+        [{ text: '🗑️ Ya, Kosongkan Blacklist', callback_data: `adm_clear_bl_exec:${nonce}` }],
+        [{ text: '❌ Batalkan', callback_data: 'adm_blacklist_menu' }]
+      ]
+    };
+    await editTelegramMessage(chatId, messageId, '⚠️ *Konfirmasi Kosongkan Blacklist:*\nApakah Anda yakin ingin menghapus semua kata terlarang?', markup, token);
+    return true;
+  }
+
+  if (data.startsWith('adm_clear_bl_exec:')) {
+    if (!consumeConfirmation(data.split(':')[1], 'clear_blacklist', cq)) {
+      await answerCallback(cq.id, 'Konfirmasi kedaluwarsa atau tidak valid.', true, token);
+      return true;
+    }
     saveConfig({ blacklist: [] });
     await answerCallback(cq.id, '🗑️ Blacklist kata berhasil dikosongkan!', true, token);
     cq.data = 'adm_blacklist_menu';
@@ -136,10 +155,8 @@ async function handle(cq, botService, router = null) {
   if (data === 'adm_chpass_info') {
     await answerCallback(cq.id, null, false, token);
     const text = `🔐 *Ganti Password Login Web Admin*\n\n` +
-      `Untuk mengganti password login Web Admin panel Anda secara langsung dari Telegram, gunakan format perintah:\n\n` +
-      `\`/setpassword [password_baru_anda]\`\n\n` +
-      `_Contoh:_\n\`/setpassword rahasia12345\`\n\n` +
-      `Perubahan password akan langsung berlaku untuk Web Admin Dashboard.`;
+      `Perubahan password melalui Telegram dinonaktifkan agar credential tidak tersimpan di riwayat chat.\n\n` +
+      `Gunakan Web Admin melalui HTTPS atau atur environment \`ADMIN_PASSWORD\`, lalu restart/redeploy.`;
 
     const markup = {
       inline_keyboard: [
@@ -415,9 +432,27 @@ async function handle(cq, botService, router = null) {
   // 15c. Delete Individual User from Database
   if (data.startsWith('adm_user_del:')) {
     const targetId = data.split(':')[1];
+    const nonce = makeConfirmation(`user_del:${targetId}`, cq);
+    const markup = {
+      inline_keyboard: [
+        [{ text: '🗑️ Ya, Hapus Pengguna', callback_data: `adm_user_del_exec:${targetId}:${nonce}` }],
+        [{ text: '❌ Batalkan', callback_data: `adm_user_view:${targetId}` }]
+      ]
+    };
+    await editTelegramMessage(chatId, messageId, `⚠️ *Konfirmasi Hapus Pengguna:*\nApakah Anda yakin ingin menghapus pengguna (${targetId}) dari database?`, markup, token);
+    return true;
+  }
+
+  if (data.startsWith('adm_user_del_exec:')) {
+    const parts = data.split(':');
+    const targetId = parts[1];
+    const nonce = parts[2] || '';
+    if (!consumeConfirmation(nonce, `user_del:${targetId}`, cq)) {
+      await answerCallback(cq.id, 'Konfirmasi kedaluwarsa atau tidak valid.', true, token);
+      return true;
+    }
     removeUserRole(targetId);
     await answerCallback(cq.id, `✅ Pengguna (${targetId}) berhasil dihapus dari database.`, true, token);
-
     cq.data = 'adm_users:1:all';
     return (router ? router(cq, botService) : handle(cq, botService, router));
   }

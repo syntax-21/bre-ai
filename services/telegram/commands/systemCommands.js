@@ -183,7 +183,7 @@ Pencipta & Pengembang: *Amirun Rayan Ariandi*`;
     const loadMsg = await api.sendTelegramMessage(chatId, `⚡ *Memeriksa latensi & kesehatan seluruh provider AI...*`, null, null, token);
     const loadMsgId = loadMsg?.message_id || null;
 
-    const probeResults = await Promise.all(
+    const probeSettled = await Promise.allSettled(
       eps.map(async (ep, i) => {
         const modelToTest = ep.models?.[0] || 'default';
         const start = Date.now();
@@ -199,6 +199,19 @@ Pencipta & Pengembang: *Amirun Rayan Ariandi*`;
         };
       })
     );
+
+    const probeResults = probeSettled.map((res, i) => {
+      if (res.status === 'fulfilled') return res.value;
+      const ep = eps[i];
+      return {
+        idx: i + 1,
+        name: ep?.name || 'Provider',
+        model: ep?.models?.[0] || 'default',
+        status: '🔴 Error',
+        latency: 0,
+        error: res.reason?.message || 'Gagal terhubung'
+      };
+    });
 
     let resText = `⚡ *Laporan Kesehatan Provider AI Live*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
     probeResults.forEach(p => {

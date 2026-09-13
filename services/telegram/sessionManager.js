@@ -7,12 +7,40 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
 const { getConfig } = require('../../api/_shared');
 
 // Persistent storage file paths
 const DATA_DIR = path.join(process.cwd(), 'data');
 const SESSIONS_FILE = path.join(DATA_DIR, 'telegram_sessions.json');
 const TMP_SESSIONS_FILE = path.join(os.tmpdir(), 'bre_telegram_sessions.json');
+
+let _noKeyWarned = false;
+
+function _getSessionEncKey() {
+  const raw = process.env.CONFIG_ENCRYPTION_KEY || '';
+  if (!/^[a-f0-9]{64}$/i.test(raw)) return null;
+  return Buffer.from(raw, 'hex');
+}
+
+function encryptSessionData(jsonStr) {
+  const key = _getSessionEncKey();
+  if (!key) return null;
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const data = Buffer.concat([cipher.update(jsonStr, 'utf8'), cipher.final()]);
+  return JSON.stringify({ version: 1, iv: iv.toString('base64'), tag: cipher.getAuthTag().toString('base64'), data: data.toString('base64') });
+}
+
+function decryptSessionData(raw) {
+  const key = _getSessionEncKey();
+  if (!key) return null;
+  const envelope = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  if (envelope?.version !== 1) return null;
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(envelope.iv, 'base64'));
+  decipher.setAuthTag(Buffer.from(envelope.tag, 'base64'));
+  return Buffer.concat([decipher.update(Buffer.from(envelope.data, 'base64')), decipher.final()]).toString('utf8');
+}
 
 // In-memory conversation store: String(chatId) -> { history: Array<{role, content}>, updatedAt: number }
 const conversationsMap = new Map();
@@ -90,17 +118,41 @@ async function loadSessionsFromDisk() {
     const raw = fs.readFileSync(filePath, 'utf-8');
     if (!raw) return;
 
-    const parsed = JSON.parse(raw);
+    let parsed = null;
+    let isLegacyPlaintext = false;
+
+    // Try encrypted envelope first
+    try {
+      const firstChar = raw.trimStart()[0];
+      if (firstChar === '{') {
+        const maybeEnvelope = JSON.parse(raw);
+        if (maybeEnvelope?.version === 1 && maybeEnvelope.iv && maybeEnvelope.data) {
+          const decrypted = decryptSessionData(maybeEnvelope);
+          if (decrypted) {
+            parsed = JSON.parse(decrypted);
+          }
+        } else {
+          parsed = maybeEnvelope;
+          isLegacyPlaintext = true;
+        }
+      }
+    } catch (_) {}
+
+    // Fallback: legacy plaintext parse
+    if (!parsed) {
+      try {
+        parsed = JSON.parse(raw);
+        isLegacyPlaintext = true;
+      } catch (_) {}
+    }
 
     if (parsed && typeof parsed === 'object') {
       for (const [chatId, session] of Object.entries(parsed)) {
         if (!chatId) continue;
         const key = String(chatId);
         if (Array.isArray(session)) {
-          // Legacy array format
           conversationsMap.set(key, { history: session, updatedAt: now });
         } else if (session && Array.isArray(session.history)) {
-          // Check TTL
           const updatedAt = session.updatedAt || now;
           if (now - updatedAt < SESSION_TTL_MS) {
             conversationsMap.set(key, {
@@ -109,6 +161,10 @@ async function loadSessionsFromDisk() {
             });
           }
         }
+      }
+      // Migrate: if loaded legacy plaintext and encryption key available, re-save encrypted
+      if (isLegacyPlaintext && _getSessionEncKey()) {
+        scheduleSaveToDisk();
       }
     }
   } catch (err) {
@@ -140,16 +196,26 @@ function scheduleSaveToDisk() {
 
       const jsonStr = JSON.stringify(exportObj, null, 2);
 
-      // 1. Save to local or /tmp file
-      if (ensureDataDir()) {
-        try {
-          fs.writeFileSync(SESSIONS_FILE, jsonStr, 'utf-8');
-        } catch (e) {
-          // Fallback to tmpdir if data dir is read-only (e.g. serverless)
-          try { fs.writeFileSync(TMP_SESSIONS_FILE, jsonStr, 'utf-8'); } catch (err2) {}
+      // 1. Save to local or /tmp file (encrypted if key configured; otherwise memory-only + warn once)
+      const encKey = _getSessionEncKey();
+      if (!encKey) {
+        if (!_noKeyWarned) {
+          _noKeyWarned = true;
+          console.warn('[SessionManager] CONFIG_ENCRYPTION_KEY not set: session data kept in memory only (not persisted to disk). Set a 64-hex CONFIG_ENCRYPTION_KEY to enable encrypted persistence.');
         }
       } else {
-        try { fs.writeFileSync(TMP_SESSIONS_FILE, jsonStr, 'utf-8'); } catch (err2) {}
+        const encStr = encryptSessionData(jsonStr);
+        if (encKey && encStr) {
+          if (ensureDataDir()) {
+            try {
+              fs.writeFileSync(SESSIONS_FILE, encStr, { encoding: 'utf-8', mode: 0o600 });
+            } catch (e) {
+              try { fs.writeFileSync(TMP_SESSIONS_FILE, encStr, 'utf-8'); } catch (err2) {}
+            }
+          } else {
+            try { fs.writeFileSync(TMP_SESSIONS_FILE, encStr, 'utf-8'); } catch (err2) {}
+          }
+        }
       }
 
       // 2. Save to Vercel KV / Upstash Redis in cloud if configured

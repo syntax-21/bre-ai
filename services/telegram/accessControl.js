@@ -37,6 +37,7 @@ function isOwner(fromUser, activeOwnerId = null) {
   const uName = typeof fromUser === 'object' && fromUser !== null ? (fromUser.username || '').toLowerCase().replace(/^@/, '') : '';
 
   if (/^\d+$/.test(ownerId) && ownerId === uId) return true;
+  if (!/^\d+$/.test(ownerId) && uName && ownerId === uName) return true;
 
   // Also check role in telegramUsers array
   if (Array.isArray(cfg.telegramUsers)) {
@@ -99,6 +100,9 @@ function isUserAllowed(fromUser, activeOwnerId = null, activeAccessMode = null) 
   }
 
   // In public mode, everyone not blocked is allowed
+  const { consumeLimit } = require('../../httpSecurity');
+  if (consumeLimit('tg_global_quota', cfg.telegramPublicQuota || 1000, 86400000)) return false;
+  
   return true;
 }
 
@@ -204,6 +208,20 @@ async function notifyOwnerNewUser(fromUser, initialText = '', botService = null)
   }
 }
 
+const confirmations = new Map();
+function makeConfirmation(action, cq) {
+  const nonce = require('crypto').randomBytes(12).toString('hex');
+  confirmations.set(nonce, { action, userId: String(cq.from?.id || ''), chatId: String(cq.message?.chat?.id || ''), messageId: String(cq.message?.message_id || ''), expiresAt: Date.now() + 5 * 60 * 1000 });
+  if (confirmations.size > 200) confirmations.delete(confirmations.keys().next().value);
+  return nonce;
+}
+function consumeConfirmation(nonce, action, cq) {
+  if (!nonce) return false;
+  const item = confirmations.get(nonce);
+  confirmations.delete(nonce);
+  return !!item && item.action === action && item.expiresAt >= Date.now() && item.userId === String(cq.from?.id || '') && item.chatId === String(cq.message?.chat?.id || '') && item.messageId === String(cq.message?.message_id || '');
+}
+
 module.exports = {
   recentUsers,
   notifiedUsers,
@@ -214,5 +232,7 @@ module.exports = {
   isUserAllowed,
   setUserRole,
   removeUserRole,
-  notifyOwnerNewUser
+  notifyOwnerNewUser,
+  makeConfirmation,
+  consumeConfirmation
 };

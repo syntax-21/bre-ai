@@ -251,48 +251,7 @@ function parseNum(val, def = 0) {
 }
 
 function restoreFullConfigFromLocalStorage(c) {
-  try {
-    const raw = localStorage.getItem('bre_full_config');
-    if (!raw) return c;
-    const s = JSON.parse(raw);
-    if (!s || typeof s !== 'object') return c;
-
-    if (s.systemPrompt) c.systemPrompt = s.systemPrompt;
-    if (s.temperature !== undefined && s.temperature !== null) c.temperature = s.temperature;
-    if (s.topP !== undefined && s.topP !== null) c.topP = s.topP;
-    if (s.frequencyPenalty !== undefined && s.frequencyPenalty !== null) c.frequencyPenalty = s.frequencyPenalty;
-    if (s.presencePenalty !== undefined && s.presencePenalty !== null) c.presencePenalty = s.presencePenalty;
-    if (s.maxTokens !== undefined && s.maxTokens !== null) c.maxTokens = s.maxTokens;
-    if (s.forceStream !== undefined && s.forceStream !== null) c.forceStream = s.forceStream;
-    if (s.clientApiKey) c.clientApiKey = s.clientApiKey;
-
-    if (s.upstashRedisUrl) c.upstashRedisUrl = s.upstashRedisUrl;
-    if (s.upstashRedisToken) c.upstashRedisToken = s.upstashRedisToken;
-    if (s.githubToken) c.githubToken = s.githubToken;
-    if (s.githubRepo) c.githubRepo = s.githubRepo;
-    if (s.githubBranch) c.githubBranch = s.githubBranch;
-
-    if ((!c.endpoints || !c.endpoints.length) && s.endpoints && Array.isArray(s.endpoints) && s.endpoints.length) {
-      c.endpoints = s.endpoints;
-    }
-    if ((!c.clientKeys || !c.clientKeys.length) && s.clientKeys && Array.isArray(s.clientKeys) && s.clientKeys.length) {
-      c.clientKeys = s.clientKeys;
-    }
-    if ((!c.blacklist || !c.blacklist.length) && s.blacklist && Array.isArray(s.blacklist) && s.blacklist.length) {
-      c.blacklist = s.blacklist;
-    }
-
-    if (s.telegramBotToken && !c.telegramBotToken) c.telegramBotToken = s.telegramBotToken;
-    if (s.telegramOwnerId && !c.telegramOwnerId) c.telegramOwnerId = s.telegramOwnerId;
-    if (s.telegramDomain && !c.telegramDomain) c.telegramDomain = s.telegramDomain;
-    if (s.telegramAccessMode && !c.telegramAccessMode) c.telegramAccessMode = s.telegramAccessMode;
-    if (s.telegramModel && !c.telegramModel) c.telegramModel = s.telegramModel;
-    if (s.telegramStyle && !c.telegramStyle) c.telegramStyle = s.telegramStyle;
-    if (s.defaultStyle && !c.defaultStyle) c.defaultStyle = s.defaultStyle;
-    if ((!c.telegramUsers || !c.telegramUsers.length) && s.telegramUsers && Array.isArray(s.telegramUsers) && s.telegramUsers.length) {
-      c.telegramUsers = s.telegramUsers;
-    }
-  } catch(e) {}
+  try { localStorage.removeItem('bre_full_config'); } catch(e) {}
   return c;
 }
 
@@ -959,7 +918,8 @@ async function runBatchLatencyTest() {
 
     toast('Parallel probe benchmark selesai!', 'ok');
   } catch(e) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #f87171; padding: 20px;">Gagal menguji: ${e.message}</td></tr>`;
+    const safeMsg = escapeHtml(e.message);
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #f87171; padding: 20px;">Gagal menguji: ${safeMsg}</td></tr>`;
     toast('Benchmark gagal: ' + e.message, 'err');
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = '⚡ Test Semua Provider (Parallel Benchmark)'; }
@@ -2020,13 +1980,19 @@ async function executeStudioTool() {
       toast('Alat AI berhasil dieksekusi!', 'ok');
     } else {
       if (latencyEl) latencyEl.textContent = `Error (${elapsed} ms)`;
-      if (resContent) resContent.innerHTML = `<span style="color: #ef4444;">${data.error || 'Gagal mengeksekusi alat'}</span>`;
+      if (resContent) {
+        resContent.textContent = data.error || 'Gagal mengeksekusi alat';
+        resContent.style.color = '#ef4444';
+      }
       toast(data.error || 'Eksekusi gagal', 'err');
     }
   } catch (err) {
     const elapsed = Date.now() - startTime;
     if (latencyEl) latencyEl.textContent = `Error (${elapsed} ms)`;
-    if (resContent) resContent.innerHTML = `<span style="color: #ef4444;">${err.message}</span>`;
+    if (resContent) {
+      resContent.textContent = err.message;
+      resContent.style.color = '#ef4444';
+    }
     toast('Error: ' + err.message, 'err');
   } finally {
     if (btn) {
@@ -2322,11 +2288,6 @@ async function saveAllConfig() {
   
   if (newPw) payload.adminPassword = newPw;
 
-  // Simpan seluruh konfigurasi ke browser localStorage sebagai jaminan permanen klien
-  try {
-    localStorage.setItem('bre_full_config', JSON.stringify(payload));
-  } catch(e) {}
-  
   try {
     const r = await fetch('/api/config', {
       method: 'POST',
@@ -2344,10 +2305,7 @@ async function saveAllConfig() {
       document.getElementById('cfgNewPw').value = '';
       loadTelegramStatus();
 
-      // Perbarui localStorage dengan data server yang telah dimerge
-      try {
-        localStorage.setItem('bre_full_config', JSON.stringify(payload));
-      } catch(e) {}
+      try { localStorage.removeItem('bre_full_config'); } catch(e) {}
 
       if (data.cloudStorageInfo) {
         updateStorageBadges(data.cloudStorageInfo, data.cloudStatus);

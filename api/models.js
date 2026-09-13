@@ -6,18 +6,6 @@ const { getConfig, syncCloudConfig, checkClientAuth } = require('./_shared');
 const { apiHandler, httpError } = require('../services/httpSecurity');
 
 module.exports = apiHandler(async (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-custom-endpoint, x-custom-keys, x-custom-model, x-custom-provider');
-
-  if (req.method === 'OPTIONS') {
-    return res.status(204).end();
-  }
-
-  if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed. Use GET.' });
-  }
-
   const cfg = await syncCloudConfig();
   if (cfg.requireAuth !== false && !checkClientAuth(req, cfg)) throw httpError(401, 'API key diperlukan');
 

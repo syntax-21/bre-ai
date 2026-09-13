@@ -95,14 +95,8 @@ function normalizeChatUrl(rawUrl) {
 module.exports = apiHandler(async (req, res) => {
   const reqStartTime = Date.now();
 
-  let body = req.body;
-  if (!body) {
-    body = await new Promise(resolve => {
-      let d = ''; req.on('data', c => { d += c; });
-      req.on('end', () => { try { resolve(JSON.parse(d || '{}')); } catch { resolve({}); } });
-      req.on('error', () => resolve({}));
-    });
-  } else if (typeof body === 'string') {
+  let body = req.body || {};
+  if (typeof body === 'string') {
     try { body = JSON.parse(body); } catch { body = {}; }
   }
   body = body || {};

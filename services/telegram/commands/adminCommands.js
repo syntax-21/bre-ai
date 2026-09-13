@@ -5,7 +5,8 @@
 const {
   getConfig,
   saveConfig,
-  clearResponseCache
+  clearResponseCache,
+  redactConfigForExport
 } = require('../../../api/_shared');
 const api = require('../api');
 const {
@@ -126,13 +127,7 @@ async function handle(ctx) {
       await api.sendTelegramMessage(chatId, '⛔ Perintah ini khusus untuk Owner.', null, null, token);
       return true;
     }
-    const newPass = text.slice(12).trim();
-    if (!newPass) {
-      await api.sendTelegramMessage(chatId, `ℹ️ Format: \`/setpassword [password_baru]\``, null, null, token);
-      return true;
-    }
-    const saved = await saveConfig({ adminPassword: newPass });
-    await api.sendTelegramMessage(chatId, saved.ok ? '✅ Password login Web Admin berhasil diganti!' : `❌ ${saved.error}`, null, null, token);
+    await api.sendTelegramMessage(chatId, '⛔ Perubahan password melalui Telegram dinonaktifkan. Ubah password melalui Web Admin HTTPS atau environment ADMIN_PASSWORD.', null, null, token);
     return true;
   }
 
@@ -270,8 +265,7 @@ async function handle(ctx) {
       await api.sendTelegramMessage(chatId, '⛔ Perintah ini khusus untuk Owner.', null, null, token);
       return true;
     }
-    const fullConfig = getConfig();
-    const configStr = JSON.stringify(fullConfig, null, 2);
+    const configStr = JSON.stringify(redactConfigForExport(getConfig()), null, 2);
     const fileName = `bre_ai_config_${new Date().toISOString().slice(0, 10)}.json`;
     const caption = `📦 *Backup Konfigurasi Bre AI*\nTanggal: ${new Date().toLocaleString('id-ID')}`;
     try {

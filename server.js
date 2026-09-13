@@ -65,14 +65,6 @@ const server = http.createServer(async (req, res) => {
   const parsed = url.parse(req.url, true);
   const pathname = parsed.pathname;
 
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-custom-endpoint, x-custom-keys, x-custom-model, x-custom-provider, x-custom-style, x-custom-language');
-  if (req.method === 'OPTIONS') {
-    res.writeHead(204);
-    return res.end();
-  }
-
   const wres = wrapRes(res);
 
   // OpenAI-compatible native endpoints
@@ -88,14 +80,16 @@ const server = http.createServer(async (req, res) => {
 
   if (pathname === '/admin') return serve(res, path.join(PUBLIC, 'admin.html'));
 
-  let safePath = pathname || '/';
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' data: https:; connect-src 'self' https:; worker-src 'self' blob:;");
+  res.setHeader('X-Content-Type-Options', 'nosniff');
   try {
     safePath = decodeURIComponent(safePath);
   } catch (e) {}
   safePath = path.normalize(safePath).replace(/^(\.\.[\/\\])+/, '');
-  const fp = path.resolve(PUBLIC, '.' + (safePath.startsWith('/') || safePath.startsWith('\\') ? safePath : '/' + safePath));
   const publicDir = path.resolve(PUBLIC);
-  if (!fp.startsWith(publicDir)) {
+  const fp = path.resolve(publicDir, '.' + (safePath.startsWith('/') || safePath.startsWith('\\') ? safePath : '/' + safePath));
+  const rel = path.relative(publicDir, fp);
+  if (rel.startsWith('..') || path.isAbsolute(rel)) {
     res.writeHead(403);
     return res.end('Forbidden');
   }

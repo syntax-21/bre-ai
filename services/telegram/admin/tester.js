@@ -12,6 +12,7 @@ const {
   STYLE_LABELS
 } = require('../../../api/_shared');
 const api = require('../api');
+const { makeConfirmation, consumeConfirmation } = require('../accessControl');
 
 function editTelegramMessage(...args) { return api.editTelegramMessage(...args); }
 function answerCallback(...args) { return api.answerCallback(...args); }
@@ -85,6 +86,25 @@ async function handle(cq, botService, router = null) {
     const chosen = data.split(':')[1] || '';
     if (!chosen) {
       await answerCallback(cq.id, 'Model tidak valid', true, token);
+      return true;
+    }
+    const nonce = makeConfirmation(`apply_model:${chosen}`, cq);
+    const markup = {
+      inline_keyboard: [
+        [{ text: `✅ Terapkan ${chosen}`, callback_data: `adm_apply_exec:${chosen}:${nonce}` }],
+        [{ text: '❌ Batalkan', callback_data: 'adm_tester' }]
+      ]
+    };
+    await editTelegramMessage(chatId, messageId, `⚠️ *Konfirmasi Terapkan Model:*\nUbah model bot menjadi \`${chosen}\`?`, markup, token);
+    return true;
+  }
+
+  if (data.startsWith('adm_apply_exec:')) {
+    const parts = data.split(':');
+    const chosen = parts[1] || '';
+    const nonce = parts[2] || '';
+    if (!consumeConfirmation(nonce, `apply_model:${chosen}`, cq)) {
+      await answerCallback(cq.id, 'Konfirmasi kedaluwarsa atau tidak valid.', true, token);
       return true;
     }
     saveConfig({ telegramModel: chosen });
