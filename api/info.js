@@ -38,7 +38,8 @@ module.exports = (req, res) => {
     providers: providers,
     models: [...new Set(allModels)],
     streamEnabled: cfg.streamEnabled !== false,
-    status: 'online'
+    status: 'online',
+    serverTime: Date.now()
   });
 };
 

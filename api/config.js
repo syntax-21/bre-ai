@@ -328,23 +328,25 @@ module.exports = async (req, res) => {
       config: updated, 
       isReadOnlyFS: !!updated._isReadOnlyFS,
       cloudStatus: updated._cloudStatus || null,
-      cloudStorageInfo: getCloudStorageInfo()
+      cloudStorageInfo: getCloudStorageInfo(),
+      serverTime: Date.now()
     }); 
   }
 
   // GET
   if (req.query?.action === 'metrics' || req.url?.includes('action=metrics')) {
     if (!isAdmin) return res.status(401).json({ error: 'Unauthorized' });
-    return res.json({ ok: true, metrics: getMetrics() });
+    return res.json({ ok: true, metrics: getMetrics(), serverTime: Date.now() });
   }
 
   if (req.query?.action === 'logs' || req.url?.includes('action=logs')) {
     if (!isAdmin) return res.status(401).json({ error: 'Unauthorized' });
-    return res.json({ ok: true, logs: getLogs() });
+    return res.json({ ok: true, logs: getLogs(), serverTime: Date.now() });
   }
 
   return res.json({ 
     config: isAdmin ? cfg : publicCfg,
-    cloudStorageInfo: getCloudStorageInfo()
+    cloudStorageInfo: getCloudStorageInfo(),
+    serverTime: Date.now()
   });
 };

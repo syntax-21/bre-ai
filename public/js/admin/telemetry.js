@@ -36,7 +36,12 @@ async function load9RouterData() {
       body: JSON.stringify({ action: 'get_router_overview', range: routerTimeRange })
     });
     if (!r.ok) return;
+    const dateHdr = r.headers.get('Date');
     const data = await r.json();
+    if (typeof syncServerTime === 'function') {
+      if (data && data.serverTime) syncServerTime(data.serverTime);
+      else if (dateHdr) syncServerTime(dateHdr);
+    }
     routerOverviewData = data.overview || data || {};
     const o = routerOverviewData;
     const setKpi = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val; };

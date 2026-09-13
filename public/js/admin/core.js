@@ -154,7 +154,10 @@ async function loadConfig() {
   try {
     const r = await fetch('/api/config', { headers: { 'Authorization': 'Bearer ' + adminToken } });
     if (!r.ok) return toast('Gagal memuat konfigurasi', 'err');
+    const dateHdr = r.headers.get('Date');
     const data = await r.json();
+    if (data && data.serverTime) { syncServerTime(data.serverTime); }
+    else if (dateHdr) { syncServerTime(dateHdr); }
     let c = data.config || {};
     c = restoreFullConfigFromLocalStorage(c);
 
@@ -226,8 +229,95 @@ endpoints = Array.isArray(c.endpoints) ? c.endpoints : [];
   } catch(e) { toast('Error load config: ' + e.message, 'err'); }
 }
 
+// ================================================================
+// Server Time Sync (Vercel Serverless) & Asia/Jakarta (WIB) Live Clock
+// ================================================================
+let serverTimeOffset = 0;
+let hasServerTimeSync = false;
+
+function syncServerTime(serverTimestamp) {
+  if (!serverTimestamp) return;
+  const sTime = typeof serverTimestamp === 'number' ? serverTimestamp : new Date(serverTimestamp).getTime();
+  if (!isNaN(sTime) && sTime > 0) {
+    serverTimeOffset = sTime - Date.now();
+    hasServerTimeSync = true;
+  }
+}
+
+function getJakartaDateParts(dateObj) {
+  try {
+    const formatter = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Jakarta',
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+    const parts = formatter.formatToParts(dateObj);
+    const p = {};
+    for (const part of parts) {
+      p[part.type] = part.value;
+    }
+    const idMonths = {
+      'Jan': 'Jan', 'Feb': 'Feb', 'Mar': 'Mar', 'Apr': 'Apr', 'May': 'Mei', 'Jun': 'Jun',
+      'Jul': 'Jul', 'Aug': 'Agu', 'Sep': 'Sep', 'Oct': 'Okt', 'Nov': 'Nov', 'Dec': 'Des'
+    };
+    return {
+      day: p.day || '01',
+      month: idMonths[p.month] || p.month || 'Jan',
+      year: p.year || '2026',
+      hour: p.hour || '00',
+      minute: p.minute || '00',
+      second: p.second || '00'
+    };
+  } catch(e) {
+    // Fallback if Intl.DateTimeFormat is unavailable
+    const utc = dateObj.getTime() + (dateObj.getTimezoneOffset() * 60000);
+    const wibDate = new Date(utc + (7 * 3600000));
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    return {
+      day: String(wibDate.getDate()).padStart(2, '0'),
+      month: months[wibDate.getMonth()],
+      year: wibDate.getFullYear(),
+      hour: String(wibDate.getHours()).padStart(2, '0'),
+      minute: String(wibDate.getMinutes()).padStart(2, '0'),
+      second: String(wibDate.getSeconds()).padStart(2, '0')
+    };
+  }
+}
+
+function initSidebarLiveClock() {
+  function update() {
+    const el = document.getElementById('sidebarLiveClock');
+    if (!el) return;
+    const serverNow = new Date(Date.now() + serverTimeOffset);
+    const { day, month, year, hour, minute, second } = getJakartaDateParts(serverNow);
+    el.textContent = `${day} ${month} ${year}, ${hour}:${minute}:${second} WIB`;
+  }
+  update();
+  setInterval(update, 1000);
+
+  // Ambil waktu server Vercel secara langsung dari endpoint /api/info
+  fetch('/api/info')
+    .then(r => {
+      const dateHdr = r.headers.get('Date');
+      return r.json().then(d => {
+        if (d && d.serverTime) { syncServerTime(d.serverTime); }
+        else if (dateHdr) { syncServerTime(dateHdr); }
+        update();
+      }).catch(() => {
+        if (dateHdr) { syncServerTime(dateHdr); update(); }
+      });
+    })
+    .catch(() => {});
+}
+
 // Auto-restore login session on page refresh
 window.addEventListener('DOMContentLoaded', () => {
+  initSidebarLiveClock();
   switchTab('tab9Router', document.getElementById('tabBtn9Router'));
   try {
     const saved = sessionStorage.getItem('bre_admin_pw');

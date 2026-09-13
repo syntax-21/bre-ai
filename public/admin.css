@@ -89,10 +89,12 @@ body {
 .sidebar-nav-label { flex: 1; overflow: hidden; text-overflow: ellipsis; }
 .admin-sidebar.sidebar-collapsed .sidebar-nav-label { display: none; }
 .sidebar-footer { padding: 12px; border-top: 1px solid var(--border-subtle); display: flex; flex-direction: column; gap: 8px; background: rgba(7, 9, 14, 0.4); }
-.sidebar-status-card { display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: var(--bg-card-subtle); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); font-size: 11px; color: var(--text-secondary); }
+.sidebar-status-card { display: flex; align-items: center; gap: 7px; padding: 6px 9px; background: var(--bg-card-subtle); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); font-size: 11px; color: var(--text-secondary); transition: border-color 0.15s ease; }
+.sidebar-status-card:hover { border-color: rgba(56, 189, 248, 0.25); }
 .admin-sidebar.sidebar-collapsed .sidebar-status-card { justify-content: center; padding: 6px 2px; }
+.sidebar-status-text { font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 10px; font-weight: 500; letter-spacing: -0.25px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #94a3b8; }
 .admin-sidebar.sidebar-collapsed .sidebar-status-text { display: none; }
-.status-dot-pulse { width: 7px; height: 7px; min-width: 7px; border-radius: 50%; background: var(--accent-emerald); box-shadow: 0 0 6px var(--accent-emerald); }
+.status-dot-pulse { width: 7px; height: 7px; min-width: 7px; border-radius: 50%; background: var(--accent-emerald); box-shadow: 0 0 6px var(--accent-emerald); flex-shrink: 0; }
 
 .admin-main-wrapper { flex: 1; margin-left: var(--sidebar-width); display: flex; flex-direction: column; min-height: 100vh; background: var(--bg-base); transition: margin-left 0.22s cubic-bezier(0.16, 1, 0.3, 1); width: calc(100% - var(--sidebar-width)); }
 .admin-main-wrapper.sidebar-collapsed { margin-left: var(--sidebar-collapsed-width); width: calc(100% - var(--sidebar-collapsed-width)); }
