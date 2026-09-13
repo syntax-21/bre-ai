@@ -79,9 +79,8 @@ async function handle(ctx) {
 
 Saya adalah asisten kecerdasan buatan serba bisa dan cerdas tanpa batas ciptaan *Amirun Rayan Ariandi*, siap membantu Anda menjawab pertanyaan, menulis kode program, menghasilkan pesan interaktif, menganalisis dokumen/gambar, hingga menyelesaikan tugas kompleks langsung dari Telegram.
 
-• Tulis pesan dalam *bahasa apa pun* — Bre AI otomatis menjawab dalam bahasa yang sama! 🌐
-• Kirim /reset untuk membersihkan riwayat obrolan.
-• Kirim /help untuk daftar perintah & panduan lengkap.`;
+• Tulis pesan dalam *bahasa apa pun* — Bre AI otomatis menjawab dalam bahasa yang sama.
+• Gunakan tombol menu di bawah untuk membuka fitur, pengaturan, status, dan reset percakapan.`;
 
     let replyMarkup = {
       inline_keyboard: [
@@ -100,9 +99,8 @@ Saya adalah asisten kecerdasan buatan serba bisa dan cerdas tanpa batas ciptaan 
       const cfg2 = getConfig();
       const ownerStyle = STYLE_LABELS[cfg2.telegramStyle || cfg2.defaultStyle || 'jakarta'] || '🗣️ Jakarta / Gaul (Gue-Lu)';
       welcome += `\n\n👑 *Panel Pemilik (Owner):*\n` +
-        `Kirim */admin* untuk membuka Master Control Panel atau pantau sistem dengan perintah cepat: \`/status\`, \`/metrics\`, \`/logs\`, \`/providers\`, \`/benchmark\`.\n` +
-        `🎭 *Gaya Bahasa Indonesia Aktif:* ${ownerStyle}\n` +
-        `_Gunakan \`/style\` untuk mengubah gaya bahasa Indonesia Bre AI (global)._`;
+        `Semua kontrol admin tersedia lewat tombol Master Admin Panel dan Command Center.\n` +
+        `🎭 *Gaya Bahasa Indonesia Aktif:* ${ownerStyle}`;
 
       replyMarkup.inline_keyboard.push(
         [
@@ -123,40 +121,18 @@ Saya adalah asisten kecerdasan buatan serba bisa dan cerdas tanpa batas ciptaan 
     const globalStyle = cfg2.telegramStyle || cfg2.defaultStyle || 'jakarta';
     const styleLabel = STYLE_LABELS[globalStyle] || '🗣️ Jakarta / Gaul (Gue-Lu)';
 
-    let help = `📖 *Panduan Penggunaan Bre AI di Telegram*
+    let help = `📖 *Panduan Bre AI Telegram*
 
-• *Bahasa Otomatis:* Tulis dalam bahasa apa pun — Indonesia, Inggris, Jepang, Arab, Mandarin, dll — Bre AI otomatis menjawab dalam bahasa yang sama! 🌐
-• *Semua Jenis Pesan Diterima:* Teks, foto, suara/audio, video, berkas kode, lokasi, kontak, stiker, dan GIF.
-• *Pesan Non-Teks Interaktif:* Anda dapat menyuruh Bre AI membuat file kodingan unduhan, kuis/polling, lempar dadu/game, pin lokasi peta, dan kartu kontak secara alami!
-• *Ingatan Konteks:* Bre AI mengingat konteks percakapan secara berkelanjutan.
-• *Perintah /reset:* Membersihkan ingatan topik sebelumnya dan memulai sesi baru.
+Gunakan tombol di bawah untuk membuka semua fitur tanpa menghafal perintah.
 
-🌍 *Contoh Bahasa Otomatis:*
-_• Tulis "halo bre" → Bre AI jawab GAUL Bahasa Indonesia 🇮🇩_
-_• Write "hello bre" → Bre AI replies in English 🇺🇸_
-_• 「Bre、こんにちは」 → Bre AI returns in Japanese 🇯🇵_
+• *Chat Bebas:* Langsung ketik pertanyaan apa pun.
+• *Bahasa Otomatis:* Bre AI mengikuti bahasa pengguna.
+• *File & Media:* Kirim foto, voice note, PDF, Word, Excel, kode, lokasi, kontak, stiker, atau GIF.
+• *Tools AI:* Tersedia lewat tombol Pusat Tools AI.
+• *Reset & Status:* Tersedia lewat tombol cepat.
 
-🎮 *Perintah Pintas Media Interaktif:*
-• \`/dice\` atau \`/dadu\` - Lempar dadu animasi 🎲
-• \`/dart\`, \`/basket\`, \`/bola\`, \`/bowling\`, \`/slot\` - Game animasi seru
-• \`/poll [Pertanyaan] | [Opsi 1] | [Opsi 2] ...\` - Buat Polling Telegram
-• \`/quiz [Pertanyaan] | [Opsi A] | [Opsi B*] ...\` - Buat Kuis Interaktif
-• \`/file [nama_file.ext] [isi kode]\` - Buat & kirim berkas file fisik
-• \`/location [lat, lon] | [Tempat] | [Alamat]\` - Kirim pin lokasi peta
-• \`/contact [nomor] [Nama Depan] [Nama Belakang]\` - Kirim kartu kontak
-
-⚡ *Perintah Pintas & Fitur Baru:*
-🌅 /motivasi [topik] — Dapatkan kutipan motivasi orisinil dari Bre AI
-⚡ /remind [pesan] dalam X menit — Pengingat otomatis
-⏰ /listremind — Lihat daftar pengingat aktif
-❌ /cancelreminder [ID] — Batalkan pengingat
-📊 /mystats — Statistik penggunaan Bre AI-mu
-🎤 /tts [teks] — Ubah teks menjadi suara
-🖼️ /image [deskripsi] — Buat gambar dari teks
-
-🎭 *Gaya Bahasa Indonesia Aktif:* ${styleLabel}
-_Gaya ini berlaku untuk semua respons Bahasa Indonesia Bre AI._
-Pencipta & Pengembang: *Amirun Rayan Ariandi* 🚀`;
+🎭 *Gaya Bahasa Aktif:* ${styleLabel}
+Pencipta & Pengembang: *Amirun Rayan Ariandi*`;
 
     let helpMarkup = {
       inline_keyboard: [
@@ -175,40 +151,9 @@ Pencipta & Pengembang: *Amirun Rayan Ariandi* 🚀`;
     };
 
     if (isOwnerUser) {
-      help += `\n\n👑 *Daftar Perintah Admin (Owner):*\n` +
-        `• \`/admin\` - Buka Master Control Panel Interaktif\n` +
-        `• \`/style [gaya]\` - *Ganti gaya bahasa Indonesia global* (jakarta, jawa_halus, jawa_kasar, sunda, sopan, santai, medan, makassar)\n` +
-        `• \`/status\` - Ringkasan status bot & engine\n` +
-        `• \`/metrics\` - Laporan metrik real-time & token\n` +
-        `• \`/logs\` - Lihat 5 log server terakhir\n` +
-        `• \`/providers\` - Daftar endpoint AI & status routing\n` +
-        `• \`/addprovider [nama] [url] [key] [model]\` - Tambah provider manual\n` +
-        `• \`/editprovider [idx/nama] [field] [nilai]\` - Edit provider (url/key/model/name/weight)\n` +
-        `• \`/seturl [idx/nama] [url]\` - Ganti endpoint Base URL provider\n` +
-        `• \`/setmodel [idx/nama] [model]\` - Ganti model AI provider\n` +
-        `• \`/setkey [idx/nama] [key]\` - Ganti API Key utama provider\n` +
-        `• \`/setname [idx/nama] [nama]\` - Ganti nama label provider\n` +
-        `• \`/setweight [idx/nama] [bobot]\` - Atur bobot prioritas provider\n` +
-        `• \`/addkey [idx/nama] [key]\` - Tambah API key tambahan (rotasi)\n` +
-        `• \`/delkey [idx/nama] [key_idx]\` - Hapus API key dari provider\n` +
-        `• \`/delprovider [idx/nama]\` - Hapus provider dari router\n` +
-        `• \`/setrouting [auto|priority|weighted]\` - Atur rotasi provider (AUTO bergantian)\n` +
-        `• \`/benchmark\` - Uji kecepatan paralel semua provider\n` +
-        `• \`/setmode [public|diizinkan]\` - Ubah mode akses bot\n` +
-        `• \`/settemp [0.0-2.0]\` - Ubah suhu kreativitas\n` +
-        `• \`/setprompt [teks]\` - Ganti Master System Prompt\n` +
-        `• \`/setpassword [pass]\` - Ganti password Web Admin\n` +
-        `• \`/izinkan [id/@user] [nama]\` - Tambah user ke daftar diizinkan\n` +
-        `• \`/blokir [id/@user]\` - Blokir user\n` +
-        `• \`/batalizin [id/@user]\` - Hapus dari daftar perizinan\n` +
-        `• \`/pengguna\` - Lihat daftar user terdaftar\n` +
-        `• \`/blacklist [add|list|clear]\` - Kelola kata terlarang\n` +
-        `• \`/export\` - Unduh berkas backup config.json\n` +
-        `• \`/clearcache\` - Bersihkan cache RAM & sesi\n` +
-        `• \`/broadcast [pesan]\` - Kirim pesan siaran massal`;
-
+      help += `\n\n👑 *Mode Owner Aktif*\nSemua fitur admin tersedia lewat tombol Master Admin Panel dan Command Center.`;
       helpMarkup.inline_keyboard.push([
-        { text: '🎛️ Buka Master Admin Panel', callback_data: 'adm_main' }
+        { text: '🎛️ Master Admin Panel', callback_data: 'adm_main' }
       ]);
     }
 

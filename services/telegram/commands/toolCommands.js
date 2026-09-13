@@ -230,26 +230,7 @@ async function handle(ctx) {
 
   // /tools or /alat
   if (lowerText === '/tools' || lowerText === '/alat' || lowerText === '/menu') {
-    const toolsMsg = `🛠️ *Pusat Alat Pintar & AI Tools Bre AI*\n\n` +
-      `Gunakan perintah spesialis di bawah untuk hasil instan dan terstruktur:\n\n` +
-      `🔍 \`/search [kueri]\` — Riset web & cari data internet live\n` +
-      `💻 \`/code [deskripsi]\` — Generator kode pemrograman & bug fixer\n` +
-      `📝 \`/summary [teks]\` — Ringkasan poin eksekutif artikel/teks\n` +
-      `📋 \`/prd [nama fitur]\` — Buat dokumen Product Requirement (PRD)\n` +
-      `✍️ \`/copy [topik]\` — Generator copywriting & konten viral\n` +
-      `🧠 \`/think [masalah]\` — Penalaran analitis mendalam (Deep Reasoning)\n` +
-      `🌐 \`/translate [bahasa] [teks]\` — Terjemahan bahasa & perbaikan grammar\n` +
-      `⚡ \`/health\` — Monitor latensi & kesehatan seluruh provider AI\n` +
-      `⏰ \`/remind\` — Atur pengingat otomatis\n` +
-      `📊 \`/mystats\` — Statistik penggunaan\n` +
-      `🎤 \`/tts\` — Konversi teks ke suara\n` +
-      `🖼️ \`/image\` — Generate gambar custom\n` +
-      `📄 \`/file [nama_file.ext]\` — Buat berkas & unduhan fisik otomatis\n\n` +
-      `_Contoh cepat:_\n` +
-      `• \`/search harga saham nvidia hari ini\`\n` +
-      `• \`/code scraper tokopedia python\`\n` +
-      `• \`/prd fitur live chat customer service\`\n` +
-      `• \`/copy promosi kopi susu gula aren\``;
+    const toolsMsg = `🛠️ *Pusat Fitur Bre AI*\n\nPilih tombol fitur di bawah. Bot akan membuka panduan singkat atau menjalankan fitur langsung.\n\n• AI Kreatif & Riset\n• Koding, Dokumen, File\n• Live Tools: Cuaca, Kurs, Crypto\n• Reminder, Statistik, Lokasi, Kontak\n• Game & Interaktif Telegram`;
     await api.sendTelegramMessage(chatId, toolsMsg, { inline_keyboard: [
       [{ text: 'Search', callback_data: 'menu:cmd:search' }, { text: 'Code', callback_data: 'menu:cmd:code' }],
       [{ text: 'Summary', callback_data: 'menu:cmd:summary' }, { text: 'PRD', callback_data: 'menu:cmd:prd' }],
