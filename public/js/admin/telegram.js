@@ -133,8 +133,6 @@ async function stopTelegramBotService() {
 }
 
 async function setupTelegramWebhookFromDomain() {
-  const token = document.getElementById('cfgTelegramToken')?.value.trim();
-  if (!token) return toast('Harap masukkan TELEGRAM BOT TOKEN terlebih dahulu', 'err');
   let domain = document.getElementById('cfgTelegramDomain')?.value.trim() || window.location.host;
   domain = domain.replace(/^https?:\/\//i, '').replace(/\/api\/telegram\/?.*$/i, '').replace(/\/+$/, '');
   const domainInp = document.getElementById('cfgTelegramDomain');
@@ -148,7 +146,7 @@ async function setupTelegramWebhookFromDomain() {
   if(enCheck) enCheck.checked = true;
   await saveAllConfig();
   try {
-    const r = await fetch('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken }, body: JSON.stringify({ action: 'setup_webhook', url: webhookUrl, token }) });
+    const r = await fetch('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken }, body: JSON.stringify({ action: 'setup_webhook', url: webhookUrl }) });
     const data = await r.json();
     if(data.ok) {
       toast(`🎉 Webhook 24/7 Berhasil Dipasang ke ${domain}!`, 'ok');
@@ -163,12 +161,10 @@ async function setupTelegramWebhookFromDomain() {
 }
 
 async function testTelegramBotFlow() {
-  const token = document.getElementById('cfgTelegramToken')?.value.trim();
   const adminId = document.getElementById('cfgTelegramOwner')?.value.trim();
-  if (!token) return toast('Harap masukkan TELEGRAM BOT TOKEN terlebih dahulu', 'err');
   toast('⚡ Menguji koneksi bot & API...', 'ok');
   try {
-    const r = await fetch('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken }, body: JSON.stringify({ action: 'test_telegram', token, chatId: adminId }) });
+    const r = await fetch('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken }, body: JSON.stringify({ action: 'test_telegram', chatId: adminId }) });
     const data = await r.json();
     if(data.ok && data.bot) {
       const bt = document.getElementById('tgBotBadgeText'); const bl = document.getElementById('tgBotLinkBadge');

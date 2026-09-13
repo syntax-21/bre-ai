@@ -71,26 +71,29 @@ module.exports = apiHandler(async (req, res) => {
   if (action === 'get_telegram_status') return res.json({ ok: true, status: await telegramStatus(cfg) });
   if (['test_telegram', 'test_telegram_token'].includes(action)) {
     const api = require('../services/telegram/api');
-    const result = await api.testToken(body.token || cfg.telegramBotToken);
+    const botToken = cfg.telegramBotToken;
+    const result = await api.testToken(botToken);
     if (!result.ok) return res.status(400).json(result);
     let messageSent = false;
     if (body.chatId && /^\d+$/.test(String(body.chatId))) {
-      await api.apiCall('sendMessage', { chat_id: body.chatId, text: '✅ Koneksi Bre AI berhasil.' }, body.token || cfg.telegramBotToken);
+      await api.apiCall('sendMessage', { chat_id: body.chatId, text: `✅ Koneksi Bre AI berhasil. Bot: @${result.bot.username}` }, botToken);
       messageSent = true;
     }
-    return res.json({ ...result, messageSent });
+    return res.json({ ...result, botUsername: result.bot.username, botName: result.bot.first_name, messageSent });
   }
   if (action === 'setup_webhook') {
     const url = validateUrl(body.url);
     if (url.protocol !== 'https:' || url.search || url.pathname !== '/api/telegram') throw httpError(400, 'Gunakan URL HTTPS /api/telegram tanpa query');
-    const botToken = body.token || cfg.telegramBotToken;
-    if (!safeEqual(botToken, cfg.telegramBotToken)) throw httpError(400, 'Simpan token bot terlebih dahulu');
+    const botToken = cfg.telegramBotToken;
+    const api = require('../services/telegram/api');
+    const result = await api.testToken(botToken);
+    if (!result.ok) return res.status(400).json(result);
     const secret = cfg.telegramWebhookSecret || cfg.webhookSecret || crypto.randomBytes(32).toString('hex');
     if (!/^[A-Za-z0-9_-]{1,256}$/.test(secret)) throw httpError(400, 'Secret webhook tidak valid');
     const saved = await shared.saveConfig({ telegramWebhookSecret: secret, telegramDomain: url.host, telegramEnabled: true });
     if (!saved.ok) throw httpError(503, saved.error);
-    await require('../services/telegram/api').apiCall('setWebhook', { url: url.href, secret_token: secret, allowed_updates: ['message', 'callback_query'] }, botToken);
-    return res.json({ ok: true, status: await telegramStatus(shared.getConfig()) });
+    await api.apiCall('setWebhook', { url: url.href, secret_token: secret, allowed_updates: ['message', 'callback_query'] }, botToken);
+    return res.json({ ok: true, bot: result.bot, botUsername: result.bot.username, botName: result.bot.first_name, status: await telegramStatus(shared.getConfig()) });
   }
   if (action === 'restart_bot' || action === 'stop_bot') {
     const enabled = action === 'restart_bot';

@@ -361,6 +361,43 @@ class TelegramBotService {
           await this.sendAdminPanel(targetChatId, senderName, this.getActiveConversationsCount(), token);
           return;
         }
+
+        if (data === 'menu:cuaca' && targetChatId) {
+          await this.answerCallback(cq.id, null, false, token);
+          await this.sendTelegramMessage(targetChatId, `🌤️ *Cek Cuaca Realtime*\n\nKetik perintah:\n\`/cuaca [nama kota]\`\n\n_Contoh:_\n\`/cuaca Jakarta\`\n\`/cuaca Surabaya\`\n\`/cuaca Tokyo\``, null, null, token);
+          return;
+        }
+
+        if (data === 'menu:kurs' && targetChatId) {
+          await this.answerCallback(cq.id, null, false, token);
+          await this.sendTelegramMessage(targetChatId, `💱 *Cek Kurs Mata Uang*\n\nKetik perintah:\n\`/kurs [kode mata uang]\`\n\n_Contoh:_\n\`/kurs IDR\`\n\`/kurs EUR\`\n\`/kurs JPY\`\n\`/kurs ALL\` _(tampilkan semua)_`, null, null, token);
+          return;
+        }
+
+        if (data === 'menu:crypto' && targetChatId) {
+          await this.answerCallback(cq.id, null, false, token);
+          await this.sendTelegramMessage(targetChatId, `🪙 *Cek Harga Crypto Realtime*\n\nKetik perintah:\n\`/crypto [nama koin]\`\n\n_Contoh:_\n\`/crypto bitcoin\`\n\`/crypto ethereum\`\n\`/crypto solana\`\n\`/crypto dogecoin\``, null, null, token);
+          return;
+        }
+
+        if (data === 'menu:agenda' && targetChatId) {
+          await this.answerCallback(cq.id, 'Memuat agenda...', false, token);
+          const { handleSlashCommand } = require('./commandHandler');
+          await handleSlashCommand({
+            msg: cq.message,
+            botService: this,
+            text: '/agenda',
+            lowerText: '/agenda',
+            chatId: targetChatId,
+            fromUser,
+            senderName: fromUser?.first_name || 'User',
+            senderTag: fromUser?.username ? `@${fromUser.username}` : '',
+            token,
+            isOwnerUser,
+            queryBreAIRouter
+          });
+          return;
+        }
       }
 
       await this.answerCallback(cq.id, null, false, token);

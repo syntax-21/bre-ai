@@ -58,6 +58,39 @@ const {
 } = require('./documentParser');
 
 /**
+ * Helper function for FITUR 1: Voice In -> Voice Out (Auto TTS Reply)
+ */
+async function generateAndSendVoiceReply(chatId, text, token) {
+  const cfg = getConfig();
+  if (!cfg.ttsEndpoint || !cfg.ttsKey) return false;
+  try {
+    const { safeFetch } = require('../safeFetch');
+    const resp = await safeFetch(cfg.ttsEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${cfg.ttsKey}`
+      },
+      body: JSON.stringify({
+        model: cfg.ttsModel || 'tts-1',
+        input: text.slice(0, 4096),
+        voice: 'alloy',
+        response_format: 'mp3'
+      }),
+      signal: AbortSignal.timeout(30000)
+    });
+    if (resp.ok) {
+      const buf = Buffer.from(await resp.arrayBuffer());
+      await api.sendTelegramDocument(chatId, 'voice-reply.mp3', buf, '🎤 Bre AI Voice Reply', token);
+      return true;
+    }
+  } catch (e) {
+    console.warn('[TelegramBot] TTS Voice Reply Error:', e.message);
+  }
+  return false;
+}
+
+/**
  * Query internal Bre AI router (works seamlessly on Localhost, Serverless, and VPS)
  * @param {string|Array} userContent - Text prompt or vision payload
  * @param {Array} history - Previous conversation turns
@@ -154,6 +187,18 @@ async function queryBreAIRouter(userContent, history = [], senderInfo = '', lang
 async function handleMessage(msg, botService, ctx = null) {
   if (!msg || !msg.chat) return;
 
+  if (msg.chat.type === 'group' || msg.chat.type === 'supergroup') {
+    const textOrCap = (msg.text || msg.caption || '').trim();
+    const botUsername = botService.botInfo?.username ? `@${botService.botInfo.username}`.toLowerCase() : '';
+    const isMention = botUsername ? textOrCap.toLowerCase().includes(botUsername) : true;
+    const isCommand = textOrCap.startsWith('/');
+    const rep = msg.reply_to_message;
+    const isReplyToBot = rep && rep.from ? (rep.from.username === botService.botInfo?.username || rep.from.is_bot) : false;
+    if (!isMention && !isCommand && !isReplyToBot) {
+      return;
+    }
+  }
+
   if (ctx) {
     if (ctx.token) botService.activeToken = ctx.token;
     if (ctx.ownerId) botService.activeOwnerId = ctx.ownerId;
@@ -188,6 +233,7 @@ async function handleMessage(msg, botService, ctx = null) {
   let userQueryPrompt = '';
   let historyDisplaySnippet = '';
   let visionPayload = null;
+  let isVoiceNoteTranscribed = false;
 
   // 1. EXTRACT REPLIED / QUOTED CONTEXT
   let replyPrefix = '';
@@ -234,6 +280,9 @@ async function handleMessage(msg, botService, ctx = null) {
         const audioBuf = await api.downloadTelegramFile(audioObj.file_id, token);
         if (audioBuf && audioBuf.length > 0) {
           transcript = await transcription.transcribeAudio(audioBuf, audioMime, audioExt);
+          if (isVoice && transcript) {
+            isVoiceNoteTranscribed = true;
+          }
         }
       }
     } catch (e) {
@@ -605,7 +654,27 @@ async function handleMessage(msg, botService, ctx = null) {
     }
 
     // Deliver text & all interactive rich media outbound elements (guaranteed file creation)
-    await processAndSendOutboundMedia(chatId, answer, token, loadingMsgId, userQueryPrompt || text);
+    let voiceReplySent = false;
+    if (isVoiceNoteTranscribed) {
+      const cfg = getConfig();
+      if (cfg.ttsEnabled) {
+        const cleanText = answer.replace(/\[TELEGRAM_[A-Z_]+:[^\]]*\]/gi, '').replace(/```[\s\S]*?```/g, '').trim();
+        if (cleanText) {
+          voiceReplySent = await generateAndSendVoiceReply(chatId, cleanText, token);
+        }
+      }
+    }
+
+    if (voiceReplySent) {
+      let onlyMedia = '';
+      const tags = answer.match(/\[TELEGRAM_[A-Z_]+:[^\]]*\]/gi);
+      if (tags) onlyMedia += tags.join('\n') + '\n';
+      const codes = answer.match(/```[\s\S]*?```/g);
+      if (codes) onlyMedia += codes.join('\n\n');
+      await processAndSendOutboundMedia(chatId, onlyMedia, token, loadingMsgId, userQueryPrompt || text);
+    } else {
+      await processAndSendOutboundMedia(chatId, answer, token, loadingMsgId, userQueryPrompt || text);
+    }
   } catch (err) {
     clearInterval(typingInterval);
     console.error('[TelegramBot] Error querying Bre AI:', err.message);

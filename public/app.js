@@ -1317,6 +1317,7 @@ function handleChatSearch(val) {
   const clearBtn = document.getElementById('searchClearBtn');
   if (clearBtn) clearBtn.style.display = chatSearchQuery ? 'block' : 'none';
   renderChatList();
+  searchInsideMessages(chatSearchQuery);
 }
 
 function clearChatSearch() {
@@ -1326,6 +1327,82 @@ function clearChatSearch() {
   const clearBtn = document.getElementById('searchClearBtn');
   if (clearBtn) clearBtn.style.display = 'none';
   renderChatList();
+  searchInsideMessages('');
+}
+
+function searchInsideMessages(query) {
+  const container = document.getElementById('messages');
+  if (!container) return;
+
+  container.querySelectorAll('mark.chat-search-highlight').forEach(m => {
+    const parent = m.parentNode;
+    if (parent) {
+      parent.replaceChild(document.createTextNode(m.textContent), m);
+      parent.normalize();
+    }
+  });
+  container.querySelectorAll('.mrow.msg-search-match').forEach(row => {
+    row.classList.remove('msg-search-match');
+  });
+
+  const q = (query || '').trim();
+  if (!q) return;
+
+  const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(escaped, 'gi');
+  let firstMatchEl = null;
+
+  container.querySelectorAll('.mrow').forEach(row => {
+    const bubble = row.querySelector('.mbubble');
+    if (!bubble) return;
+
+    let matched = false;
+    const walker = document.createTreeWalker(bubble, NodeFilter.SHOW_TEXT, null, false);
+    const textNodes = [];
+    let node;
+    while ((node = walker.nextNode())) {
+      if (node.nodeValue && regex.test(node.nodeValue)) {
+        textNodes.push(node);
+      }
+      regex.lastIndex = 0;
+    }
+
+    textNodes.forEach(textNode => {
+      const val = textNode.nodeValue;
+      const frag = document.createDocumentFragment();
+      let lastIdx = 0;
+      val.replace(regex, (match, offset) => {
+        matched = true;
+        if (offset > lastIdx) {
+          frag.appendChild(document.createTextNode(val.slice(lastIdx, offset)));
+        }
+        const mark = document.createElement('mark');
+        mark.className = 'chat-search-highlight';
+        mark.style.backgroundColor = '#fef08a';
+        mark.style.color = '#854d0e';
+        mark.style.borderRadius = '2px';
+        mark.style.padding = '0 2px';
+        mark.textContent = match;
+        frag.appendChild(mark);
+        lastIdx = offset + match.length;
+      });
+      if (lastIdx < val.length) {
+        frag.appendChild(document.createTextNode(val.slice(lastIdx)));
+      }
+      if (textNode.parentNode) {
+        textNode.parentNode.replaceChild(frag, textNode);
+      }
+    });
+
+    if (matched) {
+      row.classList.add('msg-search-match');
+      if (!firstMatchEl) firstMatchEl = row;
+    }
+  });
+
+  if (firstMatchEl) {
+    firstMatchEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
 }
 
 function renderChatList() {
@@ -1980,16 +2057,14 @@ function afterRender(container) {
     });
     if (!/^[a-zA-Z0-9_+.-]{1,40}$/.test(lang)) lang = 'text';
     
-    const isHtml = /^(html|xml|svg)$/i.test(lang);
-    
-    const canPreview = /^(html|xml|svg|htm)$/i.test(lang);
+    const canPreview = /^(html|xml|svg|htm|mermaid)$/i.test(lang);
 
     hdr.innerHTML = `
       <span>📄 ${lang.toUpperCase()}</span>
       <div class="code-btns">
-        ${canPreview ? '<button onclick="openArtifactFromBtn(this, \'preview\')">▶ Canvas</button>' : ''}
+        ${canPreview ? '<button onclick="openArtifactFromBtn(this, \'preview\')">▶ ' + (lang === 'mermaid' ? 'Diagram' : 'Canvas') + '</button>' : ''}
         <button onclick="openArtifactFromBtn(this, \'code\')">👁️ View</button>
-        <button onclick="downloadCode(this, '${lang}')">📥 Download</button>
+        <button onclick="downloadCode(this, \'' + lang + '\')">📥 Download</button>
         <button onclick="copyCode(this)">📋 Copy</button>
       </div>
     `;
@@ -2061,6 +2136,37 @@ function copyCode(btn) {
 }
 
 // ---- SIDE-BY-SIDE ARTIFACTS / CANVAS PANEL ----
+function buildArtifactSrcdoc(type, code) {
+  const t = (type || 'html').toLowerCase();
+  if (t === 'mermaid') {
+    return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>body{margin:0;padding:24px;background:#fff;display:flex;justify-content:center;align-items:center;min-height:90vh;font-family:sans-serif;}</style>
+</head>
+<body>
+  <div class="mermaid">${esc(code)}</div>
+  <script>
+    try { mermaid.initialize({ startOnLoad: true, theme: 'default' }); } catch(e){}
+  </script>
+</body>
+</html>`;
+  }
+  if (t === 'svg') {
+    return code.includes('<svg')
+      ? `<!DOCTYPE html><html><body style="margin:0;padding:24px;display:flex;justify-content:center;align-items:center;min-height:90vh;background:#fff;">${code}</body></html>`
+      : `<!DOCTYPE html><html><body style="margin:0;padding:24px;background:#fff;"><pre>${esc(code)}</pre></body></html>`;
+  }
+  if (['html', 'htm', 'xml'].includes(t)) {
+    return (code.includes('<html') || code.includes('<!DOCTYPE'))
+      ? code
+      : `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:sans-serif;padding:24px;background:#fff;color:#111;line-height:1.6;}</style></head><body>${code}</body></html>`;
+  }
+  return `<!DOCTYPE html><html><body style="font-family:sans-serif;padding:24px;line-height:1.6;background:#fff;color:#111;"><pre style="white-space:pre-wrap;">${esc(code)}</pre></body></html>`;
+}
+
 function openArtifactFromBtn(btn, tab = 'preview') {
   const wrap = btn.closest('.code-wrap');
   const code = wrap.querySelector('code');
@@ -2076,38 +2182,58 @@ function openArtifactFromBtn(btn, tab = 'preview') {
   if (match && match[1]) title = match[1].replace(/^[#\/\*\-\s]+/, '');
   else title = lang.toUpperCase() + ' Artifact';
 
-  openArtifact(lang, text, title, tab);
+  openArtifact(text, lang, title, tab);
 }
 
-function openArtifact(lang, content, title, activeTab = 'preview') {
-  currentArtifact = { lang, content, title };
-  sandboxCode = content;
+function openArtifact(code, type, title, activeTab = 'preview') {
+  let finalCode = '', finalType = 'html', finalTitle = title, finalTab = activeTab;
+
+  const knownTypes = ['html', 'htm', 'xml', 'svg', 'mermaid', 'js', 'javascript', 'css', 'json'];
+  if (typeof code === 'string' && typeof type === 'string' && knownTypes.includes(type.toLowerCase())) {
+    finalCode = code;
+    finalType = type.toLowerCase();
+  } else if (typeof code === 'string' && typeof type === 'string' && knownTypes.includes(code.toLowerCase())) {
+    finalType = code.toLowerCase();
+    finalCode = type;
+  } else {
+    finalCode = code || '';
+    finalType = (type || 'html').toLowerCase();
+  }
+
+  if (!finalTitle) finalTitle = finalType.toUpperCase() + ' Artifact';
+
+  currentArtifact = { lang: finalType, content: finalCode, title: finalTitle };
+  sandboxCode = finalCode;
+
   const panel = document.getElementById('artifactPanel');
   const toggleBtn = document.getElementById('btnArtifactToggle');
   if (!panel) return;
 
-  document.getElementById('artifactTitle').textContent = title || 'Live Canvas';
-  document.getElementById('artifactTypeTag').textContent = lang.toUpperCase();
+  const titleEl = document.getElementById('artifactTitle');
+  if (titleEl) titleEl.textContent = finalTitle;
+  const tagEl = document.getElementById('artifactTypeTag');
+  if (tagEl) tagEl.textContent = finalType.toUpperCase();
 
-  const isHtml = /^(html|xml|svg|htm)$/i.test(lang);
-  document.getElementById('artifactTabs').style.display = isHtml ? 'flex' : 'none';
+  const isPreviewable = ['html', 'xml', 'svg', 'htm', 'mermaid'].includes(finalType);
+  const tabsEl = document.getElementById('artifactTabs');
+  if (tabsEl) tabsEl.style.display = isPreviewable ? 'flex' : 'none';
 
   const iframe = document.getElementById('artifactIframe');
   if (iframe) {
-    iframe.srcdoc = isHtml ? content : `<!DOCTYPE html><html><body style="font-family:sans-serif;padding:24px;line-height:1.6;background:#fff;color:#111;"><pre style="white-space:pre-wrap;">${esc(content)}</pre></body></html>`;
+    iframe.srcdoc = buildArtifactSrcdoc(finalType, finalCode);
   }
 
   const codeEl = document.getElementById('artifactCodeContent');
   if (codeEl) {
-    codeEl.textContent = content;
-    codeEl.className = 'language-' + (lang || 'plaintext');
+    codeEl.textContent = finalCode;
+    codeEl.className = 'language-' + (finalType || 'plaintext');
     if (window.hljs) hljs.highlightElement(codeEl);
   }
 
   panel.classList.add('open');
   if (toggleBtn) toggleBtn.style.display = 'flex';
 
-  switchArtifactTab(isHtml ? activeTab : 'code');
+  switchArtifactTab(isPreviewable ? finalTab : 'code');
 }
 
 function switchArtifactTab(tab) {
@@ -2143,7 +2269,7 @@ function toggleArtifactPanel() {
   if (panel.classList.contains('open')) {
     closeArtifactPanel();
   } else if (currentArtifact) {
-    openArtifact(currentArtifact.lang, currentArtifact.content, currentArtifact.title);
+    openArtifact(currentArtifact.content, currentArtifact.lang, currentArtifact.title);
   }
 }
 
@@ -2159,8 +2285,7 @@ function reloadArtifact() {
   if (iframe) {
     iframe.srcdoc = '';
     setTimeout(() => {
-      const isHtml = /^(html|xml|svg|htm)$/i.test(currentArtifact.lang);
-      iframe.srcdoc = isHtml ? currentArtifact.content : `<!DOCTYPE html><html><body style="font-family:sans-serif;padding:24px;line-height:1.6;background:#fff;color:#111;"><pre style="white-space:pre-wrap;">${esc(currentArtifact.content)}</pre></body></html>`;
+      iframe.srcdoc = buildArtifactSrcdoc(currentArtifact.lang, currentArtifact.content);
     }, 50);
   }
   toast('Canvas reloaded', 'ok');
@@ -2180,7 +2305,7 @@ function openArtifactInNewTab() {
     const frame = win.document.createElement('iframe');
     frame.setAttribute('sandbox', 'allow-scripts');
     frame.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;border:0';
-    frame.srcdoc = currentArtifact.content;
+    frame.srcdoc = buildArtifactSrcdoc(currentArtifact.lang, currentArtifact.content);
     win.document.body.replaceChildren(frame);
   }
 }

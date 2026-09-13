@@ -250,7 +250,10 @@ async function handle(ctx) {
       `• \`/code scraper tokopedia python\`\n` +
       `• \`/prd fitur live chat customer service\`\n` +
       `• \`/copy promosi kopi susu gula aren\``;
-    await api.sendTelegramMessage(chatId, toolsMsg, null, null, token);
+    await api.sendTelegramMessage(chatId, toolsMsg, { inline_keyboard: [
+      [{ text: 'Cuaca', callback_data: 'menu:cuaca' }, { text: 'Kurs', callback_data: 'menu:kurs' }],
+      [{ text: 'Crypto', callback_data: 'menu:crypto' }, { text: 'Agenda', callback_data: 'menu:agenda' }]
+    ] }, null, token);
     return true;
   }
 
@@ -645,6 +648,123 @@ async function handle(ctx) {
     } catch (e) {
       await api.sendTelegramMessage(chatId, `⚠️ Gagal menghasilkan motivasi AI: ${e.message}`, null, null, token);
     }
+    return true;
+  }
+
+  // /cuaca [kota] or /weather [city]
+  if (lowerText.startsWith('/cuaca') || lowerText.startsWith('/weather')) {
+    const city = text.replace(/^\/(cuaca|weather)/i, '').trim();
+    if (!city) {
+      await api.sendTelegramMessage(chatId, `🌤️ *Panduan Cek Cuaca Realtime:*\n\nGunakan format:\n\`/cuaca [nama kota]\`\n\n_Contoh:_\n\`/cuaca Jakarta\`\n\`/cuaca Tokyo\``, null, null, token);
+      return true;
+    }
+    api.sendTyping(chatId, token).catch(() => {});
+    try {
+      const res = await safeFetch(`https://wttr.in/${encodeURIComponent(city)}?format=j1`, { signal: AbortSignal.timeout(10000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const d = await res.json();
+      const cur = d.current_condition?.[0] || {};
+      const area = d.nearest_area?.[0]?.areaName?.[0]?.value || city;
+      const country = d.nearest_area?.[0]?.country?.[0]?.value || '';
+      const desc = cur.weatherDesc?.[0]?.value || '-';
+      const temp = cur.temp_C || '-';
+      const feels = cur.FeelsLikeC || '-';
+      const humidity = cur.humidity || '-';
+      const wind = cur.windspeedKmph || '-';
+      const windDir = cur.winddir16Point || '';
+      const precip = cur.precipMM || '0';
+      const vis = cur.visibility || '-';
+      await api.sendTelegramMessage(chatId,
+        `🌤️ *Cuaca Realtime: ${area}${country ? ', ' + country : ''}*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `• *Kondisi:* ${desc}\n` +
+        `• *Suhu:* ${temp}°C (Terasa: ${feels}°C)\n` +
+        `• *Kelembaban:* ${humidity}%\n` +
+        `• *Angin:* ${wind} km/h ${windDir}\n` +
+        `• *Curah Hujan:* ${precip} mm\n` +
+        `• *Jarak Pandang:* ${vis} km\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n_Data dari wttr.in_`, null, null, token);
+    } catch (e) {
+      await api.sendTelegramMessage(chatId, `⚠️ Gagal mengambil data cuaca: ${e.message}`, null, null, token);
+    }
+    return true;
+  }
+
+  // /kurs [mata uang] or /rate [currency]
+  if (lowerText.startsWith('/kurs') || lowerText.startsWith('/rate')) {
+    const cur = text.replace(/^\/(kurs|rate)/i, '').trim().toUpperCase() || 'IDR';
+    api.sendTyping(chatId, token).catch(() => {});
+    try {
+      const res = await safeFetch(`https://open.er-api.com/v6/latest/USD`, { signal: AbortSignal.timeout(10000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const d = await res.json();
+      const rates = d.rates || {};
+      const targets = cur === 'ALL' ? ['IDR', 'EUR', 'GBP', 'JPY', 'SGD', 'MYR', 'CNY', 'KRW'] : [cur];
+      let lines = targets.map(c => {
+        const r = rates[c];
+        return r ? `• *1 USD =* \`${r.toLocaleString('id-ID')} ${c}\`` : `• ${c}: _Tidak tersedia_`;
+      }).join('\n');
+      await api.sendTelegramMessage(chatId,
+        `💱 *Kurs Mata Uang (Base: USD)*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${lines}\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n_Update: ${d.time_last_update_utc || 'Realtime'}_\n\n_Ketik \`/kurs ALL\` untuk daftar lengkap._`, null, null, token);
+    } catch (e) {
+      await api.sendTelegramMessage(chatId, `⚠️ Gagal mengambil data kurs: ${e.message}`, null, null, token);
+    }
+    return true;
+  }
+
+  // /crypto [coin] or /kripto [coin]
+  if (lowerText.startsWith('/crypto') || lowerText.startsWith('/kripto')) {
+    const coin = text.replace(/^\/(crypto|kripto)/i, '').trim().toLowerCase() || 'bitcoin';
+    api.sendTyping(chatId, token).catch(() => {});
+    try {
+      const res = await safeFetch(`https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(coin)}&vs_currencies=usd,idr&include_24hr_change=true&include_market_cap=true`, { signal: AbortSignal.timeout(10000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const d = await res.json();
+      const data = d[coin];
+      if (!data) {
+        await api.sendTelegramMessage(chatId, `⚠️ Koin "${coin}" tidak ditemukan. Contoh: \`/crypto bitcoin\`, \`/crypto ethereum\`, \`/crypto solana\``, null, null, token);
+        return true;
+      }
+      const usd = data.usd?.toLocaleString('en-US') || '-';
+      const idr = data.idr?.toLocaleString('id-ID') || '-';
+      const change = data.usd_24h_change ? `${data.usd_24h_change >= 0 ? '📈 +' : '📉 '}${data.usd_24h_change.toFixed(2)}%` : '-';
+      const mcap = data.usd_market_cap ? `$${(data.usd_market_cap / 1e9).toFixed(2)}B` : '-';
+      await api.sendTelegramMessage(chatId,
+        `🪙 *Harga ${coin.charAt(0).toUpperCase() + coin.slice(1)} Realtime*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `• *USD:* $${usd}\n` +
+        `• *IDR:* Rp ${idr}\n` +
+        `• *24h:* ${change}\n` +
+        `• *Market Cap:* ${mcap}\n` +
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n_Data dari CoinGecko_`, null, null, token);
+    } catch (e) {
+      await api.sendTelegramMessage(chatId, `⚠️ Gagal mengambil data crypto: ${e.message}`, null, null, token);
+    }
+    return true;
+  }
+
+  // /agenda or /tugas
+  if (lowerText === '/agenda' || lowerText === '/tugas') {
+    const reminderManager = require('../reminderManager');
+    const reminders = reminderManager.getUserReminders(chatId);
+    let msg = `📋 *Daily Digest Bre AI*\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    if (reminders.length) {
+      msg += `⏰ *Pengingat Aktif (${reminders.length}):*\n`;
+      reminders.forEach((r, i) => {
+        const mins = Math.max(0, Math.ceil((r.dueAt - Date.now()) / 60000));
+        msg += `  ${i + 1}. ${r.message.slice(0, 60)} — _${mins} menit lagi_\n`;
+      });
+    } else {
+      msg += `⏰ *Pengingat:* _Tidak ada pengingat aktif_\n`;
+    }
+    msg += `\n`;
+    try {
+      const motivation = require('../../motivation');
+      const quote = await motivation.generateMotivationQuote({});
+      msg += `🌅 *Motivasi Hari Ini:*\n"${quote}"\n`;
+    } catch (e) {
+      msg += `🌅 *Motivasi:* _Tidak tersedia_\n`;
+    }
+    msg += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n_${new Date().toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}_`;
+    await api.sendTelegramMessage(chatId, msg, null, null, token);
     return true;
   }
 
