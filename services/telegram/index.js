@@ -310,6 +310,25 @@ class TelegramBotService {
         const fromUser = cq.from;
         const isOwnerUser = this.isOwner(fromUser);
 
+        if (data === 'menu:tools' && targetChatId) {
+          await this.answerCallback(cq.id, 'Membuka Pusat Tools...', false, token);
+          const { handleSlashCommand } = require('./commandHandler');
+          await handleSlashCommand({
+            msg: cq.message,
+            botService: this,
+            text: '/tools',
+            lowerText: '/tools',
+            chatId: targetChatId,
+            fromUser,
+            senderName: fromUser?.first_name || 'User',
+            senderTag: fromUser?.username ? `@${fromUser.username}` : '',
+            token,
+            isOwnerUser,
+            queryBreAIRouter
+          });
+          return;
+        }
+
         if (data === 'menu:lang' && targetChatId) {
           await this.answerCallback(cq.id, 'Pilih bahasa', false, token);
           const currentLang = getUserLanguage(targetChatId);
@@ -359,6 +378,36 @@ class TelegramBotService {
           await this.answerCallback(cq.id, 'Membuka Admin Panel...', false, token);
           const senderName = [fromUser?.first_name, fromUser?.last_name].filter(Boolean).join(' ') || fromUser?.username || 'Owner';
           await this.sendAdminPanel(targetChatId, senderName, this.getActiveConversationsCount(), token);
+          return;
+        }
+
+        if (data.startsWith('menu:cmd:') && targetChatId) {
+          await this.answerCallback(cq.id, null, false, token);
+          const key = data.split(':')[2];
+          const guides = {
+            search: '🔍 *Search Web*\n\nKetik: `/search berita AI terbaru`',
+            code: '💻 *Generator Kode*\n\nKetik: `/code buat REST API Node.js sederhana`',
+            summary: '📝 *Ringkas Teks*\n\nKetik: `/summary [tempel teks panjang]`',
+            prd: '📋 *Buat PRD*\n\nKetik: `/prd aplikasi kasir UMKM`',
+            copy: '✍️ *Copywriting*\n\nKetik: `/copy promo kopi susu gula aren`',
+            think: '🧠 *Analisis Mendalam*\n\nKetik: `/think strategi bisnis bootstrapping vs investor`',
+            translate: '🌐 *Translate*\n\nKetik: `/translate english Selamat pagi semua`',
+            file: '📄 *Buat File*\n\nKetik: `/file script.py print("Halo")`',
+            poll: '📊 *Polling*\n\nKetik: `/poll Framework favorit? | React | Vue | Svelte`',
+            quiz: '🧠 *Quiz*\n\nKetik: `/quiz 2+2? | 3 | 4* | 5`',
+            remind: '⏰ *Reminder*\n\nKetik: `/remind rapat tim dalam 30 menit`',
+            cuaca: '🌤️ *Cuaca Realtime*\n\nKetik: `/cuaca Jakarta`',
+            kurs: '💱 *Kurs Mata Uang*\n\nKetik: `/kurs IDR` atau `/kurs ALL`',
+            crypto: '🪙 *Harga Crypto*\n\nKetik: `/crypto bitcoin`',
+            tts: '🎤 *Text to Speech*\n\nKetik: `/tts teks yang ingin dijadikan suara`',
+            image: '🖼️ *Generate Gambar*\n\nKetik: `/image kucing astronot di bulan`',
+            mystats: '📊 *Statistik Chat*\n\nKetik: `/mystats`',
+            health: '🧪 *Kesehatan Provider*\n\nKetik: `/health`',
+            users: '👥 *Kelola Pengguna*\n\nKetik: `/pengguna`, `/izinkan [id]`, atau `/blokir [id]`',
+            location: '📍 *Kirim Lokasi*\n\nKetik: `/location -6.175392, 106.827153 | Monas | Jakarta`',
+            contact: '👤 *Kirim Kontak*\n\nKetik: `/contact +628123456789 Amirun Ariandi`'
+          };
+          await this.sendTelegramMessage(targetChatId, guides[key] || 'Perintah tidak dikenal.', null, null, token);
           return;
         }
 

@@ -69,6 +69,20 @@ async function handleAdminCallback(cq, botService) {
     return;
   }
 
+  if (data === 'adm_commands') {
+    await api.answerCallback(cq.id, 'Command Center dibuka', false, token);
+    await api.editTelegramMessage(chatId, messageId, '🧰 *Command Center Owner*\n\nPilih fitur untuk melihat cara pakai:', {
+      inline_keyboard: [
+        [{ text: '📊 Metrics', callback_data: 'menu:cmd:mystats' }, { text: '🔍 Provider', callback_data: 'adm_providers' }],
+        [{ text: '🧪 Health', callback_data: 'menu:cmd:health' }, { text: '📢 Broadcast', callback_data: 'adm_broadcast' }],
+        [{ text: '👥 Users', callback_data: 'menu:cmd:users' }, { text: '🛡️ Security', callback_data: 'adm_security' }],
+        [{ text: '🌅 Motivasi', callback_data: 'adm_motivation' }, { text: '📦 Backup', callback_data: 'adm_backup' }],
+        [{ text: '⬅️ Menu Admin', callback_data: 'adm_main' }]
+      ]
+    }, token);
+    return;
+  }
+
   if (data === 'adm_close') {
     await api.answerCallback(cq.id, 'Panel ditutup', false, token);
     try {

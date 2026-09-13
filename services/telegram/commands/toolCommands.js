@@ -251,8 +251,16 @@ async function handle(ctx) {
       `• \`/prd fitur live chat customer service\`\n` +
       `• \`/copy promosi kopi susu gula aren\``;
     await api.sendTelegramMessage(chatId, toolsMsg, { inline_keyboard: [
-      [{ text: 'Cuaca', callback_data: 'menu:cuaca' }, { text: 'Kurs', callback_data: 'menu:kurs' }],
-      [{ text: 'Crypto', callback_data: 'menu:crypto' }, { text: 'Agenda', callback_data: 'menu:agenda' }]
+      [{ text: 'Search', callback_data: 'menu:cmd:search' }, { text: 'Code', callback_data: 'menu:cmd:code' }],
+      [{ text: 'Summary', callback_data: 'menu:cmd:summary' }, { text: 'PRD', callback_data: 'menu:cmd:prd' }],
+      [{ text: 'Copywriting', callback_data: 'menu:cmd:copy' }, { text: 'Think', callback_data: 'menu:cmd:think' }],
+      [{ text: 'Translate', callback_data: 'menu:cmd:translate' }, { text: 'File', callback_data: 'menu:cmd:file' }],
+      [{ text: 'Poll', callback_data: 'menu:cmd:poll' }, { text: 'Quiz', callback_data: 'menu:cmd:quiz' }],
+      [{ text: 'Reminder', callback_data: 'menu:cmd:remind' }, { text: 'Agenda', callback_data: 'menu:agenda' }],
+      [{ text: 'Cuaca', callback_data: 'menu:cmd:cuaca' }, { text: 'Kurs', callback_data: 'menu:cmd:kurs' }],
+      [{ text: 'Crypto', callback_data: 'menu:cmd:crypto' }, { text: 'TTS', callback_data: 'menu:cmd:tts' }],
+      [{ text: 'Image', callback_data: 'menu:cmd:image' }, { text: 'Stats', callback_data: 'menu:cmd:mystats' }],
+      [{ text: 'Location', callback_data: 'menu:cmd:location' }, { text: 'Contact', callback_data: 'menu:cmd:contact' }]
     ] }, null, token);
     return true;
   }

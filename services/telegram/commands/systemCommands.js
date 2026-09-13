@@ -83,7 +83,18 @@ Saya adalah asisten kecerdasan buatan serba bisa dan cerdas tanpa batas ciptaan 
 • Kirim /reset untuk membersihkan riwayat obrolan.
 • Kirim /help untuk daftar perintah & panduan lengkap.`;
 
-    let replyMarkup = null;
+    let replyMarkup = {
+      inline_keyboard: [
+        [
+          { text: '🛠️ Pusat Fitur & Tools AI', callback_data: 'menu:tools' },
+          { text: '🌐 Bahasa', callback_data: 'menu:lang' }
+        ],
+        [
+          { text: '🎭 Persona / Gaya', callback_data: 'menu:style' },
+          { text: '🧹 Reset Percakapan', callback_data: 'menu:reset' }
+        ]
+      ]
+    };
 
     if (isOwnerUser) {
       const cfg2 = getConfig();
@@ -93,14 +104,12 @@ Saya adalah asisten kecerdasan buatan serba bisa dan cerdas tanpa batas ciptaan 
         `🎭 *Gaya Bahasa Indonesia Aktif:* ${ownerStyle}\n` +
         `_Gunakan \`/style\` untuk mengubah gaya bahasa Indonesia Bre AI (global)._`;
 
-      replyMarkup = {
-        inline_keyboard: [
-          [
-            { text: '🎛️ Buka Master Admin Panel', callback_data: 'adm_main' },
-            { text: '📊 Cek Status & Metrik', callback_data: 'adm_metrics' }
-          ]
+      replyMarkup.inline_keyboard.push(
+        [
+          { text: '🎛️ Buka Master Admin Panel', callback_data: 'adm_main' },
+          { text: '📊 Cek Status & Metrik', callback_data: 'adm_metrics' }
         ]
-      };
+      );
     }
 
     await api.sendTelegramMessage(chatId, welcome, replyMarkup, null, token);
@@ -149,6 +158,22 @@ _• 「Bre、こんにちは」 → Bre AI returns in Japanese 🇯🇵_
 _Gaya ini berlaku untuk semua respons Bahasa Indonesia Bre AI._
 Pencipta & Pengembang: *Amirun Rayan Ariandi* 🚀`;
 
+    let helpMarkup = {
+      inline_keyboard: [
+        [
+          { text: '🛠️ Pusat Tools AI', callback_data: 'menu:tools' },
+          { text: '🌐 Pilih Bahasa', callback_data: 'menu:lang' }
+        ],
+        [
+          { text: '🎭 Pilih Persona', callback_data: 'menu:style' },
+          { text: '📊 Status Sistem', callback_data: 'menu:status' }
+        ],
+        [
+          { text: '🧹 Reset Memori Chat', callback_data: 'menu:reset' }
+        ]
+      ]
+    };
+
     if (isOwnerUser) {
       help += `\n\n👑 *Daftar Perintah Admin (Owner):*\n` +
         `• \`/admin\` - Buka Master Control Panel Interaktif\n` +
@@ -181,9 +206,13 @@ Pencipta & Pengembang: *Amirun Rayan Ariandi* 🚀`;
         `• \`/export\` - Unduh berkas backup config.json\n` +
         `• \`/clearcache\` - Bersihkan cache RAM & sesi\n` +
         `• \`/broadcast [pesan]\` - Kirim pesan siaran massal`;
+
+      helpMarkup.inline_keyboard.push([
+        { text: '🎛️ Buka Master Admin Panel', callback_data: 'adm_main' }
+      ]);
     }
 
-    await api.sendTelegramMessage(chatId, help, null, null, token);
+    await api.sendTelegramMessage(chatId, help, helpMarkup, null, token);
     return true;
   }
 

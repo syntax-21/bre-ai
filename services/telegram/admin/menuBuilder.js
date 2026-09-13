@@ -114,7 +114,8 @@ function buildMainMenuMarkup(cfg) {
         { text: '🧪 Live Model Tester', callback_data: 'adm_tester' }
       ],
       [
-        { text: '🌅 Motivasi Harian', callback_data: 'adm_motivation' }
+        { text: '🌅 Motivasi Harian', callback_data: 'adm_motivation' },
+        { text: '🧰 Command Center', callback_data: 'adm_commands' }
       ],
       [
         { text: '📦 Backup & Maintenance', callback_data: 'adm_backup' },
