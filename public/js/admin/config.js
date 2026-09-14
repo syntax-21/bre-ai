@@ -115,13 +115,17 @@ if (newPw) payload.adminPassword = newPw;
       let data = {}; try { data = await r.json(); } catch(e){}
       if (newPw) { adminToken = newPw; try { sessionStorage.setItem('bre_admin_pw', newPw); } catch(e){} }
       const pwEl = document.getElementById('cfgNewPw'); if(pwEl) pwEl.value = '';
-loadTelegramStatus();
+      loadTelegramStatus();
       persistConfigCache(payload);
       if (data.cloudStorageInfo) updateStorageBadges(data.cloudStorageInfo, data.cloudStatus);
       if (data.cloudStatus?.synced) toast(`✅ Konfigurasi tersimpan PERMANEN! (${data.cloudStatus.message})`, 'ok');
       else if (data.isReadOnlyFS) toast('⚠️ Disimpan di cache serverless. Hubungkan Vercel KV untuk tersimpan permanen.', 'ok');
       else toast('✅ Seluruh konfigurasi berhasil disimpan permanen!', 'ok');
-    } else { toast('❌ Gagal menyimpan konfigurasi', 'err'); }
+    } else {
+      let errTxt = '';
+      try { const errJson = await r.json(); errTxt = errJson.error || errJson.message || ''; } catch(e){}
+      toast('❌ Gagal menyimpan konfigurasi' + (errTxt ? `: ${errTxt}` : ''), 'err');
+    }
   } catch(e) { toast('❌ Error: ' + e.message, 'err'); }
 }
 
