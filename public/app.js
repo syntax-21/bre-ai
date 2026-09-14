@@ -16,7 +16,7 @@ function saveClientApiKey() {
 }
 let mic = null, recording = false, autoTTS = false;
 let persona = 'default', sandboxCode = '';
-let currentLang = localStorage.getItem('bre_lang') || 'en';
+let currentLang = localStorage.getItem('bre_lang') || 'auto';
 let currentTheme = localStorage.getItem('bre_theme') || 'system';
 let currentStyle = localStorage.getItem('bre_style') || 'santai';
 
@@ -110,6 +110,7 @@ const PERSONAS = {
 };
 
 const LANGUAGE_PROMPTS = {
+  auto: '',
   en: 'Respond in English by default.',
   id: 'Responlah dalam Bahasa Indonesia secara alami dan akurat.',
   ja: '常に自然で流暢な日本語で回答してください。',
@@ -294,7 +295,7 @@ function setLanguage(lang) {
 }
 
 function applyLanguage(lang) {
-  const dict = I18N[lang] || I18N.en;
+  const dict = I18N[lang] || (lang === 'auto' ? (I18N.id || I18N.en) : I18N.en);
   
   const setTxt = (id, txt) => { const el = document.getElementById(id); if (el) el.innerHTML = txt; };
   
@@ -2484,9 +2485,11 @@ async function executeBotGeneration(targetBotIdx = null, searchResults = [], gen
   if (langPrompt) {
     pExtra = (pExtra ? pExtra + '\n\n' : '') + `[LANGUAGE INSTRUCTION]: ${langPrompt}`;
   }
-  const stylePrompt = STYLE_PROMPTS[currentStyle];
-  if (stylePrompt) {
-    pExtra = (pExtra ? pExtra + '\n\n' : '') + stylePrompt;
+  if (!currentLang || currentLang === 'auto' || currentLang === 'id') {
+    const stylePrompt = STYLE_PROMPTS[currentStyle];
+    if (stylePrompt) {
+      pExtra = (pExtra ? pExtra + '\n\n' : '') + stylePrompt;
+    }
   }
 
   // Inject web search results into system context

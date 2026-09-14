@@ -1599,7 +1599,11 @@ ${langEntry.instruction}
 ABSOLUTELY FORBIDDEN to respond in any other language, even if the user's message is in Indonesian.
 Tone: FORMAL, POLITE, INTELLIGENT, AND PROFESSIONAL (Standard Formal Bre AI in ${langEntry.name}).`;
 
-  const customPromptSection = customSystemPrompt ? `\n\n[ADDITIONAL PLATFORM INSTRUCTIONS]:\n${customSystemPrompt}` : '';
+  let cleanedCustomPrompt = customSystemPrompt;
+  if (cleanedCustomPrompt) {
+    cleanedCustomPrompt = cleanedCustomPrompt.replace(/\[GAYA BAHASA & TONE[^\]]*\][\s\S]*?(?=\n\n\[|$)/gi, '').trim();
+  }
+  const customPromptSection = cleanedCustomPrompt ? `\n\n[ADDITIONAL PLATFORM INSTRUCTIONS]:\n${cleanedCustomPrompt}` : '';
   return masterIdentity + reasoningDirective + foreignLangInstruction + fileDocInstruction + customPromptSection;
 }
 
