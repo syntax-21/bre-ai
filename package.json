@@ -1,6 +1,6 @@
 {
   "name": "bre-ai",
-  "version": "3.0.0",
+  "version": "1.0.0",
   "description": "Bre AI - Kecerdasan Buatan Tanpa Batas by Amirun Rayan Ariandi",
   "main": "server.js",
   "scripts": {

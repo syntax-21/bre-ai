@@ -100,7 +100,7 @@ function isUserAllowed(fromUser, activeOwnerId = null, activeAccessMode = null) 
   }
 
   // In public mode, everyone not blocked is allowed
-  const { consumeLimit } = require('../../httpSecurity');
+  const { consumeLimit } = require('../httpSecurity');
   if (consumeLimit('tg_global_quota', cfg.telegramPublicQuota || 1000, 86400000)) return false;
   
   return true;
