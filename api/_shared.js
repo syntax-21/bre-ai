@@ -927,21 +927,16 @@ function getConfig() {
   if (memConfig) return memConfig;
   let cfg = structuredClone(DEFAULT_CONFIG);
 
-  // 1. Baca konfigurasi bawaan repositori (config.json) — otoritatif saat tersedia.
-  let repoExists = false;
+  // 1. Baca konfigurasi bawaan repositori (config.json)
   try {
     if (fs.existsSync(CONFIG_PATH)) {
-      repoExists = true;
       cfg = { ...cfg, ...cleanObject(JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'))) };
     }
   } catch (e) {}
 
-  // 2. Baca konfigurasi /tmp sebagai fallback SAAT config.json TIDAK ada
-  //    (kondisi serverless Vercel karena config.json tidak ikut ter-deploy).
-  //    Ketika config.json ada, isi repo SELALU menang agar cache tmp basi
-  //    tidak menimpa nilai yang disengaja (mis. password admin yang di-hash).
+  // 2. Baca konfigurasi /tmp (untuk persistensi sesi serverless / update admin lokal)
   try {
-    if (!repoExists && fs.existsSync(TMP_CONFIG_PATH)) {
+    if (fs.existsSync(TMP_CONFIG_PATH)) {
       const tmpData = JSON.parse(fs.readFileSync(TMP_CONFIG_PATH, 'utf-8'));
       cfg = { ...cfg, ...cleanObject(tmpData) };
     }

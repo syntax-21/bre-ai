@@ -2129,60 +2129,141 @@ function generateRandomKey() {
 
 function updateTestModelDropdown() {
   syncProvidersFromUI();
-  const sel = document.getElementById('testModelSelect');
-  if (!sel) return;
-  
-  const allModels = new Set();
-  endpoints.forEach(ep => {
-    (ep.models || []).forEach(m => allModels.add(m));
-    (ep.mapping || []).forEach(map => {
-      const alias = map.split(':')[0]?.trim();
-      if (alias) allModels.add(alias);
-    });
+  const provSel = document.getElementById('testProviderSelect');
+  if (!provSel) return;
+
+  const currentProvVal = provSel.value;
+  let optionsHtml = '<option value="auto">🌐 Auto (Semua Provider Aktif)</option>';
+
+  endpoints.forEach((ep, idx) => {
+    const name = ep.name || `Provider #${idx + 1}`;
+    const statusIcon = ep.status !== false ? '🟢' : '⚪ (Nonaktif)';
+    optionsHtml += `<option value="${idx}">${statusIcon} #${idx + 1}: ${name}</option>`;
   });
-  
-  if (!allModels.size) allModels.add('mercury-2');
-  sel.innerHTML = Array.from(allModels).map(m => `<option value="${m}">${m}</option>`).join('');
+
+  provSel.innerHTML = optionsHtml;
+  if (currentProvVal && (currentProvVal === 'auto' || endpoints[parseInt(currentProvVal)])) {
+    provSel.value = currentProvVal;
+  } else {
+    provSel.value = 'auto';
+  }
+
+  onTestProviderChange();
+}
+
+function onTestProviderChange() {
+  syncProvidersFromUI();
+  const provSel = document.getElementById('testProviderSelect');
+  const modelSel = document.getElementById('testModelSelect');
+  const badge = document.getElementById('testProviderInfoBadge');
+  if (!modelSel) return;
+
+  const provVal = provSel ? provSel.value : 'auto';
+  const modelList = [];
+
+  if (provVal === 'auto') {
+    modelList.push('auto');
+    const seen = new Set(['auto']);
+    endpoints.forEach(ep => {
+      (ep.models || []).forEach(m => {
+        const clean = String(m || '').trim();
+        if (clean && !seen.has(clean)) { seen.add(clean); modelList.push(clean); }
+      });
+      (ep.mapping || []).forEach(map => {
+        const alias = String(map || '').split(':')[0]?.trim();
+        if (alias && !seen.has(alias)) { seen.add(alias); modelList.push(alias); }
+      });
+    });
+    if (badge) badge.textContent = `ℹ️ Menguji semua provider (${endpoints.length} terdaftar)`;
+  } else {
+    const idx = parseInt(provVal, 10);
+    const ep = endpoints[idx];
+    if (ep) {
+      const seen = new Set();
+      (ep.models || []).forEach(m => {
+        const clean = String(m || '').trim();
+        if (clean && !seen.has(clean)) { seen.add(clean); modelList.push(clean); }
+      });
+      (ep.mapping || []).forEach(map => {
+        const alias = String(map || '').split(':')[0]?.trim();
+        if (alias && !seen.has(alias)) { seen.add(alias); modelList.push(alias); }
+      });
+      if (badge) badge.textContent = `📍 Base URL: ${ep.url || '-'} (${modelList.length} model terdaftar)`;
+    }
+  }
+
+  if (!modelList.length) modelList.push('auto', 'mercury-2');
+
+  modelSel.innerHTML = modelList.map(m => {
+    const label = m === 'auto' ? '✨ auto (Model Default / Cerdas)' : m;
+    return `<option value="${m}">${label}</option>`;
+  }).join('');
 }
 
 async function runLiveTest() {
-  const sel = document.getElementById('testModelSelect');
-  const model = sel ? sel.value : 'mercury-2';
-  const prompt = document.getElementById('testPromptInput').value.trim() || 'Hi';
+  syncProvidersFromUI();
+  const provSel = document.getElementById('testProviderSelect');
+  const modelSel = document.getElementById('testModelSelect');
+  const provVal = provSel ? provSel.value : 'auto';
+  const model = modelSel ? modelSel.value : 'auto';
+  const prompt = document.getElementById('testPromptInput')?.value.trim() || 'Hi';
   const out = document.getElementById('testOutputArea');
   const btn = document.getElementById('btnRunTest');
-  
-  btn.disabled = true;
-  out.textContent = '⏳ Mengirim permintaan ke endpoint upstream...';
-  
+
+  let targetProviderName = '';
+  if (provVal !== 'auto') {
+    const idx = parseInt(provVal, 10);
+    const ep = endpoints[idx];
+    if (ep) targetProviderName = ep.name || `Provider #${idx + 1}`;
+  }
+
+  if (btn) { btn.disabled = true; }
+  if (out) out.textContent = `⏳ Mengirim permintaan uji...\n• Target Provider: ${targetProviderName || 'Auto (Semua Provider)'}\n• Target Model: ${model}\n• Prompt: "${prompt}"`;
+
   const start = Date.now();
   try {
+    const adminToken = sessionStorage.getItem('bre_admin_pw') || localStorage.getItem('bre_admin_pw') || '';
+    const payload = {
+      model,
+      messages: [{ role: 'user', content: prompt }],
+      stream: false
+    };
+    if (targetProviderName) {
+      payload.provider = targetProviderName;
+    }
+
     const r = await fetch('/api/chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: model,
-        messages: [{ role: 'user', content: prompt }],
-        stream: false
-      })
+      headers: {
+        'Content-Type': 'application/json',
+        ...(adminToken ? { 'Authorization': 'Bearer ' + adminToken } : {})
+      },
+      body: JSON.stringify(payload)
     });
-    
+
     const elapsed = Date.now() - start;
+    const xProvider = r.headers.get('x-provider') || targetProviderName || 'Auto';
+    const xModel = r.headers.get('x-model') || model;
+
     if (r.ok) {
       const data = await r.json();
       const content = data.choices?.[0]?.message?.content || JSON.stringify(data, null, 2);
-      out.textContent = `[HTTP 200 OK | Latency: ${elapsed}ms | Model: ${model}]\n\n${content}`;
-      toast(`Query sukses (${elapsed}ms)`, 'ok');
+      if (out) {
+        out.textContent = `[HTTP 200 OK | Latency: ${elapsed}ms]\n[Provider: ${xProvider} | Model: ${xModel}]\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${content}`;
+      }
+      toast(`Query sukses (${elapsed}ms) - [${xModel}]`, 'ok');
     } else {
       const err = await r.text();
-      out.textContent = `[HTTP ${r.status} Error | ${elapsed}ms]\n\n${err}`;
+      if (out) {
+        out.textContent = `[HTTP ${r.status} Error | Latency: ${elapsed}ms]\n[Provider: ${xProvider} | Model: ${xModel}]\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${err}`;
+      }
       toast(`Gagal (HTTP ${r.status})`, 'err');
     }
-  } catch(e) {
-    out.textContent = `[Network Error]\n\n${e.message}`;
+  } catch (e) {
+    if (out) out.textContent = `[Network Error]\n\n${e.message}`;
     toast('Network Error: ' + e.message, 'err');
   } finally {
-    btn.disabled = false;
+    if (btn) btn.disabled = false;
   }
 }
 

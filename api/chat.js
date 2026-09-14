@@ -92,6 +92,17 @@ function normalizeChatUrl(rawUrl) {
   return normalizeUpstreamUrl(rawUrl);
 }
 
+function resolveActualModel(ep, requested) {
+  const isGeneric = !requested || ['auto', 'bre-ai', 'unified', 'all'].includes(String(requested).toLowerCase().trim()) || (ep && requested === ep.name);
+  if (!isGeneric) return requested;
+  if (ep && Array.isArray(ep.models) && ep.models.length > 0) {
+    const real = ep.models.find(m => m && !['auto', 'bre-ai', 'unified', 'all'].includes(String(m).toLowerCase().trim()));
+    if (real) return real;
+    return ep.models[0];
+  }
+  return 'mercury-2';
+}
+
 module.exports = apiHandler(async (req, res) => {
   const reqStartTime = Date.now();
 
@@ -216,6 +227,18 @@ module.exports = apiHandler(async (req, res) => {
   const searchProv = requestedProvider || requestedModel;
   const isAutoSelection = !searchProv || ['auto', 'bre-ai', 'unified', 'all'].includes(searchProv.toLowerCase());
 
+function resolveActualModel(ep, modelName) {
+  const generic = ['auto', 'bre-ai', 'unified', 'all', '', null, undefined];
+  if (modelName && !generic.includes(String(modelName).toLowerCase().trim()) && modelName !== ep?.name) {
+    return String(modelName).trim();
+  }
+  if (Array.isArray(ep?.models)) {
+    const concrete = ep.models.find(m => m && !generic.includes(String(m).toLowerCase().trim()));
+    if (concrete) return String(concrete).trim();
+  }
+  return ep?.models?.[0] || 'mercury-2';
+}
+
   let candidates = [];
   let primaryTarget = null;
   let targetModelName = requestedModel;
@@ -249,7 +272,7 @@ module.exports = apiHandler(async (req, res) => {
     }
 
     if (primaryTarget) {
-      if (!targetModelName || ['auto', 'bre-ai', 'unified', 'all'].includes(targetModelName.toLowerCase()) || targetModelName === primaryTarget.name) targetModelName = primaryTarget.models?.[0] || 'mercury-2';
+      targetModelName = resolveActualModel(primaryTarget, targetModelName);
       candidates = [primaryTarget];
       if (cfg.autoFailover !== false) {
         activeEps.forEach(e => {
@@ -275,12 +298,12 @@ module.exports = apiHandler(async (req, res) => {
         randWeight -= w;
       }
       primaryTarget = activeEps[chosenIdx];
-      targetModelName = primaryTarget.models?.[0] || requestedModel || 'mercury-2';
+      targetModelName = resolveActualModel(primaryTarget, requestedModel);
       candidates = [primaryTarget, ...activeEps.filter((_, idx) => idx !== chosenIdx)];
     } else if (routingMode === 'priority') {
       candidates = [...activeEps];
       primaryTarget = candidates[0];
-      targetModelName = primaryTarget.models?.[0] || requestedModel;
+      targetModelName = resolveActualModel(primaryTarget, requestedModel);
     } else {
       // Mode AUTO: Rotasi bergantian secara teratur (Round-Robin Sequential) ke semua provider aktif
       const startIdx = getNextRoundRobinIndex(activeEps.length);
@@ -288,7 +311,7 @@ module.exports = apiHandler(async (req, res) => {
         candidates.push(activeEps[(startIdx + i) % activeEps.length]);
       }
       primaryTarget = candidates[0];
-      targetModelName = primaryTarget.models?.[0] || requestedModel || 'mercury-2';
+      targetModelName = resolveActualModel(primaryTarget, requestedModel);
     }
   }
 
@@ -354,13 +377,17 @@ module.exports = apiHandler(async (req, res) => {
 
     // Build ordered list of models to try for this provider
     let providerModels = [];
-    if (currentTarget === primaryTarget && targetModelName) providerModels.push(targetModelName);
+    const resolvedPrimary = resolveActualModel(currentTarget, targetModelName);
+    if (resolvedPrimary) providerModels.push(resolvedPrimary);
     if (Array.isArray(currentTarget.models)) {
       for (const m of currentTarget.models) {
-        if (m && !providerModels.includes(m)) providerModels.push(m);
+        const cleanM = String(m || '').trim();
+        if (cleanM && !['auto', 'bre-ai', 'unified', 'all'].includes(cleanM.toLowerCase()) && !providerModels.includes(cleanM)) {
+          providerModels.push(cleanM);
+        }
       }
     }
-    if (!providerModels.length) providerModels.push(targetModelName || 'mercury-2');
+    if (!providerModels.length) providerModels.push('mercury-2');
 
     // If request contains image/vision, prioritize vision-capable models
     if (hasImageAttachment) {

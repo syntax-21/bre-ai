@@ -881,20 +881,27 @@
         <div class="card-title">Live Model Query & Latency Inspector</div>
         <div class="card-subtitle" style="margin-bottom: 16px;">Uji respon dan kecepatan model AI langsung dari panel admin.</div>
         
-        <div class="grid-2" style="margin-bottom: 14px;">
+        <div class="grid-3" style="margin-bottom: 14px;">
           <div class="form-group">
-            <label class="form-label">Pilih Model Uji</label>
+            <label class="form-label">1. Pilih Provider AI</label>
+            <select id="testProviderSelect" class="input-select" onchange="onTestProviderChange()">
+              <option value="auto">🌐 Auto (Semua Provider)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">2. Pilih Model di Dalam Provider</label>
             <select id="testModelSelect" class="input-select"></select>
           </div>
           <div class="form-group">
-            <label class="form-label">Pesan Uji</label>
+            <label class="form-label">3. Pesan Uji</label>
             <input type="text" id="testPromptInput" class="input-text" value="Hai Bre AI, perkenalkan dirimu secara singkat.">
           </div>
         </div>
         
-        <div style="display: flex; gap: 8px; margin-bottom: 14px;">
+        <div style="display: flex; gap: 8px; margin-bottom: 14px; align-items: center; flex-wrap: wrap;">
           <button class="btn btn-save" id="btnRunTest" onclick="runLiveTest()">⚡ Kirim Query Uji</button>
           <button class="btn btn-outline" onclick="clearLiveOutput()">Bersihkan Output</button>
+          <span id="testProviderInfoBadge" style="font-size: 11.5px; color: #94a3b8; margin-left: 8px;"></span>
         </div>
         
         <div class="form-group">
