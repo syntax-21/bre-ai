@@ -21,7 +21,7 @@ function validateConfigUpdate(input) {
   for (const field of ['action', 'password', 'ok', 'isAdmin', 'telegramStatus', 'cloudStorageInfo', '_isReadOnlyFS', '_saveError', '_cloudStatus']) delete update[field];
   if (update.adminPassword === '••••••••') delete update.adminPassword;
   if (update.adminPassword !== undefined && (typeof update.adminPassword !== 'string' || update.adminPassword.trim().length < 12 || update.adminPassword.length > 256)) throw new Error('Password admin minimal 12 dan maksimal 256 karakter');
-  const numbers = { temperature: [0, 2], topP: [0, 1], maxTokens: [1, 32768], frequencyPenalty: [-2, 2], presencePenalty: [-2, 2], rateLimitMax: [1, 100], rateLimitWindow: [1, 3600], chatRateLimitMax: [1, 1000], chatRateLimitWindow: [1, 3600], cacheTTL: [1, 86400], telegramMaxHistory: [4, 100] };
+  const numbers = { temperature: [0, 2], topP: [0, 1], maxTokens: [1, 131072], frequencyPenalty: [-2, 2], presencePenalty: [-2, 2], rateLimitMax: [1, 100], rateLimitWindow: [1, 3600], chatRateLimitMax: [1, 1000], chatRateLimitWindow: [1, 3600], cacheTTL: [1, 86400], telegramMaxHistory: [4, 100] };
   for (const [key, [min, max]] of Object.entries(numbers)) {
     if (update[key] === undefined) continue;
     if (update[key] === '' || !Number.isFinite(Number(update[key])) || Number(update[key]) < min || Number(update[key]) > max) throw new Error(`${key} harus antara ${min} dan ${max}`);
