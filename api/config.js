@@ -41,7 +41,12 @@ module.exports = apiHandler(async (req, res) => {
   if (req.method === 'GET') {
     const config = isAdmin ? { ...cfg, adminPassword: cfg.adminPassword ? '••••••••' : '' } : {
       model: cfg.model, temperature: cfg.temperature, topP: cfg.topP, maxTokens: cfg.maxTokens,
-      reasoningEffort: cfg.reasoningEffort, streamEnabled: cfg.streamEnabled, requireAuth: cfg.requireAuth
+      reasoningEffort: cfg.reasoningEffort, streamEnabled: cfg.streamEnabled, requireAuth: cfg.requireAuth,
+      endpoints: (cfg.endpoints || []).filter(e => e.status !== false && e.enabled !== false).map(e => ({
+        name: e.name || 'Provider',
+        models: e.models || [],
+        mapping: e.mapping || []
+      }))
     };
     return res.json({ ok: true, isAdmin, config, serverTime: Date.now(), ...(isAdmin ? { cloudStorageInfo: shared.getCloudStorageInfo() } : {}) });
   }

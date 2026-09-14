@@ -14,19 +14,21 @@ const PRESET_TEMPLATES = {
 
 function syncProvidersFromUI() {
   const boxes = document.querySelectorAll('.provider-box');
+  if (!boxes || boxes.length === 0) return;
   const list = [];
   boxes.forEach(box => {
-    list.push({
-      name: box.querySelector('.p-name').value.trim(),
-      status: box.querySelector('.p-status').value === 'true',
-      weight: parseInt(box.querySelector('.p-weight').value) || 1,
-      url: box.querySelector('.p-url').value.trim(),
-      models: box.querySelector('.p-models').value.split(',').map(m => m.trim()).filter(Boolean),
-      mapping: box.querySelector('.p-mapping').value.split(',').map(m => m.trim()).filter(Boolean),
-      keys: box.querySelector('.p-keys').value.split('\n').map(k => k.trim()).filter(Boolean)
-    });
+    const name = box.querySelector('.p-name')?.value?.trim() || '';
+    const status = box.querySelector('.p-status')?.value === 'true';
+    const weight = parseInt(box.querySelector('.p-weight')?.value) || 1;
+    const url = box.querySelector('.p-url')?.value?.trim() || '';
+    const models = (box.querySelector('.p-models')?.value || '').split(',').map(m => m.trim()).filter(Boolean);
+    const mapping = (box.querySelector('.p-mapping')?.value || '').split(',').map(m => m.trim()).filter(Boolean);
+    const keys = (box.querySelector('.p-keys')?.value || '').split('\n').map(k => k.trim()).filter(Boolean);
+    list.push({ name, status, weight, url, models, mapping, keys });
   });
-  endpoints = list;
+  if (list.length > 0) {
+    endpoints = list;
+  }
 }
 
 function renderProviders() {

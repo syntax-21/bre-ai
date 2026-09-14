@@ -85,10 +85,19 @@
         </button>
 
         <!-- Quick Provider Select -->
-        <div class="model-select-wrapper desktop-only" title="Provider AI Aktif">
+        <div class="model-select-wrapper desktop-only" title="Pilih Provider AI">
           <svg class="model-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polygon points="12 8 8 12 12 16 16 12 12 8"></polygon></svg>
-          <select id="modelSelect" onchange="setProvider(this.value)">
-            <option value="auto">✨ Bre AI</option>
+          <select id="chatProviderSelect" onchange="onChatProviderChange(this.value)">
+            <option value="auto">🌐 Auto Provider</option>
+          </select>
+          <svg class="dropdown-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+
+        <!-- Quick Model Select -->
+        <div class="model-select-wrapper" title="Pilih Model AI">
+          <svg class="model-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+          <select id="modelSelect" onchange="setChatModel(this.value)">
+            <option value="auto">✨ Otomatis</option>
           </select>
           <svg class="dropdown-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
         </div>

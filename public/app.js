@@ -317,34 +317,115 @@ function applyLanguage(lang) {
   if (msgInput) msgInput.placeholder = dict.msgPlaceholder;
 }
 
-// ---- AI PROVIDER SELECTOR ----
-let selectedProvider = 'auto';
-selectedModel = 'auto';
+// ---- AI PROVIDER & MODEL SELECTOR ----
+let chatEndpoints = [];
+let selectedProvider = localStorage.getItem('bre_provider') || 'auto';
+let selectedModel = localStorage.getItem('bre_model') || 'auto';
 
 async function initModelSelect() {
-  const sel = document.getElementById('modelSelect');
-  if (!sel) return;
+  const provSel = document.getElementById('chatProviderSelect');
+  const modelSel = document.getElementById('modelSelect');
 
-  sel.innerHTML = '<option value="auto">✨ Bre AI</option>';
-  sel.value = 'auto';
-  selectedProvider = 'auto';
-  selectedModel = 'auto';
-  localStorage.setItem('bre_provider', 'auto');
-  localStorage.setItem('bre_model', 'auto');
+  try {
+    const r = await fetch('/api/config');
+    if (r.ok) {
+      const data = await r.json();
+      if (Array.isArray(data?.config?.endpoints)) {
+        chatEndpoints = data.config.endpoints;
+      }
+    }
+  } catch (e) {
+    console.warn('[Bre AI] Gagal memuat daftar provider publik:', e.message);
+  }
+
+  if (provSel) {
+    let provHtml = '<option value="auto">🌐 Auto Provider</option>';
+    chatEndpoints.forEach((ep, idx) => {
+      const name = ep.name || `Provider #${idx + 1}`;
+      provHtml += `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`;
+    });
+    provSel.innerHTML = provHtml;
+
+    if (selectedProvider && (selectedProvider === 'auto' || chatEndpoints.some(e => e.name === selectedProvider))) {
+      provSel.value = selectedProvider;
+    } else {
+      provSel.value = 'auto';
+      selectedProvider = 'auto';
+    }
+  }
+
+  updateChatModelOptions();
+}
+
+function onChatProviderChange(provName) {
+  selectedProvider = provName || 'auto';
+  localStorage.setItem('bre_provider', selectedProvider);
+  updateChatModelOptions();
+  toast('Provider dipilih: ' + (selectedProvider === 'auto' ? 'Auto Routing' : selectedProvider), 'ok');
+}
+
+function updateChatModelOptions() {
+  const modelSel = document.getElementById('modelSelect');
+  if (!modelSel) return;
+
+  const modelList = ['auto'];
+  const seen = new Set(['auto']);
+
+  if (selectedProvider === 'auto') {
+    chatEndpoints.forEach(ep => {
+      (ep.models || []).forEach(m => {
+        const clean = String(m || '').trim();
+        if (clean && !seen.has(clean)) { seen.add(clean); modelList.push(clean); }
+      });
+      (ep.mapping || []).forEach(map => {
+        const alias = String(map || '').split(':')[0]?.trim();
+        if (alias && !seen.has(alias)) { seen.add(alias); modelList.push(alias); }
+      });
+    });
+  } else {
+    const ep = chatEndpoints.find(e => e.name === selectedProvider);
+    if (ep) {
+      (ep.models || []).forEach(m => {
+        const clean = String(m || '').trim();
+        if (clean && !seen.has(clean)) { seen.add(clean); modelList.push(clean); }
+      });
+      (ep.mapping || []).forEach(map => {
+        const alias = String(map || '').split(':')[0]?.trim();
+        if (alias && !seen.has(alias)) { seen.add(alias); modelList.push(alias); }
+      });
+    }
+  }
+
+  if (modelList.length <= 1) modelList.push('mercury-2');
+
+  modelSel.innerHTML = modelList.map(m => {
+    const label = m === 'auto' ? '✨ Otomatis' : m;
+    return `<option value="${escapeHtml(m)}">${escapeHtml(label)}</option>`;
+  }).join('');
+
+  if (selectedModel && modelList.includes(selectedModel)) {
+    modelSel.value = selectedModel;
+  } else {
+    modelSel.value = 'auto';
+    selectedModel = 'auto';
+    localStorage.setItem('bre_model', 'auto');
+  }
+}
+
+function setChatModel(val) {
+  selectedModel = val || 'auto';
+  localStorage.setItem('bre_model', selectedModel);
+  const modelSel = document.getElementById('modelSelect');
+  const label = modelSel?.options[modelSel.selectedIndex]?.textContent || selectedModel;
+  toast('Model aktif: ' + label, 'ok');
 }
 
 function setProvider(val) {
-  selectedProvider = val || 'auto';
-  selectedModel = selectedProvider;
-  localStorage.setItem('bre_provider', selectedProvider);
-  localStorage.setItem('bre_model', selectedModel);
-  const sel = document.getElementById('modelSelect');
-  const label = sel?.options[sel.selectedIndex]?.textContent || selectedProvider;
-  toast('Provider aktif: ' + label, 'ok');
+  onChatProviderChange(val);
 }
 
 function setModel(val) {
-  setProvider(val);
+  setChatModel(val);
 }
 
 // ---- PARAMETERS (TEMPERATURE & MAX TOKENS) ----

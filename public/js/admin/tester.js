@@ -38,7 +38,7 @@ function updateTestModelDropdown() {
   if (!provSel) return;
 
   const currentProvVal = provSel.value;
-  let optionsHtml = '<option value="auto">🌐 Auto (Semua Provider Aktif)</option>';
+  let optionsHtml = '';
 
   endpoints.forEach((ep, idx) => {
     const name = ep.name || `Provider #${idx + 1}`;
@@ -46,11 +46,14 @@ function updateTestModelDropdown() {
     optionsHtml += `<option value="${idx}">${statusIcon} #${idx + 1}: ${name}</option>`;
   });
 
+  optionsHtml += '<option value="auto">🌐 Auto Routing (Semua Provider)</option>';
+
   provSel.innerHTML = optionsHtml;
   if (currentProvVal && (currentProvVal === 'auto' || endpoints[parseInt(currentProvVal)])) {
     provSel.value = currentProvVal;
   } else {
-    provSel.value = 'auto';
+    const firstActiveIdx = endpoints.findIndex(e => e.status !== false);
+    provSel.value = firstActiveIdx !== -1 ? String(firstActiveIdx) : (endpoints.length ? '0' : 'auto');
   }
 
   onTestProviderChange();
