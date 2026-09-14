@@ -135,6 +135,9 @@ async function stopTelegramBotService() {
 async function setupTelegramWebhookFromDomain() {
   let domain = document.getElementById('cfgTelegramDomain')?.value.trim() || window.location.host;
   domain = domain.replace(/^https?:\/\//i, '').replace(/\/api\/telegram\/?.*$/i, '').replace(/\/+$/, '');
+  if (domain.includes('-projects-') && domain.endsWith('.vercel.app')) {
+    toast('⚠️ Domain preview Vercel diproteksi login. Harap gunakan domain produksi (contoh: bre-ai.vercel.app atau www.breai.my.id)', 'err');
+  }
   const domainInp = document.getElementById('cfgTelegramDomain');
   if(domainInp) domainInp.value = domain;
   saveTelegramToLocalStorage();
