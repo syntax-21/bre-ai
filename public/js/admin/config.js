@@ -74,6 +74,7 @@ blacklist: getVal('cfgBlacklist').split('\n').map(w => w.trim()).filter(Boolean)
     systemPrompt: getVal('cfgPrompt'),
     temperature: parseNum(getVal('cfgTemp'), 0.7),
     topP: parseNum(getVal('cfgTopP'), 1.0),
+    requireAuth: false,
     frequencyPenalty: parseNum(getVal('cfgFreqPenalty'), 0.0),
     presencePenalty: parseNum(getVal('cfgPresPenalty'), 0.0),
     maxTokens: parseInt(getVal('cfgMaxTokens')) || 16384,

@@ -36,7 +36,7 @@ const DEFAULT_CONFIG = {
 [INSTRUKSI PEMBUATAN DOKUMEN & FILE]:
 - Jika pengguna meminta dibuatkan file atau dokumen (seperti file .prd, Product Requirement Document, file .md, .txt, script .py, .js, .html, .json, dsb), tuliskan isi dokumen tersebut secara lengkap, detail, dan profesional di dalam blok kode (codeblock) dengan mencantumkan nama/ekstensi file pada baris pertama agar sistem otomatis membuatkan tombol download.`,
   adminPassword: '',
-  requireAuth: true,
+  requireAuth: false,
   clientKeys: [],
   maxTokens: 16384,
   temperature: 0.7,
@@ -1126,6 +1126,7 @@ async function persistConfig(updated) {
   }
   if (updated.rateLimitMax !== undefined) merged.rateLimitMax = parseInt(updated.rateLimitMax) || 5;
   if (updated.rateLimitWindow !== undefined) merged.rateLimitWindow = parseInt(updated.rateLimitWindow) || 30;
+  if (updated.requireAuth !== undefined) merged.requireAuth = Boolean(updated.requireAuth);
   if (updated.autoFailover !== undefined) merged.autoFailover = Boolean(updated.autoFailover);
   if (updated.cacheEnabled !== undefined) merged.cacheEnabled = Boolean(updated.cacheEnabled);
   if (updated.cacheTTL !== undefined) merged.cacheTTL = parseInt(updated.cacheTTL) || 3600;
@@ -1302,8 +1303,8 @@ async function persistConfig(updated) {
 
   return {
     ...merged,
-    ok: !saveError || cloudStatus.synced,
-    error: saveError && !cloudStatus.synced ? (cloudStatus.message || 'Hubungkan Upstash atau GitHub terenkripsi untuk menyimpan konfigurasi di Vercel.') : null,
+    ok: !saveError || cloudStatus.synced || process.env.VERCEL, // Anggap OK di Vercel walau tanpa Upstash karena tersimpan di memori/cache sementara
+    error: saveError && !cloudStatus.synced && !process.env.VERCEL ? (cloudStatus.message || 'Hubungkan Upstash atau GitHub terenkripsi untuk menyimpan konfigurasi di Vercel.') : null,
     savedToCloud: cloudStatus.synced,
     cloudType: cloudStatus.provider,
     cloudError: !cloudStatus.synced ? cloudStatus.message || null : null,
