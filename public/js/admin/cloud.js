@@ -9,8 +9,9 @@ async function loadCloudStorageStatus(interactive = false) {
     const r = await fetch('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken }, body: JSON.stringify({ action: 'get_cloud_status' }) });
     if (!r.ok) return;
     const data = await r.json();
-    if (data.status) {
-      updateStorageBadges(data.status);
+    const st = data.cloudStorageInfo || data.status;
+    if (st) {
+      updateStorageBadges(st);
       if (interactive) {
         const st = data.status;
         if (st.upstashInvalidUrl) alert('⚠️ URL UPSTASH TIDAK VALID!\n\nGunakan URL REST API yang berakhiran .upstash.io, bukan URL browser console.');

@@ -198,9 +198,8 @@ setVal('cfgTelegramStyle', c.telegramStyle || 'santai');
 
     // Motivasi Harian
     const motivEl = document.getElementById('cfgMotivationEnabled'); if(motivEl) motivEl.checked = !!c.motivationEnabled;
-    const mTimes = Array.isArray(c.motivationTimes) && c.motivationTimes.length ? c.motivationTimes : ['08:00', '19:00'];
+    const mTimes = Array.isArray(c.motivationTimes) && c.motivationTimes.length ? c.motivationTimes : ['08:00'];
     setVal('cfgMotivationTime1', mTimes[0] || '08:00');
-    setVal('cfgMotivationTime2', mTimes[1] || '19:00');
     setVal('cfgMotivationCustom', c.motivationCustom || '');
     if (typeof updateMotivationStatus === 'function') updateMotivationStatus();
 

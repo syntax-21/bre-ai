@@ -73,7 +73,7 @@ const DEFAULT_CONFIG = {
   githubBranch: 'main',
   // Motivasi Harian (auto-send 2x sehari, sinkron Web + Telegram)
   motivationEnabled: false,
-  motivationTimes: ['08:00', '19:00'],
+  motivationTimes: ['08:00'],
   motivationCustom: '',
   // Transkripsi Audio / Voice Note (Whisper OpenAI-compatible)
   transcriptionEnabled: true,
