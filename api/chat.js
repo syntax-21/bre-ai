@@ -186,6 +186,10 @@ module.exports = apiHandler(async (req, res) => {
   const requestedLang = (req.headers['x-custom-language'] || body.language || 'auto').trim().toLowerCase();
   const stream = internal ? false : (cfg.forceStream === true ? true : (cfg.forceStream === false ? false : (body.stream !== undefined ? body.stream : cfg.streamEnabled !== false)));
 
+  if (isOwnershipOrIdentityQuery(allUserText)) {
+    return sendStandbyResponse(res, stream, getMultilingualIdentityResponse(allUserText, requestedStyle, requestedLang));
+  }
+
     // 6. Select Candidates for Routing & Auto-Failover
   let activeEps = (cfg.endpoints || []).filter(e => {
     const isStatusActive = e.status !== false && e.enabled !== false;
@@ -603,10 +607,10 @@ function isOwnershipOrIdentityQuery(text) {
   const q = text.toLowerCase().trim();
   const patterns = [
     // Indonesian & Regional
-    /\b(siapa|sp)\s+(pemilik|owner|pencipta|pembuat|developer|pendiri|creator|maker)\b/i,
+    /\b(siapa|sp)\s+(pemilik|owner|pencipta|pembuat|developer|pendiri|creator|maker)(mu|nya)?\b/i,
     /\b(siapa|sp)\s+(yang\s+)?(buat|bikin|ciptain|menciptakan|membuat|kembangin|mengembangkan|punya)\s+(kamu|anda|bot|ai|bre|sistem|ini)\b/i,
     /\b(kamu|anda|bre|bot|ai)\s+(milik|punya|ciptaan|buatan|karya|hasil\s+karya)\s+siapa\b/i,
-    /\b(pemilik|owner|pencipta|pembuat|developer|pendiri)\s+(kamu|anda|bre|bot|ai|bre\s*ai)\b/i,
+    /\b(pemilik|owner|pencipta|pembuat|developer|pendiri)(mu|nya)?\s+(kamu|anda|bre|bot|ai|bre\s*ai)?\b/i,
     /\b(saha\s+(nu\s+)?(ngadamel|boga|nyieun)|sinten\s+(ingkang\s+)?(damel|gadah))\b/i,
     // English
     /\bwho\s+(is\s+your|are\s+your)\s+(owner|creator|maker|developer|founder|author)\b/i,
