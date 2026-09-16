@@ -21,7 +21,7 @@ function syncProvidersFromUI() {
     const status = box.querySelector('.p-status')?.value === 'true';
     const weight = parseInt(box.querySelector('.p-weight')?.value) || 1;
     const url = box.querySelector('.p-url')?.value?.trim() || '';
-    const models = (box.querySelector('.p-models')?.value || '').split(',').map(m => m.trim()).filter(Boolean);
+    const models = (box.querySelector('.p-models')?.value || '').split(',').map(m => m.trim()).filter(m => m && m.toLowerCase() !== 'auto');
     const mapping = (box.querySelector('.p-mapping')?.value || '').split(',').map(m => m.trim()).filter(Boolean);
     const keys = (box.querySelector('.p-keys')?.value || '').split('\n').map(k => k.trim()).filter(Boolean);
     list.push({ name, status, weight, url, models, mapping, keys });
@@ -38,7 +38,9 @@ function renderProviders() {
     container.innerHTML = `<div style="text-align:center; padding: 40px; border: 1px dashed #232733; border-radius: 10px; color: #64748b;">Belum ada Provider API. Klik template di atas atau klik <b>+ Tambah Provider Manual</b>.</div>`;
     return;
   }
-  container.innerHTML = endpoints.map((ep, i) => `
+  container.innerHTML = endpoints.map((ep, i) => {
+    const cleanModels = (ep.models || []).filter(m => typeof m === 'string' && m.trim().toLowerCase() !== 'auto');
+    return `
     <div class="provider-box" id="providerCard_${i}">
       <div class="provider-box-head">
         <div style="display:flex; align-items:center; gap:10px;">
@@ -62,9 +64,9 @@ function renderProviders() {
       <div class="grid-2" style="margin-bottom:14px;">
         <div class="form-group" style="margin-bottom:0;">
           <label class="form-label">Model Asli (pisahkan koma)</label>
-          <input type="text" class="input-text p-models" id="pModels_${i}" value="${escapeHtml((ep.models || []).join(', '))}" placeholder="mercury-2, gpt-4o">
+          <input type="text" class="input-text p-models" id="pModels_${i}" value="${escapeHtml(cleanModels.join(', '))}" placeholder="mercury-2, gpt-4o">
           <div id="modelTestRow_${i}" style="margin-top:8px; display:flex; flex-wrap:wrap; gap:6px;">
-            ${(ep.models || []).map((m, mi) => `<div id="modelCard_${i}_${mi}" style="display:flex; align-items:center; gap:4px; background:#141922; border:1px solid #232733; border-radius:6px; padding:3px 8px; font-size:12px;"><span style="color:#e2e8f0;">${escapeHtml(m)}</span><button type="button" onclick="testModel(${i},'${m.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')" id="testModelBtn_${i}_${mi}" style="background:#1e3a5f; color:#38bdf8; border:1px solid #38bdf8; border-radius:4px; padding:1px 7px; font-size:11px; cursor:pointer;">⚡ Tes</button><span id="testModelBadge_${i}_${mi}" style="display:none;"></span></div>`).join('')}
+            ${cleanModels.map((m, mi) => `<div id="modelCard_${i}_${mi}" style="display:flex; align-items:center; gap:4px; background:#141922; border:1px solid #232733; border-radius:6px; padding:3px 8px; font-size:12px;"><span style="color:#e2e8f0;">${escapeHtml(m)}</span><button type="button" onclick="testModel(${i},'${m.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')" id="testModelBtn_${i}_${mi}" style="background:#1e3a5f; color:#38bdf8; border:1px solid #38bdf8; border-radius:4px; padding:1px 7px; font-size:11px; cursor:pointer;">⚡ Tes</button><span id="testModelBadge_${i}_${mi}" style="display:none;"></span></div>`).join('')}
           </div>
           <div id="testAllSummary_${i}" style="display:none; margin-top:10px;"></div>
           <div class="form-hint">Klik 🔍 Detect Model untuk isi otomatis. Klik 🧪 Test All untuk uji semua.</div>
@@ -80,7 +82,8 @@ function renderProviders() {
         <div class="form-hint">Server otomatis merotasi kunci (Round-Robin) untuk menghindari rate limit.</div>
       </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
   updateTopActiveEndpointsCount();
   if (typeof updateTelegramModelDropdown === 'function') updateTelegramModelDropdown(document.getElementById('cfgTelegramModel')?.value);
 }
@@ -166,10 +169,14 @@ async function detectModels(i) {
     if (!data.ok) { if(badge){badge.className='ping-badge fail';badge.textContent='🔴 Gagal';} return toast('Deteksi gagal: ' + (data.error || 'Unknown error'), 'err'); }
     const provResult = data.results?.find(r => r.provider === ep.name) || data.results?.[0];
     if (!provResult || !provResult.ok) { if(badge){badge.className='ping-badge fail';badge.textContent='🔴 Gagal';} return toast('Gagal mendeteksi model', 'err'); }
-    const models = provResult.models || [];
+    const models = (provResult.models || []).filter(m => typeof m === 'string' && m.trim().toLowerCase() !== 'auto');
     const modelsInput = document.querySelector(`#providerCard_${i} .p-models`);
     if (modelsInput) modelsInput.value = models.join(', ');
     endpoints[i].models = models;
+    const testRow = document.getElementById(`modelTestRow_${i}`);
+    if (testRow) {
+      testRow.innerHTML = models.map((m, mi) => `<div id="modelCard_${i}_${mi}" style="display:flex; align-items:center; gap:4px; background:#141922; border:1px solid #232733; border-radius:6px; padding:3px 8px; font-size:12px;"><span style="color:#e2e8f0;">${escapeHtml(m)}</span><button type="button" onclick="testModel(${i},'${m.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')" id="testModelBtn_${i}_${mi}" style="background:#1e3a5f; color:#38bdf8; border:1px solid #38bdf8; border-radius:4px; padding:1px 7px; font-size:11px; cursor:pointer;">⚡ Tes</button><span id="testModelBadge_${i}_${mi}" style="display:none;"></span></div>`).join('');
+    }
     if (badge) { badge.className = 'ping-badge ok'; badge.textContent = `✅ ${models.length} model terdeteksi`; }
     toast(`[${ep.name}] Berhasil mendeteksi ${models.length} model`, 'ok');
   } catch(e) {
@@ -261,13 +268,18 @@ async function testAllModels(providerIdx) {
 }
 
 function applyWorkingModels(providerIdx, workingModels) {
-  if (!workingModels?.length) return toast('Tidak ada model yang berhasil.', 'err');
-  endpoints[providerIdx].models = workingModels;
+  const validModels = (workingModels || []).filter(m => typeof m === 'string' && m.trim().toLowerCase() !== 'auto');
+  if (!validModels.length) return toast('Tidak ada model yang berhasil.', 'err');
+  endpoints[providerIdx].models = validModels;
   const modelsInput = document.getElementById(`pModels_${providerIdx}`);
-  if (modelsInput) modelsInput.value = workingModels.join(', ');
+  if (modelsInput) modelsInput.value = validModels.join(', ');
+  const testRow = document.getElementById(`modelTestRow_${providerIdx}`);
+  if (testRow) {
+    testRow.innerHTML = validModels.map((m, mi) => `<div id="modelCard_${providerIdx}_${mi}" style="display:flex; align-items:center; gap:4px; background:#141922; border:1px solid #232733; border-radius:6px; padding:3px 8px; font-size:12px;"><span style="color:#e2e8f0;">${escapeHtml(m)}</span><button type="button" onclick="testModel(${providerIdx},'${m.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')" id="testModelBtn_${providerIdx}_${mi}" style="background:#1e3a5f; color:#38bdf8; border:1px solid #38bdf8; border-radius:4px; padding:1px 7px; font-size:11px; cursor:pointer;">⚡ Tes</button><span id="testModelBadge_${providerIdx}_${mi}" style="display:none;"></span></div>`).join('');
+  }
   const summaryEl = document.getElementById(`testAllSummary_${providerIdx}`);
-  if (summaryEl) summaryEl.innerHTML = `<div style="background:#0d1a0d; border:1px solid #22c55e; border-radius:8px; padding:10px 14px; font-size:13px; color:#4ade80;">✅ Diterapkan! ${workingModels.length} model aktif. Klik <b>Simpan Semua Pengaturan</b> untuk menyimpan.</div>`;
-  toast(`✅ Daftar model diperbarui: ${workingModels.length} model aktif.`, 'ok');
+  if (summaryEl) summaryEl.innerHTML = `<div style="background:#0d1a0d; border:1px solid #22c55e; border-radius:8px; padding:10px 14px; font-size:13px; color:#4ade80;">✅ Diterapkan! ${validModels.length} model aktif. Klik <b>Simpan Semua Pengaturan</b> untuk menyimpan.</div>`;
+  toast(`✅ Daftar model diperbarui: ${validModels.length} model aktif.`, 'ok');
 }
 
 async function runBatchLatencyTest() {

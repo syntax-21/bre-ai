@@ -35,7 +35,7 @@ module.exports = apiHandler(async (req, res) => {
         if (Array.isArray(ep.models)) {
           ep.models.forEach(m => {
             const mClean = (m || '').trim();
-            if (mClean && !modelSet.has(mClean)) {
+            if (mClean && mClean.toLowerCase() !== 'auto' && !modelSet.has(mClean)) {
               modelSet.add(mClean);
               modelDetails.push({
                 id: mClean,
@@ -56,7 +56,7 @@ module.exports = apiHandler(async (req, res) => {
           const pairs = mapStr.split(',').map(p => p.trim()).filter(Boolean);
           pairs.forEach(p => {
             const [alias] = p.split(':').map(s => s.trim());
-            if (alias && !modelSet.has(alias)) {
+            if (alias && alias.toLowerCase() !== 'auto' && !modelSet.has(alias)) {
               modelSet.add(alias);
               modelDetails.push({
                 id: alias,

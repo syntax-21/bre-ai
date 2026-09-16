@@ -387,7 +387,7 @@ function syncProvidersFromUI() {
       status: box.querySelector('.p-status').value === 'true',
       weight: parseInt(box.querySelector('.p-weight').value) || 1,
       url: box.querySelector('.p-url').value.trim(),
-      models: box.querySelector('.p-models').value.split(',').map(m => m.trim()).filter(Boolean),
+      models: box.querySelector('.p-models').value.split(',').map(m => m.trim()).filter(m => m && m.toLowerCase() !== 'auto'),
       mapping: box.querySelector('.p-mapping').value.split(',').map(m => m.trim()).filter(Boolean),
       keys: box.querySelector('.p-keys').value.split('\n').map(k => k.trim()).filter(Boolean)
     });
@@ -406,7 +406,9 @@ function renderProviders() {
     return;
   }
   
-  container.innerHTML = endpoints.map((ep, i) => `
+  container.innerHTML = endpoints.map((ep, i) => {
+    const cleanModels = (ep.models || []).filter(m => typeof m === 'string' && m.trim().toLowerCase() !== 'auto');
+    return `
     <div class="provider-box" id="providerCard_${i}">
       <div class="provider-box-head">
         <div style="display:flex; align-items:center; gap:10px;">
@@ -455,10 +457,10 @@ function renderProviders() {
             <label class="form-label" style="margin-bottom:0;">Model Asli (Pisahkan dengan koma)</label>
           </div>
           <div style="display:flex; gap:6px; align-items:center;">
-            <input type="text" class="input-text p-models" id="pModels_${i}" value="${(ep.models || []).join(', ')}" placeholder="mercury-2, gpt-4o" style="flex:1;">
+            <input type="text" class="input-text p-models" id="pModels_${i}" value="${cleanModels.join(', ')}" placeholder="mercury-2, gpt-4o" style="flex:1;">
           </div>
           <div id="modelTestRow_${i}" style="margin-top:8px; display:flex; flex-wrap:wrap; gap:6px;">
-            ${(ep.models || []).map((m, mi) => `
+            ${cleanModels.map((m, mi) => `
               <div id="modelCard_${i}_${mi}" style="display:flex; align-items:center; gap:4px; background:#141922; border:1px solid #232733; border-radius:6px; padding:3px 8px; font-size:12px; transition: border-color 0.3s;">
                 <span style="color:#e2e8f0;">${m}</span>
                 <button type="button" onclick="testModel(${i},'${m.replace(/'/g, "\\'")}')"
@@ -488,7 +490,8 @@ function renderProviders() {
         <div class="form-hint">Server akan otomatis merotasi kunci (Round-Robin) untuk menghindari rate limit.</div>
       </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
   updateTopActiveEndpointsCount();
 }
 
@@ -626,7 +629,7 @@ async function detectModels(i) {
       return toast('Gagal mendeteksi model: ' + (provResult?.error || 'Endpoint tidak mendukung /v1/models'), 'err');
     }
 
-    const models = provResult.models || [];
+    const models = (provResult.models || []).filter(m => typeof m === 'string' && m.trim().toLowerCase() !== 'auto');
     if (!models.length) {
       if (badge) { badge.className = 'ping-badge testing'; badge.textContent = '🟡 0 model'; }
       return toast('Endpoint tidak mengembalikan daftar model.', 'warn');
@@ -826,16 +829,17 @@ async function testAllModels(providerIdx) {
 // APPLY WORKING MODELS — filter out failed models
 // ========================================================
 function applyWorkingModels(providerIdx, workingModels) {
-  if (!workingModels || !workingModels.length) return toast('Tidak ada model yang berhasil untuk diterapkan.', 'err');
+  const validModels = (workingModels || []).filter(m => typeof m === 'string' && m.trim().toLowerCase() !== 'auto');
+  if (!validModels.length) return toast('Tidak ada model yang berhasil untuk diterapkan.', 'err');
   
-  endpoints[providerIdx].models = workingModels;
+  endpoints[providerIdx].models = validModels;
   const modelsInput = document.getElementById(`pModels_${providerIdx}`);
-  if (modelsInput) modelsInput.value = workingModels.join(', ');
+  if (modelsInput) modelsInput.value = validModels.join(', ');
 
   // Re-render test row with only working models
   const testRow = document.getElementById(`modelTestRow_${providerIdx}`);
   if (testRow) {
-    testRow.innerHTML = workingModels.map((m, mi) => `
+    testRow.innerHTML = validModels.map((m, mi) => `
       <div id="modelCard_${providerIdx}_${mi}" style="display:flex; align-items:center; gap:4px; background:#0d1a0d; border:1px solid #22c55e; border-radius:6px; padding:3px 8px; font-size:12px;">
         <span style="color:#4ade80;">✅</span>
         <span style="color:#e2e8f0;">${m}</span>
@@ -2170,11 +2174,11 @@ function onTestProviderChange() {
     endpoints.forEach(ep => {
       (ep.models || []).forEach(m => {
         const clean = String(m || '').trim();
-        if (clean && !seen.has(clean)) { seen.add(clean); modelList.push(clean); }
+        if (clean && clean.toLowerCase() !== 'auto' && !seen.has(clean)) { seen.add(clean); modelList.push(clean); }
       });
       (ep.mapping || []).forEach(map => {
         const alias = String(map || '').split(':')[0]?.trim();
-        if (alias && !seen.has(alias)) { seen.add(alias); modelList.push(alias); }
+        if (alias && alias.toLowerCase() !== 'auto' && !seen.has(alias)) { seen.add(alias); modelList.push(alias); }
       });
     });
     if (badge) badge.textContent = `ℹ️ Menguji semua provider (${endpoints.length} terdaftar)`;
@@ -2185,11 +2189,11 @@ function onTestProviderChange() {
       const seen = new Set();
       (ep.models || []).forEach(m => {
         const clean = String(m || '').trim();
-        if (clean && !seen.has(clean)) { seen.add(clean); modelList.push(clean); }
+        if (clean && clean.toLowerCase() !== 'auto' && !seen.has(clean)) { seen.add(clean); modelList.push(clean); }
       });
       (ep.mapping || []).forEach(map => {
         const alias = String(map || '').split(':')[0]?.trim();
-        if (alias && !seen.has(alias)) { seen.add(alias); modelList.push(alias); }
+        if (alias && alias.toLowerCase() !== 'auto' && !seen.has(alias)) { seen.add(alias); modelList.push(alias); }
       });
       if (badge) badge.textContent = `📍 Base URL: ${ep.url || '-'} (${modelList.length} model terdaftar)`;
     }

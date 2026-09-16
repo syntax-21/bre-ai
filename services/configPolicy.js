@@ -47,6 +47,9 @@ function validateConfigUpdate(input) {
         if (ep[key] !== undefined && !Array.isArray(ep[key]) && typeof ep[key] !== 'string') throw new Error(`${key} endpoint tidak valid`);
         if (Array.isArray(ep[key]) && (ep[key].length > (key === 'keys' ? 30 : 500) || ep[key].some(v => typeof v !== 'string' || v.length > 2048 || /[\r\n\x00]/.test(v)))) throw new Error(`${key} endpoint tidak valid`);
       }
+      if (Array.isArray(ep.models)) {
+        ep.models = ep.models.filter(m => typeof m === 'string' && m.trim().toLowerCase() !== 'auto');
+      }
       if (ep.weight !== undefined && (!Number.isFinite(Number(ep.weight)) || ep.weight < 1 || ep.weight > 100)) throw new Error('Bobot endpoint harus 1–100');
     }
   }

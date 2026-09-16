@@ -76,11 +76,11 @@ function onTestProviderChange() {
     endpoints.forEach(ep => {
       (ep.models || []).forEach(m => {
         const clean = String(m || '').trim();
-        if (clean && !seen.has(clean)) { seen.add(clean); modelList.push(clean); }
+        if (clean && clean.toLowerCase() !== 'auto' && !seen.has(clean)) { seen.add(clean); modelList.push(clean); }
       });
       (ep.mapping || []).forEach(map => {
         const alias = String(map || '').split(':')[0]?.trim();
-        if (alias && !seen.has(alias)) { seen.add(alias); modelList.push(alias); }
+        if (alias && alias.toLowerCase() !== 'auto' && !seen.has(alias)) { seen.add(alias); modelList.push(alias); }
       });
     });
     if (badge) badge.textContent = `ℹ️ Menguji semua provider (${endpoints.length} terdaftar)`;
@@ -92,11 +92,11 @@ function onTestProviderChange() {
       const seen = new Set();
       (ep.models || []).forEach(m => {
         const clean = String(m || '').trim();
-        if (clean && !seen.has(clean)) { seen.add(clean); modelList.push(clean); }
+        if (clean && clean.toLowerCase() !== 'auto' && !seen.has(clean)) { seen.add(clean); modelList.push(clean); }
       });
       (ep.mapping || []).forEach(map => {
         const alias = String(map || '').split(':')[0]?.trim();
-        if (alias && !seen.has(alias)) { seen.add(alias); modelList.push(alias); }
+        if (alias && alias.toLowerCase() !== 'auto' && !seen.has(alias)) { seen.add(alias); modelList.push(alias); }
       });
       if (badge) badge.textContent = `📍 Base URL: ${ep.url || '-'} (${modelList.length} model terdaftar)`;
     }

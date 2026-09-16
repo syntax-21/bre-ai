@@ -1014,6 +1014,14 @@ function getConfig() {
     cfg.telegramWebhookSecret = cfg.webhookSecret;
   }
 
+  if (Array.isArray(cfg.endpoints)) {
+    cfg.endpoints.forEach(ep => {
+      if (Array.isArray(ep.models)) {
+        ep.models = ep.models.filter(m => typeof m === 'string' && m.trim().toLowerCase() !== 'auto');
+      }
+    });
+  }
+
   memConfig = cfg;
   return cfg;
 }
@@ -1050,6 +1058,13 @@ async function syncCloudConfig(force = false) {
         if (remoteVal && typeof remoteVal === 'object') {
           memConfig = applyEnvironment({ ...cfg, ...cleanObject(remoteVal) });
           if (memConfig.adminPassword === 'admin') memConfig.adminPassword = '';
+          if (Array.isArray(memConfig.endpoints)) {
+            memConfig.endpoints.forEach(ep => {
+              if (Array.isArray(ep.models)) {
+                ep.models = ep.models.filter(m => typeof m === 'string' && m.trim().toLowerCase() !== 'auto');
+              }
+            });
+          }
           lastCloudSync = now;
           try { fs.writeFileSync(TMP_CONFIG_PATH, JSON.stringify(memConfig, null, 2), 'utf-8'); } catch(e){}
           return memConfig;
@@ -1077,6 +1092,13 @@ async function syncCloudConfig(force = false) {
           const fileStr = Buffer.from(data.content, 'base64').toString('utf-8');
           const parsed = decryptConfig(JSON.parse(fileStr));
           memConfig = applyEnvironment({ ...cfg, ...parsed });
+          if (Array.isArray(memConfig.endpoints)) {
+            memConfig.endpoints.forEach(ep => {
+              if (Array.isArray(ep.models)) {
+                ep.models = ep.models.filter(m => typeof m === 'string' && m.trim().toLowerCase() !== 'auto');
+              }
+            });
+          }
           lastCloudSync = now;
           try { fs.writeFileSync(TMP_CONFIG_PATH, JSON.stringify(memConfig, null, 2), 'utf-8'); } catch(e){}
           return memConfig;
@@ -1108,7 +1130,7 @@ async function persistConfig(updated) {
       url: e.url,
       status: e.status !== false,
       weight: parseInt(e.weight) || 1,
-      models: Array.isArray(e.models) ? e.models : (typeof e.models === 'string' ? e.models.split(',').map(m=>m.trim()).filter(Boolean) : []),
+      models: (Array.isArray(e.models) ? e.models : (typeof e.models === 'string' ? e.models.split(',').map(m=>m.trim()).filter(Boolean) : [])).filter(m => typeof m === 'string' && m.trim().toLowerCase() !== 'auto'),
       mapping: Array.isArray(e.mapping) ? e.mapping : (typeof e.mapping === 'string' ? e.mapping.split(',').map(m=>m.trim()).filter(Boolean) : []),
        keys: parseKeys(e.keys || e.apiKey)
     }));
@@ -1645,6 +1667,8 @@ async function fetchAvailableModels(endpoint) {
     } else if (Array.isArray(data)) {
       modelIds = data.map(m => (typeof m === 'string' ? m : m.id || m.name)).filter(Boolean);
     }
+
+    modelIds = modelIds.filter(m => typeof m === 'string' && m.trim().toLowerCase() !== 'auto');
 
     return { ok: true, models: modelIds, modelsUrl };
   } catch (err) {
