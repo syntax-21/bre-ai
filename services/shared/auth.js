@@ -14,21 +14,30 @@ function hashAdminPassword(pw) {
   return `scrypt$${salt}$${hash}`;
 }
 
-function verifyAdminPassword(input, stored) {
-  if (!stored || typeof input !== 'string' || !input || input.length > 256) return false;
-  const s = String(stored);
+function matchPassword(input, expected) {
+  if (!expected || typeof input !== 'string' || !input || input.length > 256) return false;
+  const s = String(expected).trim();
   const i = String(input);
   if (s.startsWith('scrypt$')) {
     const parts = s.split('$');
     if (parts.length !== 3 || !/^[a-f0-9]{32}$/i.test(parts[1]) || !/^[a-f0-9]{64}$/i.test(parts[2])) return false;
     const candidate = crypto.scryptSync(i, parts[1], 32);
-    const expected = Buffer.from(parts[2], 'hex');
-    return candidate.length === expected.length && crypto.timingSafeEqual(candidate, expected);
+    const expectedBuf = Buffer.from(parts[2], 'hex');
+    return candidate.length === expectedBuf.length && crypto.timingSafeEqual(candidate, expectedBuf);
   }
   const a = Buffer.from(i);
   const b = Buffer.from(s);
   if (a.length !== b.length) return false;
   return crypto.timingSafeEqual(a, b);
+}
+
+function verifyAdminPassword(input, stored) {
+  if (process.env.ADMIN_PASSWORD) {
+    const envPw = process.env.ADMIN_PASSWORD.trim();
+    if (envPw && matchPassword(input, envPw)) return true;
+  }
+  if (stored && matchPassword(input, stored)) return true;
+  return false;
 }
 
 function getClientIp(req) {
