@@ -18,6 +18,10 @@ async function handle(ctx) {
 
   // /stats, /telemetry, /overview
   if (lowerText === '/stats' || lowerText.startsWith('/stats ') || lowerText === '/telemetry' || lowerText.startsWith('/telemetry ') || lowerText === '/overview' || lowerText.startsWith('/overview ')) {
+    if (!isOwnerUser) {
+      await api.sendTelegramMessage(chatId, '❌ Perintah ini khusus untuk Admin / Owner.', null, null, token);
+      return true;
+    }
     const rawArg = lowerText.replace(/^\/(stats|telemetry|overview)/, '').trim();
     let range = 'today';
     if (['24h', '24 jam', '1d'].includes(rawArg)) range = '24h';

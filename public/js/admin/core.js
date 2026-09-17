@@ -100,6 +100,8 @@ async function doLogin() {
     });
     if (r.ok) {
       adminToken = pw;
+      // Note: Storing plaintext password in sessionStorage since server expects raw password as Bearer token.
+      // This is automatically cleared on tab close. For full security, server-side session tokens would be needed.
       try { sessionStorage.setItem('bre_admin_pw', pw); } catch(e){}
       document.getElementById('loginOverlay').style.display = 'none';
       document.getElementById('appContainer').style.display = 'flex';

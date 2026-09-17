@@ -8,10 +8,11 @@ const {
   getConfig,
   saveConfig
 } = require('../../api/_shared');
+const { BoundedMap } = require('../shared/boundedMap');
 
-// Per-chat language and style selections (in-memory state)
-const chatLanguages = new Map(); // chatId -> languageCode ('id', 'en', 'ja', etc.)
-const chatStyles = new Map();    // chatId -> styleCode ('santai', 'jakarta', 'jawa_halus', etc.)
+// Per-chat language and style selections (in-memory state, dibatasi agar tidak bocor memori)
+const chatLanguages = new BoundedMap(5000); // chatId -> languageCode ('id', 'en', 'ja', etc.)
+const chatStyles = new BoundedMap(5000);    // chatId -> styleCode ('santai', 'jakarta', 'jawa_halus', etc.)
 
 // Multi-language options synchronized with core API
 const LANGUAGE_OPTIONS = SHARED_LANGUAGES || {

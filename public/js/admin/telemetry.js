@@ -73,8 +73,8 @@ function renderRecentRequests(requests) {
       <div class="recent-req-item-left">
         <div style="display:flex;align-items:center;gap:6px;">
           <span style="width:7px;height:7px;border-radius:50%;background:${dotColor};box-shadow:0 0 6px ${dotColor};flex-shrink:0;"></span>
-          <span class="recent-req-model">${req.model||'model'}</span>
-          <span style="font-size:10.5px;color:#64748b;background:#0c0f17;border:1px solid #1e2536;padding:1px 5px;border-radius:4px;">${req.provider||'proxy'}</span>
+          <span class="recent-req-model">${escapeHtml(req.model||'model')}</span>
+          <span style="font-size:10.5px;color:#64748b;background:#0c0f17;border:1px solid #1e2536;padding:1px 5px;border-radius:4px;">${escapeHtml(req.provider||'proxy')}</span>
         </div>
         <div class="recent-req-prompt">${escapeHtml(req.requestSummary||req.model||'Chat completion request')}</div>
       </div>

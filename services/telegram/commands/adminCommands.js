@@ -16,12 +16,80 @@ const {
 } = require('../accessControl');
 const { sendAdminPanel } = require('../adminMenu');
 
+const pendingBroadcasts = new Map();
+
 // Broadcast announcement to all known users
 async function handleBroadcastCommand(chatId, fromUser, broadcastText, botService) {
   if (!require('../accessControl').isOwner(fromUser, botService.activeOwnerId)) return false;
   const token = botService.activeToken || null;
-  const messageToSend = broadcastText.trim();
-  if (!messageToSend) {
+  const arg = broadcastText.trim();
+
+  if (arg.toLowerCase() === 'confirm') {
+    const pendingText = pendingBroadcasts.get(String(fromUser.id));
+    if (!pendingText) {
+      await api.sendTelegramMessage(
+        chatId,
+        '⚠️ Tidak ada siaran broadcast yang pending untuk dikonfirmasi.',
+        null, null, token
+      );
+      return true;
+    }
+    pendingBroadcasts.delete(String(fromUser.id));
+    const messageToSend = pendingText;
+
+    const cfg = getConfig();
+    const recipientIds = new Set();
+
+    for (const [uid] of recentUsers) {
+      recipientIds.add(Number(uid));
+    }
+    if (Array.isArray(cfg.telegramUsers)) {
+      for (const u of cfg.telegramUsers) {
+        if (u.id && !isNaN(Number(u.id)) && u.role !== 'blocked') {
+          recipientIds.add(Number(u.id));
+        }
+      }
+    }
+
+    if (recipientIds.size === 0) {
+      await api.sendTelegramMessage(
+        chatId,
+        '⚠️ *Tidak Ada Penerima Siaran*\n\nBelum ada pengguna lain yang berinteraksi dengan bot sejak server aktif.',
+        null, null, token
+      );
+      return true;
+    }
+
+    await api.sendTelegramMessage(chatId, `🚀 *Memulai Pengiriman Siaran...*\nTarget penerima: ${recipientIds.size} pengguna.`, null, null, token);
+
+    let successCount = 0;
+    let failCount = 0;
+    const formattedBroadcast = `📢 *PENGUMUMAN RESMI BRE AI*\n\n${messageToSend}\n\n— _Pesan dari Pengelola Bot_`;
+
+    for (const targetId of recipientIds) {
+      if (!require('../accessControl').isUserAllowed({ id: targetId })) continue;
+      if (String(targetId) === String(fromUser.id)) continue;
+      try {
+        await api.sendTelegramMessage(targetId, formattedBroadcast, null, null, token);
+        successCount++;
+        await new Promise(r => setTimeout(r, 60));
+      } catch (err) {
+        failCount++;
+      }
+    }
+
+    await api.sendTelegramMessage(
+      chatId,
+      `✅ *Laporan Siaran Broadcast Selesai*\n\n` +
+      `• Berhasil terkirim: *${successCount} pengguna*\n` +
+      `• Gagal terkirim: *${failCount} pengguna*\n` +
+      `• Total target: *${recipientIds.size} akun*`,
+      null, null, token
+    );
+    return true;
+  }
+
+  if (!arg) {
     await api.sendTelegramMessage(
       chatId,
       '📢 *Panduan Format Broadcast:*\n\nGunakan format:\n`/broadcast [isi pesan siaran]`\n\n_Contoh:_\n`/broadcast Halo! Kami baru saja memperbarui kecerdasan Bre AI ke versi terbaru 🚀`',
@@ -53,30 +121,10 @@ async function handleBroadcastCommand(chatId, fromUser, broadcastText, botServic
     return true;
   }
 
-  await api.sendTelegramMessage(chatId, `🚀 *Memulai Pengiriman Siaran...*\nTarget penerima: ${recipientIds.size} pengguna.`, null, null, token);
-
-  let successCount = 0;
-  let failCount = 0;
-  const formattedBroadcast = `📢 *PENGUMUMAN RESMI BRE AI*\n\n${messageToSend}\n\n— _Pesan dari Pengelola Bot_`;
-
-  for (const targetId of recipientIds) {
-    if (!require('../accessControl').isUserAllowed({ id: targetId })) continue;
-    if (String(targetId) === String(fromUser.id)) continue;
-    try {
-      await api.sendTelegramMessage(targetId, formattedBroadcast, null, null, token);
-      successCount++;
-      await new Promise(r => setTimeout(r, 60));
-    } catch (err) {
-      failCount++;
-    }
-  }
-
+  pendingBroadcasts.set(String(fromUser.id), arg);
   await api.sendTelegramMessage(
     chatId,
-    `✅ *Laporan Siaran Broadcast Selesai*\n\n` +
-    `• Berhasil terkirim: *${successCount} pengguna*\n` +
-    `• Gagal terkirim: *${failCount} pengguna*\n` +
-    `• Total target: *${recipientIds.size} akun*`,
+    `Kirim broadcast ke ${recipientIds.size} user? Ketik /broadcast confirm`,
     null, null, token
   );
   return true;

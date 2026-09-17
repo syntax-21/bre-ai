@@ -320,13 +320,23 @@ async function sendTelegramContact(chatId, phoneNumber, firstName, lastName = ''
 }
 
 // Send photo from URL or file
-async function sendTelegramPhoto(chatId, photoUrl, caption = '', token = null) {
+async function sendTelegramPhoto(chatId, photoUrl, caption = '', tokenOrMarkup = null, markupOrToken = null) {
+  let token = null;
+  let replyMarkup = null;
+  if (typeof tokenOrMarkup === 'string') {
+    token = tokenOrMarkup;
+    replyMarkup = markupOrToken;
+  } else {
+    replyMarkup = tokenOrMarkup;
+    token = markupOrToken;
+  }
   const payload = {
     chat_id: chatId,
     photo: photoUrl,
     parse_mode: 'Markdown'
   };
   if (caption) payload.caption = cleanTelegramText(caption).slice(0, 1024);
+  if (replyMarkup) payload.reply_markup = replyMarkup;
   return api.apiCall('sendPhoto', payload, token);
 }
 

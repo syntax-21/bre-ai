@@ -244,8 +244,8 @@ function renderTelegramUsersTable() {
     const userTag = u.username ? `@${u.username.replace(/^@/,'')}` : (u.id ? `ID: ${u.id}` : '-');
     const isAllowed = u.role === 'diizinkan' || u.role === 'whitelist';
     return `<tr>
-      <td style="font-family:monospace;font-size:13px;color:#38bdf8;font-weight:600;">${userTag}</td>
-      <td style="color:#f1f5f9;"><span>${u.name||'-'}</span>${u.role!=='owner'?`<button class="btn" onclick="editTelegramUserNote(${u.originalIndex})" title="Edit Catatan" style="background:transparent;border:none;color:#64748b;cursor:pointer;padding:0 4px;font-size:11px;">✏️</button>`:''}</td>
+      <td style="font-family:monospace;font-size:13px;color:#38bdf8;font-weight:600;">${escapeHtml(userTag)}</td>
+      <td style="color:#f1f5f9;"><span>${escapeHtml(u.name||'-')}</span>${u.role!=='owner'?`<button class="btn" onclick="editTelegramUserNote(${u.originalIndex})" title="Edit Catatan" style="background:transparent;border:none;color:#64748b;cursor:pointer;padding:0 4px;font-size:11px;">✏️</button>`:''}</td>
       <td>${roleBadge}</td>
       <td style="font-size:12px;color:#94a3b8;">${dateStr}</td>
       <td style="text-align:right;"><div style="display:inline-flex;gap:6px;">

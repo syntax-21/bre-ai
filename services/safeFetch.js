@@ -1,6 +1,11 @@
 const dns = require('dns');
 const net = require('net');
-const { Agent } = require('undici');
+let Agent;
+try {
+  Agent = require('undici').Agent;
+} catch (e) {
+  Agent = null;
+}
 
 function isPrivateAddress(address) {
   let ip = address.toLowerCase().replace(/^\[|\]$/g, '');
@@ -35,18 +40,20 @@ function validateUrl(raw) {
   return url;
 }
 
-const dispatcher = new Agent({ connect: { lookup(hostname, options, callback) {
+const dispatcher = Agent ? new Agent({ connect: { lookup(hostname, options, callback) {
   dns.lookup(hostname, { ...options, all: true }, (err, addresses) => {
     if (err) return callback(err);
     if (!addresses.length || (!privateAllowed(hostname) && addresses.some(a => isPrivateAddress(a.address)))) return callback(new Error('Alamat DNS privat/internal ditolak'));
     if (options.all) callback(null, addresses);
     else callback(null, addresses[0].address, addresses[0].family);
   });
-} }, headersTimeout: 25000, bodyTimeout: 25000, connections: 8 });
+} }, headersTimeout: 25000, bodyTimeout: 25000, connections: 8 }) : null;
 
 async function safeFetch(raw, options = {}) {
   const url = validateUrl(raw);
-  return globalThis.fetch(url.href, { ...options, redirect: 'error', dispatcher, signal: options.signal || AbortSignal.timeout(20000) });
+  const opts = { ...options, redirect: 'error', signal: options.signal || AbortSignal.timeout(20000) };
+  if (dispatcher) opts.dispatcher = dispatcher;
+  return globalThis.fetch(url.href, opts);
 }
 
 async function responseText(response, maxBytes = 2 * 1024 * 1024) {

@@ -39,7 +39,20 @@ module.exports = apiHandler(async (req, res) => {
     throw httpError(401, cfg.adminPassword ? 'Unauthorized: Password admin diperlukan' : 'Admin belum dikonfigurasi. Atur ADMIN_PASSWORD di environment.');
   }
   if (req.method === 'GET') {
-    const config = isAdmin ? { ...cfg, adminPassword: cfg.adminPassword ? '••••••••' : '' } : {
+    const maskKeys = (eps) => (eps || []).map(e => ({
+      ...e,
+      keys: (e.keys || []).map(k => k ? ('••••' + String(k).slice(-4)) : ''),
+      apiKey: e.apiKey ? ('••••' + String(e.apiKey).slice(-4)) : undefined
+    }));
+    const config = isAdmin ? {
+      ...cfg,
+      adminPassword: cfg.adminPassword ? '••••••••' : '',
+      endpoints: maskKeys(cfg.endpoints),
+      upstashRedisToken: cfg.upstashRedisToken ? '••••••••' : '',
+      githubToken: cfg.githubToken ? '••••••••' : '',
+      transcriptionKey: cfg.transcriptionKey ? '••••••••' : '',
+      telegramBotToken: cfg.telegramBotToken ? ('••••' + String(cfg.telegramBotToken).slice(-6)) : ''
+    } : {
       model: cfg.model, temperature: cfg.temperature, topP: cfg.topP, maxTokens: cfg.maxTokens,
       reasoningEffort: cfg.reasoningEffort, streamEnabled: cfg.streamEnabled, requireAuth: cfg.requireAuth,
       endpoints: (cfg.endpoints || []).filter(e => e.status !== false && e.enabled !== false).map(e => ({

@@ -547,7 +547,7 @@ async function handle(cq, botService, router = null) {
         inline_keyboard: [
           [
             { text: '🔄 Coba Deteksi Lagi', callback_data: `adm_prov_detect:${idx}` },
-            { text: '✏️ Edit Model Manual', callback_data: `adm_prov_edit_field:${idx}:model` }
+            { text: '✏️ Edit Model Manual', callback_data: `adm_prov_edit_model:${idx}` }
           ],
           [
             { text: '⚡ Test Ping Latensi', callback_data: `adm_prov_ping:${idx}` },
@@ -640,7 +640,7 @@ async function handle(cq, botService, router = null) {
         inline_keyboard: [
           [
             { text: '🔄 Coba Tes Lagi', callback_data: `adm_prov_test:${idx}` },
-            { text: '✏️ Edit Model', callback_data: `adm_prov_edit_field:${idx}:model` }
+            { text: '✏️ Edit Model', callback_data: `adm_prov_edit_model:${idx}` }
           ],
           [
             { text: '⚡ Test Ping Latensi', callback_data: `adm_prov_ping:${idx}` },

@@ -185,7 +185,7 @@ class TelegramBotService {
   }
 
   sendTelegramPhoto(chatId, photoBufferOrUrl, caption = '', replyMarkup = null, customToken = null) {
-    return sendTelegramPhoto(chatId, photoBufferOrUrl, caption, customToken || this.activeToken);
+    return sendTelegramPhoto(chatId, photoBufferOrUrl, caption, replyMarkup, customToken || this.activeToken);
   }
 
   // Delegated UI / Menu
@@ -461,16 +461,24 @@ class TelegramBotService {
 
   async checkReminders() {
     const dueList = getDueReminders();
-    if (!dueList || dueList.length === 0) return;
-
-    for (const r of dueList) {
-      try {
-        const text = `⏰ *PENGINGAT ANDA*\n\n"${r.message}"\n\n_Pengingat dijadwalkan untuk sekarang._`;
-        await this.sendTelegramMessage(r.chatId, text);
-        markReminderSent(r.id);
-      } catch (e) {
-        console.warn(`[Reminder Error] Gagal kirim reminder ${r.id}:`, e.message);
+    if (dueList && dueList.length > 0) {
+      for (const r of dueList) {
+        try {
+          const text = `⏰ *PENGINGAT ANDA*\n\n"${r.message}"\n\n_Pengingat dijadwalkan untuk sekarang._`;
+          await this.sendTelegramMessage(r.chatId, text);
+          markReminderSent(r.id);
+        } catch (e) {
+          console.warn(`[Reminder Error] Gagal kirim reminder ${r.id}:`, e.message);
+        }
       }
+    }
+
+    // Auto-check and trigger daily motivation at scheduled hours (WIB)
+    try {
+      const motivation = require('../motivation');
+      await motivation.checkAndSendMotivation();
+    } catch (e) {
+      console.warn('[Motivation Auto-Check] Error:', e.message);
     }
   }
 

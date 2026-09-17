@@ -7,7 +7,7 @@
 <br />
 
 [![Language](https://img.shields.io/badge/Language-🇮🇩%20Bahasa%20Indonesia%20|%20🇬🇧%20English-blue.svg)](README.md)
-[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D18.0.0-339933.svg?logo=node.js)](https://nodejs.org)
+[![Node.js](https://img.shields.io/badge/Node.js-%3E%3D20.0.0-339933.svg?logo=node.js)](https://nodejs.org)
 [![Platform](https://img.shields.io/badge/Platform-Serverless%20|%20Vercel%20|%20Local-black.svg?logo=vercel)](https://vercel.com)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -204,14 +204,16 @@ bre-ai-main/
 │   └── telegram_sessions.json         # Telegram multi-turn chat session memory
 │
 ├── public/                            # FRONTEND WEB APPLICATION
+│   ├── js/app/                        # MODULAR WEB CHAT (state.js, ui.js, media.js, chat.js)
+│   ├── js/admin/                      # MODULAR ADMIN CONSOLE (providers, telemetry, details, etc.)
 │   ├── admin.html                     # Bre AI Admin Console (Linear/Vercel Dark, Telemetry Radar)
-│   ├── admin.js                       # Admin panel interactive logic (Canvas mesh, date filter, key mask)
-│   ├── app.js                         # Web chat client (Markdown, LaTeX, canvas, & download)
+│   ├── app.js                         # Web chat loader fallback
 │   ├── bre_ai_avatar.jpg              # Official Bre AI visual avatar asset
 │   ├── index.html                     # Main user chat interface
 │   └── style.css                      # Dark theme system, glassmorphism, & UI animations
 │
 ├── services/                          # BACKGROUND SERVICES & BOT
+│   ├── shared/                        # MODULAR CORE HUB (configStore, auth, telemetry, prompt, standby)
 │   ├── telegram/                      # MODULAR TELEGRAM BOT ENGINE (SRP)
 │   │   ├── accessControl.js           # Access control system (Owner, Allowed, Blocked)
 │   │   ├── adminMenu.js               # Telegram inline keyboard menu controller (/admin)

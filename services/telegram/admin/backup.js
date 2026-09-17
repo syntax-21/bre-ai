@@ -96,6 +96,7 @@ async function handle(cq, botService, router = null) {
       await answerCallback(cq.id, 'Konfirmasi kedaluwarsa atau tidak valid.', true, token);
       return;
     }
+    const oldConfig = getConfig();
     const defConfig = {
       endpoints: [{
         name: "Inception Labs",
@@ -108,7 +109,10 @@ async function handle(cq, botService, router = null) {
       maxTokens: 16384,
       autoFailover: true,
       cacheEnabled: false,
-      blacklist: []
+      blacklist: [],
+      telegramOwnerId: oldConfig.telegramOwnerId,
+      telegramUsers: oldConfig.telegramUsers,
+      telegramAccessMode: oldConfig.telegramAccessMode
     };
     saveConfig(defConfig);
     await answerCallback(cq.id, '🔄 Pengaturan berhasil direset ke Default Pabrik!', true, token);

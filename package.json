@@ -11,7 +11,7 @@
     "test": "node tests/verify_security_hardening.js"
   },
   "engines": {
-    "node": ">=22.13.0 <25"
+    "node": ">=20.0.0 <25"
   },
   "author": "Amirun Rayan Ariandi",
   "license": "MIT",

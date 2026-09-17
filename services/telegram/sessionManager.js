@@ -208,12 +208,37 @@ function scheduleSaveToDisk() {
         if (encKey && encStr) {
           if (ensureDataDir()) {
             try {
-              fs.writeFileSync(SESSIONS_FILE, encStr, { encoding: 'utf-8', mode: 0o600 });
+              const tmpFile = SESSIONS_FILE + '.tmp.' + process.pid;
+              try {
+                fs.writeFileSync(tmpFile, encStr, { encoding: 'utf-8', mode: 0o600 });
+                fs.renameSync(tmpFile, SESSIONS_FILE);
+              } catch (err) {
+                if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
+                throw err;
+              }
             } catch (e) {
-              try { fs.writeFileSync(TMP_SESSIONS_FILE, encStr, 'utf-8'); } catch (err2) {}
+              try {
+                const tmpFile = TMP_SESSIONS_FILE + '.tmp.' + process.pid;
+                try {
+                  fs.writeFileSync(tmpFile, encStr, 'utf-8');
+                  fs.renameSync(tmpFile, TMP_SESSIONS_FILE);
+                } catch (err2) {
+                  if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
+                  throw err2;
+                }
+              } catch (err2) {}
             }
           } else {
-            try { fs.writeFileSync(TMP_SESSIONS_FILE, encStr, 'utf-8'); } catch (err2) {}
+            try {
+              const tmpFile = TMP_SESSIONS_FILE + '.tmp.' + process.pid;
+              try {
+                fs.writeFileSync(tmpFile, encStr, 'utf-8');
+                fs.renameSync(tmpFile, TMP_SESSIONS_FILE);
+              } catch (err2) {
+                if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
+                throw err2;
+              }
+            } catch (err2) {}
           }
         }
       }

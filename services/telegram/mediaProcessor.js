@@ -118,6 +118,58 @@ function tryParseJson(str) {
 }
 
 /**
+ * Maximum file size for outbound documents (bytes). Telegram limit is 50MB.
+ * We set a conservative 20MB limit to avoid memory issues.
+ */
+const MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024; // 20MB
+
+/**
+ * Allowed MIME types for outbound media files.
+ * Only text-based content is allowed to be sent as documents.
+ */
+const ALLOWED_MIME_PATTERNS = [
+  /^text\//,
+  /^application\/json$/,
+  /^application\/xml$/,
+  /^application\/yaml$/,
+  /^application\/x-yaml$/,
+  /^application\/javascript$/,
+  /^application\/x-javascript$/,
+  /^application\/typescript$/,
+  /^application\/sql$/,
+  /^application\/x-sh$/,
+  /^application\/x-python$/,
+  /^application\/x-httpd-php$/,
+  /^application\/x-java$/,
+  /^application\/x-ruby$/,
+  /^application\/x-perl$/,
+  /^application\/x-lua$/,
+  /^application\/x-go$/,
+  /^application\/x-rust$/
+];
+
+/**
+ * Validate that content size is within limits and content type is acceptable.
+ * @param {string} filename 
+ * @param {string} content 
+ * @returns {{ valid: boolean, error?: string }}
+ */
+function validateOutboundFile(filename, content) {
+  if (!filename || typeof filename !== 'string') {
+    return { valid: false, error: 'Nama file tidak valid' };
+  }
+  if (content === undefined || content === null) {
+    return { valid: false, error: 'Konten file kosong' };
+  }
+  const contentStr = String(content);
+  const sizeBytes = Buffer.byteLength(contentStr, 'utf-8');
+  if (sizeBytes > MAX_FILE_SIZE_BYTES) {
+    return { valid: false, error: `Ukuran file terlalu besar (${(sizeBytes / 1024 / 1024).toFixed(1)}MB). Maksimum ${MAX_FILE_SIZE_BYTES / 1024 / 1024}MB.` };
+  }
+  return { valid: true };
+}
+
+/**
  * Process raw AI answer, extract interactive tags and codeblocks,
  * deliver actual physical files via sendTelegramDocument, and send text response.
  * @param {string|number} chatId 
@@ -197,6 +249,11 @@ async function processAndSendOutboundMedia(chatId, rawAnswer, token = null, load
     }
 
     if (filename && (content !== '' && content !== undefined)) {
+      const validation = validateOutboundFile(filename, content);
+      if (!validation.valid) {
+        console.warn(`[TelegramBot] File ${filename} ditolak: ${validation.error}`);
+        return '';
+      }
       generatedFiles.push(filename);
       const finalCaption = caption || `📄 Berkas \`${filename}\` siap diunduh.`;
       outboundActions.push(async () => {
@@ -336,19 +393,24 @@ async function processAndSendOutboundMedia(chatId, rawAnswer, token = null, load
       }
 
       if (detectedFilename && !generatedFiles.includes(detectedFilename)) {
-        extractedCount++;
-        generatedFiles.push(detectedFilename);
         const finalFn = detectedFilename;
         const finalCode = code;
-        outboundActions.push(async () => {
-          await api.sendTelegramDocument(
-            chatId,
-            finalFn,
-            finalCode,
-            `📥 *Berkas Unduhan:* \`${finalFn}\`\n_Dibuat otomatis oleh Bre AI_`,
-            token
-          );
-        });
+        const validation = validateOutboundFile(finalFn, finalCode);
+        if (validation.valid) {
+          extractedCount++;
+          generatedFiles.push(detectedFilename);
+          outboundActions.push(async () => {
+            await api.sendTelegramDocument(
+              chatId,
+              finalFn,
+              finalCode,
+              `📥 *Berkas Unduhan:* \`${finalFn}\`\n_Dibuat otomatis oleh Bre AI_`,
+              token
+            );
+          });
+        } else {
+          console.warn(`[TelegramBot] Code block ${finalFn} ditolak: ${validation.error}`);
+        }
       }
     }
   }
