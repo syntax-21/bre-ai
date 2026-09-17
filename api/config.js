@@ -1,133 +1,339 @@
-const crypto = require('crypto');
-const shared = require('./_shared');
-const { apiHandler, httpError, consumeLimit, safeEqual } = require('../services/httpSecurity');
-const { validateUrl } = require('../services/safeFetch');
-const { logAdminAction } = shared;
+// ================================================================
+// admin/providers.js - Provider cards, ping, detect models
+// ================================================================
 
-function getToken(req) {
-  const auth = req.headers?.authorization || '';
-  return typeof auth === 'string' ? auth.replace(/^Bearer\s+/i, '').trim() : '';
-}
+const PRESET_TEMPLATES = {
+  inception: { name: 'Inception Labs', url: 'https://api.inceptionlabs.ai/v1/chat/completions', models: ['mercury-2'], mapping: ['gpt-4o:mercury-2'], keys: [] },
+  openai: { name: 'OpenAI', url: 'https://api.openai.com/v1/chat/completions', models: ['gpt-4o', 'gpt-4o-mini', 'o1-preview'], mapping: [], keys: [] },
+  groq: { name: 'Groq Cloud', url: 'https://api.groq.com/openai/v1/chat/completions', models: ['llama-3.3-70b-versatile', 'mixtral-8x7b-32768'], mapping: [], keys: [] },
+  deepseek: { name: 'DeepSeek API', url: 'https://api.deepseek.com/chat/completions', models: ['deepseek-chat', 'deepseek-reasoner'], mapping: [], keys: [] },
+  openrouter: { name: 'OpenRouter', url: 'https://openrouter.ai/api/v1/chat/completions', models: ['anthropic/claude-3.5-sonnet'], mapping: [], keys: [] },
+  together: { name: 'Together AI', url: 'https://api.together.xyz/v1/chat/completions', models: ['meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo'], mapping: [], keys: [] },
+  ollama: { name: 'Ollama (Localhost)', url: 'http://localhost:11434/v1/chat/completions', models: ['llama3.2', 'qwen2.5-coder'], mapping: [], keys: ['ollama-local-key'] }
+};
 
-async function telegramStatus(cfg) {
-  const bot = require('../services/telegramBot');
-  const status = bot.getStatus();
-  if (!cfg.telegramBotToken) return status;
-  const api = require('../services/telegram/api');
-  const [me, webhook] = await Promise.all([
-    api.testToken(cfg.telegramBotToken),
-    api.apiCall('getWebhookInfo', {}, cfg.telegramBotToken).catch(() => ({}))
-  ]);
-  let cleanUrl = '';
-  try { const url = new URL(webhook.url); url.search = ''; cleanUrl = url.href; } catch {}
-  return { ...status, botInfo: me.ok ? me.bot : null, isWebhookActive: !!webhook.url,
-    webhookUrl: cleanUrl, pendingUpdates: webhook.pending_update_count || 0,
-    ownerId: cfg.telegramOwnerId, accessMode: cfg.telegramAccessMode,
-    userCount: cfg.telegramUsers?.length || 0, activeConversations: status.activeSessions };
-}
-
-module.exports = apiHandler(async (req, res) => {
-  const cfg = await shared.syncCloudConfig();
-  const body = req.body || {};
-  const token = getToken(req) || (body.action === 'login' && typeof body.password === 'string' ? body.password : '');
-  const ip = shared.getClientIp(req);
-  // Apply failed-password throttling to EVERY admin action, including authenticated GET.
-  const rate = shared.checkRateLimit(ip);
-  if (rate.limited) { res.setHeader('Retry-After', String(rate.retryAfter)); throw httpError(429, 'Terlalu banyak percobaan login. Coba lagi nanti.'); }
-  const isAdmin = shared.verifyAdminPassword(token, cfg.adminPassword);
-  if (!isAdmin && (req.method === 'POST' || token)) {
-    shared.recordFailedAttempt(ip);
-    throw httpError(401, cfg.adminPassword ? 'Unauthorized: Password admin diperlukan' : 'Admin belum dikonfigurasi. Atur ADMIN_PASSWORD di environment.');
-  }
-  if (req.method === 'GET') {
-    const config = isAdmin ? {
-      ...cfg,
-      adminPassword: cfg.adminPassword ? '••••••••' : ''
-    } : {
-      model: cfg.model, temperature: cfg.temperature, topP: cfg.topP, maxTokens: cfg.maxTokens,
-      reasoningEffort: cfg.reasoningEffort, streamEnabled: cfg.streamEnabled, requireAuth: cfg.requireAuth,
-      endpoints: (cfg.endpoints || []).filter(e => e.status !== false && e.enabled !== false).map(e => ({
-        name: e.name || 'Provider',
-        models: e.models || [],
-        mapping: e.mapping || []
-      }))
-    };
-    return res.json({ ok: true, isAdmin, config, serverTime: Date.now(), ...(isAdmin ? { cloudStorageInfo: shared.getCloudStorageInfo() } : {}) });
-  }
-  if (body.action === 'login') { shared.clearLoginAttempts(ip); return res.json({ ok: true }); }
-
-  const action = body.action || 'save_full_config';
-  if (['test_model', 'detect_models', 'fetch_models', 'preview_motivation', 'send_motivation_now', 'test_telegram', 'setup_webhook'].includes(action)) {
-    if (consumeLimit('probe:' + ip, 60, 60000)) throw httpError(429, 'Batas pengujian tercapai');
-  }
-  if (action === 'get_metrics') return res.json({ ok: true, metrics: shared.getMetrics() });
-  if (action === 'get_logs') return res.json({ ok: true, logs: shared.getLogs() });
-  if (action === 'clear_logs') { shared.clearLogs(); return res.json({ ok: true }); }
-  if (action === 'get_audit_logs') return res.json({ ok: true, auditLogs: shared.getAuditLogs() });
-  if (action === 'clear_audit_logs') { shared.clearAuditLogs(); logAdminAction('clear_audit_logs', {}, ip); return res.json({ ok: true }); }
-  if (action === 'get_router_overview') return res.json({ ok: true, overview: shared.getRouterOverview(body) });
-  if (action === 'get_router_details') return res.json({ ok: true, details: shared.getRouterDetails(body) });
-  if (action === 'get_cloud_status') return res.json({ ok: true, cloudStorageInfo: shared.getCloudStorageInfo() });
-  if (action === 'test_upstash') return res.json(await shared.testUpstash(body.url ?? cfg.upstashRedisUrl, body.token ?? cfg.upstashRedisToken));
-  if (action === 'test_github') return res.json(await shared.testGitHub(body.token ?? cfg.githubToken, body.repo ?? cfg.githubRepo, body.branch ?? cfg.githubBranch));
-  if (['detect_models', 'fetch_models', 'test_model'].includes(action)) {
-    const endpoint = typeof body.endpoint === 'object' ? body.endpoint : {
-      url: body.url || body.endpoint, keys: body.keys || [body.key].filter(Boolean), name: body.providerName || body.provider
-    };
-    if (action === 'test_model') return res.json(await shared.testSingleModel(endpoint, body.model));
-    const result = await shared.fetchAvailableModels(endpoint);
-    return res.json({ ...result, results: [{ provider: endpoint.name, ...result }] });
-  }
-
-  if (action === 'get_telegram_status') return res.json({ ok: true, status: await telegramStatus(cfg) });
-  if (['test_telegram', 'test_telegram_token'].includes(action)) {
-    const api = require('../services/telegram/api');
-    const botToken = cfg.telegramBotToken;
-    const result = await api.testToken(botToken);
-    if (!result.ok) return res.status(400).json(result);
-    let messageSent = false;
-    if (body.chatId && /^\d+$/.test(String(body.chatId))) {
-      await api.apiCall('sendMessage', { chat_id: body.chatId, text: `✅ Koneksi Bre AI berhasil. Bot: @${result.bot.username}` }, botToken);
-      messageSent = true;
+function syncProvidersFromUI() {
+  const boxes = document.querySelectorAll('.provider-box');
+  if (!boxes || boxes.length === 0) return;
+  const list = [];
+  const isMaskedVal = v => typeof v === 'string' && /[\u2022]/.test(v);
+  boxes.forEach((box, idx) => {
+    const name = box.querySelector('.p-name')?.value?.trim() || '';
+    const status = box.querySelector('.p-status')?.value === 'true';
+    const weight = parseInt(box.querySelector('.p-weight')?.value) || 1;
+    const url = box.querySelector('.p-url')?.value?.trim() || '';
+    const models = (box.querySelector('.p-models')?.value || '').split(',').map(m => m.trim()).filter(m => m && m.toLowerCase() !== 'auto');
+    const mapping = (box.querySelector('.p-mapping')?.value || '').split(',').map(m => m.trim()).filter(Boolean);
+    let keys = (box.querySelector('.p-keys')?.value || '').split('\n').map(k => k.trim()).filter(Boolean);
+    // Abaikan key tersamarkan (••••xxxx) dari textarea agar tidak menimpa key asli di state.
+    if (!keys.length || keys.some(isMaskedVal)) {
+      const prev = endpoints[idx];
+      if (prev && Array.isArray(prev.keys) && prev.keys.some(k => !isMaskedVal(k))) {
+        keys = prev.keys;
+      } else {
+        keys = keys.filter(k => !isMaskedVal(k));
+      }
     }
-    return res.json({ ...result, botUsername: result.bot.username, botName: result.bot.first_name, messageSent });
+    list.push({ name, status, weight, url, models, mapping, keys });
+  });
+  if (list.length > 0) {
+    endpoints = list;
   }
-  if (action === 'setup_webhook') {
-    const url = validateUrl(body.url);
-    if (url.protocol !== 'https:' || url.search || url.pathname !== '/api/telegram') throw httpError(400, 'Gunakan URL HTTPS /api/telegram tanpa query');
-    const botToken = cfg.telegramBotToken;
-    const api = require('../services/telegram/api');
-    const result = await api.testToken(botToken);
-    if (!result.ok) return res.status(400).json(result);
-    const secret = cfg.telegramWebhookSecret || cfg.webhookSecret || crypto.randomBytes(32).toString('hex');
-    if (!/^[A-Za-z0-9_-]{1,256}$/.test(secret)) throw httpError(400, 'Secret webhook tidak valid');
-    const saved = await shared.saveConfig({ telegramWebhookSecret: secret, telegramDomain: url.host, telegramEnabled: true });
-    if (!saved.ok) throw httpError(503, saved.error);
-    await api.apiCall('setWebhook', { url: url.href, secret_token: secret, allowed_updates: ['message', 'callback_query'] }, botToken);
-    return res.json({ ok: true, bot: result.bot, botUsername: result.bot.username, botName: result.bot.first_name, status: await telegramStatus(shared.getConfig()) });
+}
+
+function renderProviders() {
+  const container = document.getElementById('providersList');
+  if (!container) return;
+  if (!endpoints.length) {
+    container.innerHTML = `<div style="text-align:center; padding: 40px; border: 1px dashed #232733; border-radius: 10px; color: #64748b;">Belum ada Provider API. Klik template di atas atau klik <b>+ Tambah Provider Manual</b>.</div>`;
+    return;
   }
-  if (action === 'restart_bot' || action === 'stop_bot') {
-    const enabled = action === 'restart_bot';
-    const saved = await shared.saveConfig({ telegramEnabled: enabled });
-    if (!saved.ok) throw httpError(503, saved.error);
-    const bot = require('../services/telegramBot');
-    if (enabled) return res.json(await bot.init());
-    bot.stop();
-    return res.json({ ok: true, message: 'Bot dihentikan' });
+  container.innerHTML = endpoints.map((ep, i) => {
+    const cleanModels = (ep.models || []).filter(m => typeof m === 'string' && m.trim().toLowerCase() !== 'auto');
+    return `
+    <div class="provider-box" id="providerCard_${i}">
+      <div class="provider-box-head">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div style="font-weight:600; font-size:15px; color:#38bdf8;">⚡ Provider #${i+1}: <span style="color:#f1f5f9;">${escapeHtml(ep.name) || 'Unnamed'}</span></div>
+          <span class="ping-badge ${ep.status !== false ? 'ok' : 'fail'}">${ep.status !== false ? '🟢 Active' : '🔴 Inactive'}</span>
+          <span id="pingBadge_${i}" class="ping-badge" style="display:none;"></span>
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn btn-ping" onclick="pingProvider(${i})">⚡ Test Ping</button>
+          <button class="btn" style="background:#1e3a5f; color:#38bdf8; border:1px solid #38bdf8;" onclick="detectModels(${i})">🔍 Detect Model</button>
+          <button class="btn" style="background:#1a2e1a; color:#4ade80; border:1px solid #4ade80;" onclick="testAllModels(${i})" id="testAllBtn_${i}">🧪 Test All Models</button>
+          <button class="btn btn-danger" onclick="removeProvider(${i})">Hapus</button>
+        </div>
+      </div>
+      <div class="grid-3" style="margin-bottom:14px;">
+        <div class="form-group" style="margin-bottom:0;"><label class="form-label">Nama Provider</label><input type="text" class="input-text p-name" value="${escapeHtml(ep.name) || ''}" placeholder="Contoh: Inception Labs"></div>
+        <div class="form-group" style="margin-bottom:0;"><label class="form-label">Status Routing</label><select class="input-select p-status"><option value="true" ${ep.status !== false ? 'selected' : ''}>🟢 Aktif</option><option value="false" ${ep.status === false ? 'selected' : ''}>🔴 Nonaktif</option></select></div>
+        <div class="form-group" style="margin-bottom:0;"><label class="form-label">Priority / Weight (1-100)</label><input type="number" class="input-text p-weight" value="${ep.weight || 1}" min="1" max="100"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Base URL Endpoint</label><input type="url" class="input-text p-url" value="${escapeHtml(ep.url) || ''}" placeholder="https://api.inceptionlabs.ai/v1/chat/completions"></div>
+      <div class="grid-2" style="margin-bottom:14px;">
+        <div class="form-group" style="margin-bottom:0;">
+          <label class="form-label">Model Asli (pisahkan koma)</label>
+          <input type="text" class="input-text p-models" id="pModels_${i}" value="${escapeHtml(cleanModels.join(', '))}" placeholder="mercury-2, gpt-4o">
+          <div id="modelTestRow_${i}" style="margin-top:8px; display:flex; flex-wrap:wrap; gap:6px;">
+            ${cleanModels.map((m, mi) => `<div id="modelCard_${i}_${mi}" style="display:flex; align-items:center; gap:4px; background:#141922; border:1px solid #232733; border-radius:6px; padding:3px 8px; font-size:12px;"><span style="color:#e2e8f0;">${escapeHtml(m)}</span><button type="button" onclick="testModel(${i},'${m.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')" id="testModelBtn_${i}_${mi}" style="background:#1e3a5f; color:#38bdf8; border:1px solid #38bdf8; border-radius:4px; padding:1px 7px; font-size:11px; cursor:pointer;">⚡ Tes</button><span id="testModelBadge_${i}_${mi}" style="display:none;"></span></div>`).join('')}
+          </div>
+          <div id="testAllSummary_${i}" style="display:none; margin-top:10px;"></div>
+          <div class="form-hint">Klik 🔍 Detect Model untuk isi otomatis. Klik 🧪 Test All untuk uji semua.</div>
+        </div>
+        <div class="form-group" style="margin-bottom:0;"><label class="form-label">Model Mapping / Alias (alias:asli)</label><input type="text" class="input-text p-mapping" value="${escapeHtml((ep.mapping || []).join(', '))}" placeholder="claude-3-opus:mercury-2"></div>
+      </div>
+      <div class="form-group" style="margin-bottom:0;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <label class="form-label" style="margin-bottom:0;">API Keys (Multi-Key Round Robin)</label>
+          <button type="button" class="btn btn-outline" style="font-size:11px; padding:3px 8px;" onclick="toggleKeyMask(${i})" id="keyMaskBtn_${i}">👁️ Tampilkan Kunci</button>
+        </div>
+        <textarea class="input-textarea p-keys masked-key" id="pKeys_${i}" rows="3" placeholder="sk-key-1&#10;sk-key-2 (satu key per baris)">${escapeHtml((ep.keys || []).join('\n'))}</textarea>
+        ${keyPreviewHtml(ep, i)}
+        <div class="form-hint">Kunci tersimpan di server / Upstash. Server otomatis merotasi kunci (Round-Robin) untuk menghindari rate limit.</div>
+      </div>
+    </div>
+  `;
+  }).join('');
+  updateTopActiveEndpointsCount();
+  if (typeof updateTelegramModelDropdown === 'function') updateTelegramModelDropdown(document.getElementById('cfgTelegramModel')?.value);
+}
+
+function keyPreviewHtml(ep, i) {
+  const keys = Array.isArray(ep.keys) ? ep.keys.filter(Boolean) : [];
+  if (!keys.length) return '<div class="form-hint" style="color:#f59e0b;">⚠️ Belum ada API key terpasang di provider ini.</div>';
+  return `
+    <div id="keyPreviewBox_${i}" style="margin-top:6px; font-size:11.5px; color:#94a3b8; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+      <span style="color:#38bdf8; font-weight:600;">🔑 Terpasang (${keys.length} key):</span>
+      ${keys.map(k => {
+        const s = String(k || '').trim();
+        const masked = s.length > 12 ? `${s.slice(0, 6)}...${s.slice(-4)}` : (s || '••••••••');
+        return `<code style="background:#0f172a; padding:2px 6px; border-radius:4px; border:1px solid #1e293b; color:#34d399;" title="${escapeHtml(s)}">${escapeHtml(masked)}</code>`;
+      }).join(' ')}
+    </div>`;
+}
+
+function toggleKeyMask(i) {
+  const ta = document.getElementById(`pKeys_${i}`);
+  const btn = document.getElementById(`keyMaskBtn_${i}`);
+  if (!ta || !btn) return;
+  const isMasked = ta.classList.contains('masked-key');
+  if (isMasked) {
+    ta.classList.remove('masked-key');
+    btn.textContent = '🔒 Sembunyikan Kunci';
+  } else {
+    ta.classList.add('masked-key');
+    btn.textContent = '👁️ Tampilkan Kunci';
   }
-  if (['get_motivation', 'preview_motivation', 'send_motivation_now'].includes(action)) {
-    const motivation = require('../services/motivation');
-    if (action === 'get_motivation') return res.json({ ok: true, enabled: cfg.motivationEnabled, times: cfg.motivationTimes, lastSent: motivation.getLastMotivation(), recipients: motivation.collectRecipients().length });
-    const result = action === 'preview_motivation' ? await motivation.previewMotivation(body.customText) : await motivation.sendMotivationNow(body.customText);
-    return res.json({ ok: true, ...result });
+}
+
+function addProvider() {
+  syncProvidersFromUI();
+  endpoints.push({ name: 'Provider Baru', status: true, weight: 1, url: '', models: [], mapping: [], keys: [] });
+  renderProviders();
+  toast('Provider baru ditambahkan', 'ok');
+}
+
+function addPreset(type) {
+  const t = PRESET_TEMPLATES[type];
+  if (!t) return;
+  syncProvidersFromUI();
+  endpoints.unshift({ ...t, keys: [...t.keys] });
+  renderProviders();
+  toast(`Template [${t.name}] berhasil ditambahkan!`, 'ok');
+}
+
+function removeProvider(i) {
+  if (!confirm('Hapus provider ini dari konfigurasi?')) return;
+  syncProvidersFromUI();
+  endpoints.splice(i, 1);
+  renderProviders();
+  toast('Provider dihapus', 'ok');
+}
+
+async function pingProvider(i) {
+  syncProvidersFromUI();
+  const ep = endpoints[i];
+  if (!ep || !ep.url) return toast('URL Endpoint belum diisi', 'err');
+  const badge = document.getElementById(`pingBadge_${i}`);
+  if (badge) { badge.style.display = 'inline-flex'; badge.className = 'ping-badge testing'; badge.textContent = '⏳ Testing Ping...'; }
+  try {
+    const key = ep.keys?.[0] || '';
+const model = ep.models?.[0] || 'mercury-2';
+    const r = await fetch('/api/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
+      body: JSON.stringify({ customEndpoint: ep.url, customModel: model, customKeys: key })
+    });
+    const data = await r.json();
+    const res = data.results?.[0];
+    if (res && res.status === 'OK') {
+      badge.className = 'ping-badge ok';
+      badge.textContent = `🟢 ${res.latencyMs}ms (${res.httpStatus})`;
+      toast(`[${ep.name}] Online! Latensi: ${res.latencyMs}ms`, 'ok');
+    } else {
+      badge.className = 'ping-badge fail';
+      badge.textContent = `🔴 Fail (${res?.httpStatus || 'Error'})`;
+      toast(`[${ep.name}] Gagal: ${res?.error || 'HTTP ' + res?.httpStatus}`, 'err');
+    }
+  } catch(e) {
+    if (badge) { badge.className = 'ping-badge fail'; badge.textContent = '🔴 Offline'; }
+    toast('Error ping: ' + e.message, 'err');
   }
-  if (['save_full_config', 'save_admin_password', 'save_router', 'save_telegram', 'save_cloud'].includes(action)) {
-    const updates = action === 'save_admin_password' ? { adminPassword: body.newPassword } : (body.config || body);
-    const result = await shared.saveConfig(updates);
-    if (!result.ok) throw httpError(400, result.error || 'Gagal menyimpan konfigurasi');
-    logAdminAction(action, { keysUpdated: Object.keys(updates || {}) }, ip);
-    return res.json({ ok: true, savedToCloud: result.savedToCloud, cloudType: result.cloudType, cloudError: result.cloudError,
-      cloudStatus: result._cloudStatus, isReadOnlyFS: result._isReadOnlyFS, cloudStorageInfo: shared.getCloudStorageInfo() });
+}
+
+async function detectModels(i) {
+  syncProvidersFromUI();
+  const ep = endpoints[i];
+  if (!ep || !ep.url) return toast('URL Endpoint belum diisi', 'err');
+  if (!ep.keys || !ep.keys.length) return toast('API Key belum diisi', 'err');
+  const badge = document.getElementById(`pingBadge_${i}`);
+  if (badge) { badge.style.display = 'inline-flex'; badge.className = 'ping-badge testing'; badge.textContent = '🔍 Mendeteksi model...'; }
+  try {
+    const r = await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
+      body: JSON.stringify({ action: 'detect_models', providerName: ep.name, url: ep.url, keys: ep.keys })
+    });
+    const data = await r.json();
+    if (!data.ok) { if(badge){badge.className='ping-badge fail';badge.textContent='🔴 Gagal';} return toast('Deteksi gagal: ' + (data.error || 'Unknown error'), 'err'); }
+    const provResult = data.results?.find(r => r.provider === ep.name) || data.results?.[0];
+    if (!provResult || !provResult.ok) { if(badge){badge.className='ping-badge fail';badge.textContent='🔴 Gagal';} return toast('Gagal mendeteksi model', 'err'); }
+    const models = (provResult.models || []).filter(m => typeof m === 'string' && m.trim().toLowerCase() !== 'auto');
+    const modelsInput = document.querySelector(`#providerCard_${i} .p-models`);
+    if (modelsInput) modelsInput.value = models.join(', ');
+    endpoints[i].models = models;
+    const testRow = document.getElementById(`modelTestRow_${i}`);
+    if (testRow) {
+      testRow.innerHTML = models.map((m, mi) => `<div id="modelCard_${i}_${mi}" style="display:flex; align-items:center; gap:4px; background:#141922; border:1px solid #232733; border-radius:6px; padding:3px 8px; font-size:12px;"><span style="color:#e2e8f0;">${escapeHtml(m)}</span><button type="button" onclick="testModel(${i},'${m.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')" id="testModelBtn_${i}_${mi}" style="background:#1e3a5f; color:#38bdf8; border:1px solid #38bdf8; border-radius:4px; padding:1px 7px; font-size:11px; cursor:pointer;">⚡ Tes</button><span id="testModelBadge_${i}_${mi}" style="display:none;"></span></div>`).join('');
+    }
+    if (badge) { badge.className = 'ping-badge ok'; badge.textContent = `✅ ${models.length} model terdeteksi`; }
+    toast(`[${ep.name}] Berhasil mendeteksi ${models.length} model`, 'ok');
+  } catch(e) {
+    if (badge) { badge.className = 'ping-badge fail'; badge.textContent = '🔴 Error'; }
+    toast('Error deteksi model: ' + e.message, 'err');
   }
-  throw httpError(400, 'Action tidak dikenali');
-}, ['GET', 'POST'], { admin: true });
+}
+
+async function testModel(providerIdx, modelName) {
+  syncProvidersFromUI();
+  const ep = endpoints[providerIdx];
+  if (!ep) return;
+  const models = ep.models || [];
+  const mi = models.indexOf(modelName);
+  const badgeEl = mi >= 0 ? document.getElementById(`testModelBadge_${providerIdx}_${mi}`) : null;
+  const btnEl = mi >= 0 ? document.getElementById(`testModelBtn_${providerIdx}_${mi}`) : null;
+  if (badgeEl) { badgeEl.style.display = 'inline-flex'; badgeEl.textContent = '⏳'; badgeEl.style.cssText += ';color:#f59e0b;'; }
+  if (btnEl) btnEl.disabled = true;
+  try {
+    const r = await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
+      body: JSON.stringify({ action: 'test_model', providerName: ep.name, model: modelName, url: ep.url, keys: ep.keys })
+    });
+    const data = await r.json();
+    if (data.ok) {
+      const ms = data.latencyMs || 0;
+      const color = ms < 500 ? '#22c55e' : ms < 2000 ? '#f59e0b' : '#ef4444';
+      if (badgeEl) { badgeEl.style.cssText = `display:inline-flex; color:${color}; font-size:11px; font-weight:600;`; badgeEl.textContent = `${ms}ms ✓`; }
+      toast(`[${ep.name}] Model ${modelName}: ✅ OK (${ms}ms)`, 'ok');
+    } else {
+      if (badgeEl) { badgeEl.style.cssText = 'display:inline-flex; color:#ef4444; font-size:11px;'; badgeEl.textContent = '✗ Gagal'; }
+      toast(`[${ep.name}] Model ${modelName}: ❌ ${(data.error || 'Gagal').slice(0, 80)}`, 'err');
+    }
+  } catch(e) {
+    if (badgeEl) { badgeEl.textContent = '✗'; badgeEl.style.color = '#ef4444'; }
+    toast('Error test model: ' + e.message, 'err');
+  } finally { if (btnEl) btnEl.disabled = false; }
+}
+
+async function testAllModels(providerIdx) {
+  syncProvidersFromUI();
+  const ep = endpoints[providerIdx];
+  if (!ep || !ep.models?.length) return toast('Tidak ada model. Klik Detect Model dulu.', 'err');
+  const btn = document.getElementById(`testAllBtn_${providerIdx}`);
+  const summaryEl = document.getElementById(`testAllSummary_${providerIdx}`);
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Menguji...'; }
+  if (summaryEl) summaryEl.style.display = 'none';
+  ep.models.forEach((m, mi) => {
+    const badge = document.getElementById(`testModelBadge_${providerIdx}_${mi}`);
+    const btnEl = document.getElementById(`testModelBtn_${providerIdx}_${mi}`);
+    if (badge) { badge.style.display = 'inline-flex'; badge.textContent = '⏳'; badge.style.color = '#94a3b8'; }
+    if (btnEl) btnEl.disabled = true;
+  });
+  const results = await Promise.all(ep.models.map(async (modelName, mi) => {
+    try {
+      const r = await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` },
+        body: JSON.stringify({ action: 'test_model', providerName: ep.name, model: modelName, url: ep.url, keys: ep.keys })
+      });
+      const data = await r.json();
+      return { model: modelName, mi, ok: data.ok, latencyMs: data.latencyMs || 0, error: data.error || null };
+    } catch(e) { return { model: modelName, mi, ok: false, latencyMs: 0, error: e.message }; }
+  }));
+  const working = [], failed = [];
+  results.forEach(({ model, mi, ok, latencyMs, error }) => {
+    const card = document.getElementById(`modelCard_${providerIdx}_${mi}`);
+    const badge = document.getElementById(`testModelBadge_${providerIdx}_${mi}`);
+    const btnEl = document.getElementById(`testModelBtn_${providerIdx}_${mi}`);
+    if (ok) {
+      working.push({ model, latencyMs });
+      const color = latencyMs < 500 ? '#22c55e' : latencyMs < 2000 ? '#f59e0b' : '#ef4444';
+      if (card) card.style.borderColor = '#22c55e';
+      if (badge) { badge.style.cssText = `display:inline-flex; color:${color}; font-size:11px; font-weight:600;`; badge.textContent = `${latencyMs}ms ✓`; }
+    } else {
+      failed.push({ model, error });
+      if (card) { card.style.borderColor = '#ef4444'; card.style.opacity = '0.6'; }
+      if (badge) { badge.style.cssText = 'display:inline-flex; color:#ef4444; font-size:11px;'; badge.textContent = '✗ Gagal'; }
+    }
+    if (btnEl) btnEl.disabled = false;
+  });
+  if (summaryEl) {
+    summaryEl.style.display = 'block';
+    summaryEl.innerHTML = `<div style="background:#0d1a0d; border:1px solid #166534; border-radius:8px; padding:12px 14px;"><div style="font-size:13px; font-weight:600; color:#4ade80; margin-bottom:8px;">🧪 Hasil: <span style="color:#4ade80;">${working.length} berhasil</span> / <span style="color:#f87171;">${failed.length} gagal</span></div>${working.length > 0 ? `<button onclick="applyWorkingModels(${providerIdx}, ${escapeHtml(JSON.stringify(working.map(w => w.model)))})" style="background:linear-gradient(135deg,#166534,#15803d);color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;">✅ Pakai ${working.length} Model Berhasil Saja</button>` : '<div style="color:#f87171; font-size:12px;">⚠️ Tidak ada model yang berhasil.</div>'}</div>`;
+  }
+  if (btn) { btn.disabled = false; btn.textContent = '🧪 Test All Models'; }
+  toast(`[${ep.name}] Selesai: ${working.length}/${ep.models.length} model berfungsi`, working.length > 0 ? 'ok' : 'err');
+}
+
+function applyWorkingModels(providerIdx, workingModels) {
+  const validModels = (workingModels || []).filter(m => typeof m === 'string' && m.trim().toLowerCase() !== 'auto');
+  if (!validModels.length) return toast('Tidak ada model yang berhasil.', 'err');
+  endpoints[providerIdx].models = validModels;
+  const modelsInput = document.getElementById(`pModels_${providerIdx}`);
+  if (modelsInput) modelsInput.value = validModels.join(', ');
+  const testRow = document.getElementById(`modelTestRow_${providerIdx}`);
+  if (testRow) {
+    testRow.innerHTML = validModels.map((m, mi) => `<div id="modelCard_${providerIdx}_${mi}" style="display:flex; align-items:center; gap:4px; background:#141922; border:1px solid #232733; border-radius:6px; padding:3px 8px; font-size:12px;"><span style="color:#e2e8f0;">${escapeHtml(m)}</span><button type="button" onclick="testModel(${providerIdx},'${m.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')" id="testModelBtn_${providerIdx}_${mi}" style="background:#1e3a5f; color:#38bdf8; border:1px solid #38bdf8; border-radius:4px; padding:1px 7px; font-size:11px; cursor:pointer;">⚡ Tes</button><span id="testModelBadge_${providerIdx}_${mi}" style="display:none;"></span></div>`).join('');
+  }
+  const summaryEl = document.getElementById(`testAllSummary_${providerIdx}`);
+  if (summaryEl) summaryEl.innerHTML = `<div style="background:#0d1a0d; border:1px solid #22c55e; border-radius:8px; padding:10px 14px; font-size:13px; color:#4ade80;">✅ Diterapkan! ${validModels.length} model aktif. Klik <b>Simpan Semua Pengaturan</b> untuk menyimpan.</div>`;
+  toast(`✅ Daftar model diperbarui: ${validModels.length} model aktif.`, 'ok');
+}
+
+async function runBatchLatencyTest() {
+  syncProvidersFromUI();
+  const box = document.getElementById('benchmarkLeaderboardBox');
+  const tbody = document.getElementById('benchmarkTableBody');
+  const btn = document.getElementById('btnBatchBenchmark');
+  if (box) box.style.display = 'block';
+  if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#38bdf8;padding:24px;">⏳ Menguji semua endpoint...</td></tr>`;
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Sedang Menguji...'; }
+  try {
+    const r = await fetch('/api/test', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${adminToken}` }, body: JSON.stringify({ testAll: true, endpoints }) });
+    const data = await r.json();
+    const results = data.results || [];
+    if (!results.length) { if(tbody) tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#64748b;padding:20px;">Tidak ada provider aktif.</td></tr>`; return; }
+    if (tbody) tbody.innerHTML = results.map((item, idx) => {
+      let rank = idx < 3 ? ['🥇 1','🥈 2','🥉 3'][idx] : idx+1;
+      const latText = item.latencyMs !== null ? `${item.latencyMs} ms` : '-';
+      const badge = item.status === 'OK' ? `<span class="ping-badge ok">🟢 OK</span>` : `<span class="ping-badge fail">🔴 Error</span>`;
+      return `<tr><td style="font-weight:700;text-align:center;">${rank}</td><td style="font-weight:600;color:#f1f5f9;">${item.name||item.provider||'Provider'}</td><td style="color:#94a3b8;font-size:12px;">${item.model||'-'}</td><td style="font-family:monospace;font-weight:600;color:#38bdf8;">${latText}</td><td>${badge}</td><td>${item.error?`<span style="font-size:11px;color:#f87171;">${item.error}</span>`:'–'}</td></tr>`;
+    }).join('');
+    toast('Benchmark selesai!', 'ok');
+  } catch(e) {
+    if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#f87171;padding:20px;">Gagal: ${e.message}</td></tr>`;
+    toast('Benchmark gagal: ' + e.message, 'err');
+  } finally { if (btn) { btn.disabled = false; btn.textContent = '⚡ Test Semua Provider (Parallel Benchmark)'; } }
+}
