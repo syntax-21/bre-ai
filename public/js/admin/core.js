@@ -2,6 +2,8 @@
 // admin/core.js - Login, Tab navigation, Config loader, Sidebar
 // ================================================================
 
+window.__BRE_ADMIN_LOADED__ = true;
+
 let adminToken = '';
 let endpoints = [];
 let telegramUsers = [];
