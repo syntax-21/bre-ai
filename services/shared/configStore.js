@@ -345,7 +345,11 @@ async function persistConfig(updated) {
   if (updated.telegramStyle !== undefined) merged.telegramStyle = String(updated.telegramStyle).trim();
   if (updated.telegramLanguage !== undefined) merged.telegramLanguage = String(updated.telegramLanguage).trim();
   if (updated.telegramEnabled !== undefined) merged.telegramEnabled = Boolean(updated.telegramEnabled);
-  if (updated.telegramBotToken !== undefined) merged.telegramBotToken = String(updated.telegramBotToken).trim();
+  if (updated.telegramBotToken !== undefined) {
+    const t = String(updated.telegramBotToken).trim();
+    if (t && !isMaskedKey(t)) merged.telegramBotToken = t;
+    else if (!t) merged.telegramBotToken = '';
+  }
   if (updated.telegramOwnerId !== undefined) merged.telegramOwnerId = String(updated.telegramOwnerId).trim();
   if (updated.telegramAccessMode !== undefined) merged.telegramAccessMode = updated.telegramAccessMode;
   if (updated.telegramModel !== undefined) merged.telegramModel = updated.telegramModel;
@@ -355,8 +359,16 @@ async function persistConfig(updated) {
 
   if (updated.cloudStorageType !== undefined) merged.cloudStorageType = updated.cloudStorageType;
   if (updated.upstashRedisUrl !== undefined) merged.upstashRedisUrl = String(updated.upstashRedisUrl).trim();
-  if (updated.upstashRedisToken !== undefined) merged.upstashRedisToken = String(updated.upstashRedisToken).trim();
-  if (updated.githubToken !== undefined) merged.githubToken = String(updated.githubToken).trim();
+  if (updated.upstashRedisToken !== undefined) {
+    const t = String(updated.upstashRedisToken).trim();
+    if (t && !isMaskedKey(t)) merged.upstashRedisToken = t;
+    else if (!t) merged.upstashRedisToken = '';
+  }
+  if (updated.githubToken !== undefined) {
+    const t = String(updated.githubToken).trim();
+    if (t && !isMaskedKey(t)) merged.githubToken = t;
+    else if (!t) merged.githubToken = '';
+  }
   if (updated.githubRepo !== undefined) merged.githubRepo = String(updated.githubRepo).trim();
   if (updated.githubBranch !== undefined) merged.githubBranch = String(updated.githubBranch).trim() || 'main';
   if (updated.motivationEnabled !== undefined) merged.motivationEnabled = !!updated.motivationEnabled;
@@ -364,7 +376,11 @@ async function persistConfig(updated) {
   if (updated.motivationCustom !== undefined) merged.motivationCustom = String(updated.motivationCustom).trim();
   if (updated.transcriptionEnabled !== undefined) merged.transcriptionEnabled = Boolean(updated.transcriptionEnabled);
   if (updated.transcriptionEndpoint !== undefined) merged.transcriptionEndpoint = String(updated.transcriptionEndpoint).trim();
-  if (updated.transcriptionKey !== undefined) merged.transcriptionKey = String(updated.transcriptionKey).trim();
+  if (updated.transcriptionKey !== undefined) {
+    const t = String(updated.transcriptionKey).trim();
+    if (t && !isMaskedKey(t)) merged.transcriptionKey = t;
+    else if (!t) merged.transcriptionKey = '';
+  }
   if (updated.transcriptionModel !== undefined) merged.transcriptionModel = String(updated.transcriptionModel).trim() || 'whisper-1';
   if (updated.transcriptionLanguage !== undefined) merged.transcriptionLanguage = String(updated.transcriptionLanguage).trim() || 'auto';
 
