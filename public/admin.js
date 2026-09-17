@@ -485,11 +485,15 @@ function renderProviders() {
       
       <div class="form-group" style="margin-bottom:0;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-          <label class="form-label" style="margin-bottom:0;">API Keys (Multi-Key Round Robin - Satu key per baris)</label>
-          <button type="button" class="btn btn-outline" style="font-size:11px; padding:3px 8px;" onclick="toggleKeyMask(${i})" id="keyMaskBtn_${i}">👁️ Tampilkan Kunci</button>
+          <label class="form-label" style="margin-bottom:0;">API Keys (Multi-Key Round Robin)</label>
+          <button type="button" class="btn btn-outline" style="font-size:11px; padding:3px 8px;" onclick="toggleKeyMask(${i})" id="keyMaskBtn_${i}">🔒 Sembunyikan Kunci</button>
         </div>
-        <textarea class="input-textarea p-keys masked-key" id="pKeys_${i}" rows="3" placeholder="sk_key_1&#10;sk_key_2">${(ep.keys || []).join('\n')}</textarea>
-        <div class="form-hint">Server akan otomatis merotasi kunci (Round-Robin) untuk menghindari rate limit.</div>
+        <textarea class="input-textarea p-keys" id="pKeys_${i}" rows="${Math.max(3, Math.min(8, (ep.keys || []).length || 3))}" placeholder="Masukkan API Key (satu per baris)..." style="font-family: monospace; font-size: 12px; line-height: 1.5;">${(ep.keys || []).join('\n')}</textarea>
+        <div id="keyPreviewBox_${i}" style="margin-top:6px; font-size:12px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+          <span style="color:#38bdf8; font-weight:600;">⚡ <span style="color:#34d399;">${(ep.keys || []).length} API Key aktif</span> (Rotasi Otomatis Round-Robin)</span>
+          <span style="color:#64748b; font-size:11px;">1 baris = 1 API Key</span>
+        </div>
+        <div class="form-hint" style="margin-top:4px;">Kunci tersimpan di database server / Upstash. Masukkan beberapa kunci untuk menghindari rate limit.</div>
       </div>
     </div>
   `;
