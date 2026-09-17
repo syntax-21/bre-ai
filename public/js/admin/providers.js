@@ -86,9 +86,9 @@ function renderProviders() {
       <div class="form-group" style="margin-bottom:0;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
           <label class="form-label" style="margin-bottom:0;">API Keys (Multi-Key Round Robin)</label>
-          <button type="button" class="btn btn-outline" style="font-size:11px; padding:3px 8px;" onclick="toggleKeyMask(${i})" id="keyMaskBtn_${i}">🔒 Sembunyikan Kunci</button>
+          <button type="button" class="btn btn-outline" style="font-size:11px; padding:3px 8px;" onclick="toggleKeyMask(${i})" id="keyMaskBtn_${i}">👁️ Tampilkan Kunci</button>
         </div>
-        <textarea class="input-textarea p-keys" id="pKeys_${i}" rows="${Math.max(3, Math.min(8, (ep.keys || []).length || 3))}" placeholder="Masukkan API Key (satu per baris)..." style="font-family: monospace; font-size: 12px; line-height: 1.5;">${escapeHtml((ep.keys || []).join('\n'))}</textarea>
+        <textarea class="input-textarea p-keys masked-key" id="pKeys_${i}" rows="${Math.max(3, Math.min(8, (ep.keys || []).length || 3))}" placeholder="Masukkan API Key (satu per baris)..." style="font-family: monospace; font-size: 12px; line-height: 1.5;">${escapeHtml((ep.keys || []).join('\n'))}</textarea>
         ${keyStatusHtml(ep, i)}
         <div class="form-hint" style="margin-top:4px;">Kunci tersimpan di database server / Upstash. Server otomatis merotasi kunci (Round-Robin) untuk menghindari rate limit.</div>
       </div>
