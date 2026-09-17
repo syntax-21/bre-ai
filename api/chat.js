@@ -1,7 +1,6 @@
 const {
   getConfig,
   syncCloudConfig,
-  sanitizeOutput,
   checkChatRateLimit,
   consumeChatRate,
   logRequest,
@@ -11,8 +10,7 @@ const {
   getNextRoundRobinIndex,
   buildBreAISystemPrompt,
   getClientIp,
-  checkClientAuth,
-  STYLE_PROMPTS
+  checkClientAuth
 } = require('./_shared');
 const {
   detectQueryLanguage,
@@ -332,13 +330,12 @@ module.exports = apiHandler(async (req, res) => {
   if (cfg.autoFailover === false) candidates = candidates.slice(0, 1);
 
   // 7. Response Caching check (only for non-stream requests)
-  const maxTokens = body.max_tokens ?? cfg.maxTokens ?? 16384;
+  const maxTokens = body.max_tokens ?? (cfg.maxTokens || 16384);
   const temperature = body.temperature ?? cfg.temperature ?? 0.7;
   if (!Number.isInteger(maxTokens) || maxTokens < 1 || maxTokens > Math.min(32768, cfg.maxTokens || 16384)) throw httpError(400, 'max_tokens di luar batas konfigurasi');
   if (!Number.isFinite(temperature) || temperature < 0 || temperature > 2) throw httpError(400, 'temperature harus 0–2');
   const topP = body.top_p ?? cfg.topP ?? 1;
   if (!Number.isFinite(topP) || topP < 0 || topP > 1) throw httpError(400, 'top_p harus 0–1');
-  const dialogueDigest = userMessages.map(m => `${m.role}:${typeof m.content === 'string' ? m.content : JSON.stringify(m.content)}`).join('|');
   const cacheKey = crypto.createHash('sha256').update(JSON.stringify({ endpoint: primaryTarget.url, targetModelName, requestedLang, requestedStyle, maxTokens, temperature, topP, system: cfg.systemPrompt, custom: body.customSystemPrompt, userMessages, client: req.headers.authorization || req.headers['x-api-key'] || ip, reasoning: cfg.reasoningEffort, penalties: [cfg.frequencyPenalty, cfg.presencePenalty] })).digest('hex');
 
   if (cfg.cacheEnabled && !stream && allUserText.trim()) {

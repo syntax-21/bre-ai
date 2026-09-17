@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const shared = require('./_shared');
 const { apiHandler, httpError, consumeLimit, safeEqual } = require('../services/httpSecurity');
 const { validateUrl } = require('../services/safeFetch');
+const { logAdminAction } = shared;
 
 function getToken(req) {
   const auth = req.headers?.authorization || '';
@@ -41,8 +42,8 @@ module.exports = apiHandler(async (req, res) => {
   if (req.method === 'GET') {
     const maskKeys = (eps) => (eps || []).map(e => ({
       ...e,
-      keys: (e.keys || []).map(k => k ? ('••••' + String(k).slice(-4)) : ''),
-      apiKey: e.apiKey ? ('••••' + String(e.apiKey).slice(-4)) : undefined
+      keys: (e.keys || []).map(k => k ? '••••••••' : ''),
+      apiKey: e.apiKey ? '••••••••' : undefined
     }));
     const config = isAdmin ? {
       ...cfg,
@@ -72,6 +73,8 @@ module.exports = apiHandler(async (req, res) => {
   if (action === 'get_metrics') return res.json({ ok: true, metrics: shared.getMetrics() });
   if (action === 'get_logs') return res.json({ ok: true, logs: shared.getLogs() });
   if (action === 'clear_logs') { shared.clearLogs(); return res.json({ ok: true }); }
+  if (action === 'get_audit_logs') return res.json({ ok: true, auditLogs: shared.getAuditLogs() });
+  if (action === 'clear_audit_logs') { shared.clearAuditLogs(); logAdminAction('clear_audit_logs', {}, ip); return res.json({ ok: true }); }
   if (action === 'get_router_overview') return res.json({ ok: true, overview: shared.getRouterOverview(body) });
   if (action === 'get_router_details') return res.json({ ok: true, details: shared.getRouterDetails(body) });
   if (action === 'get_cloud_status') return res.json({ ok: true, cloudStorageInfo: shared.getCloudStorageInfo() });
@@ -132,6 +135,7 @@ module.exports = apiHandler(async (req, res) => {
     const updates = action === 'save_admin_password' ? { adminPassword: body.newPassword } : (body.config || body);
     const result = await shared.saveConfig(updates);
     if (!result.ok) throw httpError(400, result.error || 'Gagal menyimpan konfigurasi');
+    logAdminAction(action, { keysUpdated: Object.keys(updates || {}) }, ip);
     return res.json({ ok: true, savedToCloud: result.savedToCloud, cloudType: result.cloudType, cloudError: result.cloudError,
       cloudStatus: result._cloudStatus, isReadOnlyFS: result._isReadOnlyFS, cloudStorageInfo: shared.getCloudStorageInfo() });
   }

@@ -112,7 +112,8 @@ Bre AI dilengkapi mekanisme **Absolute Identity Override & Prompt Injection Shie
 - **In-Memory Response Caching**: Menyimpan respons query non-streaming identik langsung di RAM server dengan TTL kustom untuk memberikan respons 0ms dan memangkas konsumsi token.
 - **Template Provider 1-Klik**: Preset cepat untuk Inception Labs, OpenAI, Groq Cloud, DeepSeek, OpenRouter, Together AI, dan Ollama Local.
 
-#### Live Telemetry, Topology Mesh Radar & Request Inspector
+#### Real-Time Telemetry, Audit Trail & Mesh Radar
+- **Enterprise Audit Log**: Riwayat permanen (Audit Trail) seluruh aksi modifikasi admin.
 - **5 Kartu Metrik KPI Real-Time**: Total Requests, Total Input Tokens, Cached Tokens, Output Tokens, dan Estimasi Biaya (USD).
 - **Interactive Topology & Telemetry Mesh**: Visualizer radar interaktif berbasis HTML5 Canvas dengan kontrol Zoom (`+`/`-`), Reset view (`⟲`), Fullscreen (`⛶`), serta animasi aliran pulsa paket data real-time ke masing-masing satelit provider.
 - **Recent Requests Feed**: Aliran riwayat request langsung dengan indikator status dot hijau/merah, model, dan latensi.
@@ -126,6 +127,9 @@ Bre AI dilengkapi mekanisme **Absolute Identity Override & Prompt Injection Shie
 #### Multimedia & Dokumen: Video, Audio, Dokumen & Vision
 - **Analisis Semua Format Video**: Mengenali dan mengekstrak metadata dari seluruh format video (`.mp4`, `.mkv`, `.avi`, `.mov`, `.webm`, `.flv`, `.wmv`, `.3gp`, `.m4v`).
 - **Analisis Semua Format Audio**: Membaca format suara dan rekaman (`.mp3`, `.wav`, `.ogg`, `.flac`, `.m4a`, `.aac`, `.opus`, Voice Notes Telegram).
+- **Audio Transcription (Whisper)**: Audio di web chat & Telegram otomatis ditranskripsi ke teks via endpoint Whisper-compatible yang dapat dikonfigurasi admin.
+- **Text-to-Speech (TTS)**: Output suara AI di web chat (SpeechSynthesis) dan file `.mp3` di Telegram (OpenAI TTS-compatible).
+- **AI Image Generation**: Perintah `/image [prompt]` di web chat & Telegram untuk menghasilkan gambar via endpoint yang dikonfigurasi admin.
 - **Analisis Vision AI Otomatis**: Foto atau gambar otomatis diteruskan ke provider upstream aktif yang mendukung kemampuan vision.
 - **Parsing Dokumen Multi-Format**: Ekstraksi instan untuk PDF (`pdf-parse`), Microsoft Word DOCX (`mammoth`), Microsoft Excel Spreadsheet XLSX/XLS/CSV (`xlsx`), JSON, Markdown, dan file kode pemrograman.
 
@@ -133,19 +137,25 @@ Bre AI dilengkapi mekanisme **Absolute Identity Override & Prompt Injection Shie
 - **Tag Khusus `[TELEGRAM_FILE: ...]`**: Model dapat mengeluarkan tag terstruktur yang langsung diekstraksi dan dikirim sebagai dokumen biner asli.
 - **Auto-Packaging Blok Kode**: Kode di dalam blok markdown (````python ... ````, ````javascript ... ````, dll.) secara cerdas diubah menjadi berkas fisik unduhan.
 - **Kamus Ekstensi Lengkap**: Mendukung puluhan bahasa pemrograman (`.js`, `.ts`, `.py`, `.html`, `.css`, `.c`, `.cpp`, `.java`, `.go`, `.rs`, `.php`, `.sql`, `.json`, `.yaml`, `.sh`, `.bat`, dll.).
+- **Export Percakapan**: Web chat menyediakan export ke **PDF** (melalui dialog cetak), **Markdown** (`.md`) dan **Teks** (`.txt`), serta Import/Export seluruh riwayat obrolan dalam format JSON.
 
 #### Sistem Bahasa Otomatis & 9 Dialek Nusantara
 - **Deteksi Bahasa Otomatis**: Pengguna cukup menulis dalam bahasa apa pun (Indonesia, Inggris, Jepang, Mandarin, Arab, Jerman, Prancis, Rusia, Korea, Spanyol, dll.) dan Bre AI akan langsung menjawab dalam bahasa yang bersangkutan secara natural.
 - **9 Pilihan Dialek Lokal Indonesia**:
-  1. `jakarta`: Bahasa gaul Jakarta (*gue-lu*, *bgt*, santai).
-  2. `santai`: Hangat, akrab, ramah, dan bersahabat.
-  3. `jawa_halus`: Bahasa Jawa Kromo Inggil (santun dan beretika).
-  4. `jawa_kasar`: Bahasa Jawa Ngoko akrab (*cak/bro*, ceplas-ceplos).
-  5. `sunda`: Bahasa Sunda akrab nan ramah (*euy*, *atuh*, *teh*).
-  6. `sopan`: Bahasa Indonesia formal dan baku sesuai EYD/KBBI.
-  7. `medan`: Logat Medan/Batak (*Horas*, tegas, bersemangat).
-  8. `makassar`: Logat Makassar/Bugis (*Tabe'*, *ki'*, *ji*, *mi*).
-  9. `standar`: Bahasa cerdas netral standar Bre AI.
+   1. `jakarta`: Bahasa gaul Jakarta (*gue-lu*, *bgt*, santai).
+   2. `santai`: Hangat, akrab, ramah, dan bersahabat.
+   3. `jawa_halus`: Bahasa Jawa Kromo Inggil (santun dan beretika).
+   4. `jawa_kasar`: Bahasa Jawa Ngoko akrab (*cak/bro*, ceplas-ceplos).
+   5. `sunda`: Bahasa Sunda akrab nan ramah (*euy*, *atuh*, *teh*).
+   6. `sopan`: Bahasa Indonesia formal dan baku sesuai EYD/KBBI.
+   7. `medan`: Logat Medan/Batak (*Horas*, tegas, bersemangat).
+   8. `makassar`: Logat Makassar/Bugis (*Tabe'*, *ki'*, *ji*, *mi*).
+   9. `standar`: Bahasa cerdas netral standar Bre AI.
+
+#### Context Window Management
+- **Kontrol Context Window**: Pengguna dapat mengatur berapa banyak pesan terakhir (2–200) yang dikirim ke AI sebagai memori percakapan (slider di panel Pengaturan web chat).
+- **Kontrol Max Output Tokens**: Slider untuk mengatur batas token keluaran (512–16384) per respons.
+- **Kontrol Creativity (Temperature)**: Slider 0.0 (presisi) hingga 1.5 (kreatif).
 
 #### AI Tools & Prompt Studio
 - 🌐 **Web Search & Synthesis** (`/search` / `/cari`): Pencarian daring real-time dengan rangkuman sumber valid.
@@ -155,6 +165,8 @@ Bre AI dilengkapi mekanisme **Absolute Identity Override & Prompt Injection Shie
 - ✍️ **Viral Marketing Copywriter** (`/copy` / `/copywriting`): Salinan iklan persuasif dengan framework AIDA & PAS.
 - 🧠 **Deep Analytical Reasoning** (`/think` / `/analisis`): Penalaran analitis langkah-demi-langkah (Chain of Thought).
 - 🌍 **Polyglot Translator** (`/translate` / `/terjemah`): Penerjemahan multi-bahasa kontekstual.
+- 🎨 **AI Image Generation** (`/image` / `/img`): Hasilkan gambar dari prompt teks di web chat & Telegram.
+- 🎤 **Voice Transcription** (`/tts` / upload audio): Transkripsi audio & text-to-speech di web chat & Telegram.
 
 #### Cloud Database Persistence (Vercel KV / Redis & GitHub Sync)
 - **Vercel KV / Upstash Redis**: Penyimpanan konfigurasi cloud instan (<20ms) lintas seluruh serverless lambda global.

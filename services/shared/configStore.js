@@ -265,6 +265,33 @@ function saveConfig(updated) {
   return trackPending(persistConfig(updated));
 }
 
+// Deteksi key yang sudah disamarkan (bullet Unicode / [REDACTED]) agar tidak dikirim sebagai Bearer.
+function isMaskedKey(value) {
+  if (typeof value !== 'string') return false;
+  const v = value.trim();
+  if (!v) return false;
+  return /[\u2022]/.test(v) || /^\*+$/.test(v) || /^\[REDACTED\]$/i.test(v) || /[•]{2,}/.test(v);
+}
+
+// Ambil key asli dari config server jika input hanya berisi key tersamarkan.
+function resolveRealKeys(ep, providedKeys) {
+  const incoming = (Array.isArray(providedKeys) ? providedKeys : parseKeys(providedKeys))
+    .map(k => String(k || '').trim())
+    .filter(k => k && !isMaskedKey(k));
+  if (incoming.length) return incoming;
+
+  const cfg = getConfig();
+  const list = Array.isArray(cfg.endpoints) ? cfg.endpoints : [];
+  const match = list.find(c => c && (
+    (ep.url && c.url && c.url === ep.url) ||
+    (ep.name && c.name && c.name === ep.name)
+  ));
+  if (match && Array.isArray(match.keys)) {
+    return match.keys.map(k => String(k || '').trim()).filter(k => k && !isMaskedKey(k));
+  }
+  return [];
+}
+
 async function persistConfig(updated) {
   const { hashAdminPassword, verifyAdminPassword } = require('./auth');
   const { clearResponseCache } = require('./telemetry');
@@ -274,7 +301,7 @@ async function persistConfig(updated) {
   const merged = { ...current, ...updated };
 
   if (updated.endpoints && Array.isArray(updated.endpoints)) {
-    const isMasked = v => typeof v === 'string' && /^•{2,}/.test(v.trim());
+    const isMasked = isMaskedKey;
     const currentEps = Array.isArray(current.endpoints) ? current.endpoints : [];
     merged.endpoints = updated.endpoints.map(e => {
       let incomingKeys = parseKeys(e.keys || e.apiKey).filter(k => !isMasked(k));
@@ -415,7 +442,7 @@ async function persistConfig(updated) {
       });
       const contentType = resp.headers.get('content-type') || '';
       if (resp.ok && contentType.includes('application/json')) {
-        const data = await resp.json();
+        const data = await responseJson(resp);
         if (data && !data.error) {
           cloudStatus.synced = true;
           cloudStatus.upstashSuccess = true;
@@ -579,7 +606,7 @@ function getCloudStorageInfo() {
 async function fetchAvailableModels(endpoint) {
   const ep = endpoint || {};
   const url = (ep.url || '').trim();
-  const keys = Array.isArray(ep.keys) ? ep.keys : parseKeys(ep.keys);
+  const keys = resolveRealKeys(ep, ep.keys);
 
   if (!url) return { ok: false, error: 'URL endpoint kosong', models: [] };
 
@@ -646,7 +673,7 @@ function redactConfigForExport(config) {
 async function testSingleModel(endpoint, modelName) {
   const ep = endpoint || {};
   const url = (ep.url || '').trim();
-  const keys = Array.isArray(ep.keys) ? ep.keys : parseKeys(ep.keys);
+  const keys = resolveRealKeys(ep, ep.keys);
   const model = (modelName || ep.models?.[0] || '').trim();
 
   if (!url) return { ok: false, error: 'URL endpoint kosong', latencyMs: 0 };
@@ -709,5 +736,7 @@ module.exports = {
   getCloudStorageInfo,
   fetchAvailableModels,
   testSingleModel,
-  redactConfigForExport
+  redactConfigForExport,
+  isMaskedKey,
+  resolveRealKeys
 };

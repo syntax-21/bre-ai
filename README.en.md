@@ -105,7 +105,8 @@ Bre AI features built-in **Absolute Identity Override & Prompt Injection Shieldi
 - **In-Memory Response Caching**: Instant RAM caching for identical non-streaming queries with custom TTL for 0ms responses and zero token consumption.
 - **1-Click Provider Presets**: Templates for Inception Labs, OpenAI, Groq Cloud, DeepSeek, OpenRouter, Together AI, and local Ollama instances.
 
-### Real-Time Telemetry & Mesh Radar
+### Real-Time Telemetry, Audit Trail & Mesh Radar
+- **Enterprise Audit Log**: Permanent audit trail of all admin configuration modifications (Web Admin → Audit Log tab & Telegram Admin → 🧾 Audit Log).
 - **5 Real-Time KPI Cards**: Total Requests, Total Prompt Input Tokens, Cached Hit Tokens, Output Completion Tokens, and Estimated Cost (USD).
 - **Interactive Topology & Mesh Radar**: HTML5 Canvas radar visualizer with Zoom (`+`/`-`), Reset (`⟲`), Fullscreen (`⛶`), and animated data flow pulses to each satellite provider.
 - **Recent Requests Stream**: Live traffic feed with status indicator dots, active models, and latency metrics.
@@ -119,6 +120,9 @@ Bre AI features built-in **Absolute Identity Override & Prompt Injection Shieldi
 ### Multimedia & Vision: Video, Audio, Docs & Vision
 - **Comprehensive Video Analysis**: Parses container metadata from all video formats (`.mp4`, `.mkv`, `.avi`, `.mov`, `.webm`, `.flv`, `.wmv`, `.3gp`, `.m4v`).
 - **Comprehensive Audio Analysis**: Inspects voice notes and audio recordings (`.mp3`, `.wav`, `.ogg`, `.flac`, `.m4a`, `.aac`, `.opus`).
+- **Audio Transcription (Whisper)**: Audio in web chat & Telegram auto-transcribed to text via configurable Whisper-compatible endpoint.
+- **Text-to-Speech (TTS)**: AI voice output in web chat (SpeechSynthesis) and `.mp3` files in Telegram (OpenAI TTS-compatible).
+- **AI Image Generation**: `/image [prompt]` command in web chat & Telegram to generate images via configurable endpoint.
 - **Automatic Vision AI Forwarding**: Photos and images are automatically detected and routed to active vision-enabled upstream providers.
 - **Document & Spreadsheet Parsing**: Instant extraction for PDF (`pdf-parse`), Word DOCX (`mammoth`), Excel XLSX/XLS/CSV (`xlsx`), JSON, Markdown, and code scripts.
 
@@ -126,10 +130,16 @@ Bre AI features built-in **Absolute Identity Override & Prompt Injection Shieldi
 - **Structured `[TELEGRAM_FILE: ...]` Tags**: Automatically extracted and dispatched as true downloadable binary documents.
 - **Auto-Packaging Code Blocks**: Markdown code snippets are automatically packaged into downloadable source files with appropriate extensions.
 - **Extensive Extension Directory**: Supports dozens of programming languages (`.js`, `.ts`, `.py`, `.html`, `.css`, `.c`, `.cpp`, `.java`, `.go`, `.rs`, `.php`, `.sql`, `.json`, `.yaml`, `.sh`, etc.).
+- **Conversation Export**: Web chat supports export to **PDF** (via print dialog), **Markdown** (`.md`), **Text** (`.txt`), and JSON import/export of complete chat history.
 
 ### Automatic Language Detection & Dialects
 - **Seamless Language Adaptation**: Speak in any language (English, Indonesian, Japanese, Mandarin, Arabic, German, French, Russian, Spanish, Korean, etc.) and Bre AI responds naturally in that same language.
 - **9 Indonesian Dialects** (Configurable via `/style`): `jakarta`, `santai`, `jawa_halus`, `jawa_kasar`, `sunda`, `sopan`, `medan`, `makassar`, `standar`.
+
+### Context Window & AI Parameters Management
+- **Context Window Control**: Users can configure how many past messages (2–200) are sent to the AI as conversation memory (slider in web chat Settings panel).
+- **Max Output Tokens**: Slider to set token limit per response (512–16384).
+- **Creativity (Temperature)**: Slider from 0.0 (precise) to 1.5 (creative).
 
 ### AI Tools & Prompt Studio
 - 🌐 **Web Search & Synthesis** (`/search`): Real-time online research with verified source citations.
@@ -139,6 +149,8 @@ Bre AI features built-in **Absolute Identity Override & Prompt Injection Shieldi
 - ✍️ **Viral Marketing Copywriter** (`/copy`): Persuasive ad copy utilizing AIDA & PAS frameworks.
 - 🧠 **Deep Analytical Reasoning** (`/think`): Step-by-step Chain of Thought analytical reasoning.
 - 🌍 **Polyglot Translator** (`/translate`): Context-aware multilingual translation.
+- 🎨 **AI Image Generation** (`/image` / `/img`): Generate images from text prompts in web chat & Telegram.
+- 🎤 **Voice Transcription** (`/tts` / audio upload): Audio transcription & text-to-speech in web chat & Telegram.
 
 ### Cloud Database Persistence
 - **Vercel KV / Upstash Redis**: Ultra-fast serverless Redis configuration storage (<20ms) across global lambdas.

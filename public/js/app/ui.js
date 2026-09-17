@@ -188,6 +188,7 @@ function setPersona(val) {
 function initParams() {
   const tempSlider = document.getElementById('tempSlider');
   const tokensSlider = document.getElementById('tokensSlider');
+  const ctxMsgsSlider = document.getElementById('ctxMsgsSlider');
   if (tempSlider) {
     tempSlider.value = temperature;
     updateTemperatureDisplay(temperature);
@@ -196,6 +197,23 @@ function initParams() {
     tokensSlider.value = maxTokens;
     updateTokensDisplay(maxTokens);
   }
+  if (ctxMsgsSlider) {
+    ctxMsgsSlider.value = contextMessages;
+    updateContextMessagesDisplay(contextMessages);
+  }
+}
+
+function updateContextMessages(v) {
+  contextMessages = parseInt(v, 10) || 30;
+  if (contextMessages < 2) contextMessages = 2;
+  if (contextMessages > 200) contextMessages = 200;
+  localStorage.setItem('bre_context_msgs', String(contextMessages));
+  updateContextMessagesDisplay(contextMessages);
+}
+
+function updateContextMessagesDisplay(v) {
+  const el = document.getElementById('ctxMsgsDisplay');
+  if (el) el.textContent = `${v} messages`;
 }
 
 function updateTemperature(val) {

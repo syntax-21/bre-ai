@@ -77,6 +77,7 @@ const PROMPT_PRESETS = {
 const TAB_TITLES = {
   'tab9Router': '📊 Overview &amp; Telemetry',
   'tabDetails': '📜 Request Inspector &amp; Logs',
+  'tabAudit': '🧾 Enterprise Audit Trail',
   'tabProviders': '🔌 Endpoints &amp; Routing Strategy',
   'tabEngine': '⚙️ Global AI Engine &amp; Fallback',
   'tabTools': '🛠️ AI Tools &amp; Prompt Studio',
@@ -118,6 +119,7 @@ function switchTab(tabId, btn) {
   
   if (tabId === 'tab9Router') load9RouterData();
   if (tabId === 'tabDetails') load9RouterDetails();
+  if (tabId === 'tabAudit') loadAuditLogs();
   if (tabId === 'tabAnalytics') load9RouterData();
   if (tabId === 'tabLogs') load9RouterDetails();
   if (tabId === 'tabTester') updateTestModelDropdown();

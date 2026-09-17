@@ -101,6 +101,30 @@ function readAsDataURL(file) {
   });
 }
 
+// Kirim audio ke /api/transcribe untuk transkripsi Whisper
+async function transcribeWebAudio(file) {
+  try {
+    const dataUrl = await readAsDataURL(file);
+    const base64 = dataUrl.split(',')[1] || '';
+    if (!base64) return '';
+    const resp = await fetch('/api/transcribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ audio: base64, mime: file.type || 'audio/ogg', filename: file.name })
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      console.warn('[Transcribe]', err.error || resp.status);
+      return '';
+    }
+    const data = await resp.json();
+    return (data && typeof data.text === 'string') ? data.text : '';
+  } catch (e) {
+    console.warn('[Transcribe] error:', e.message);
+    return '';
+  }
+}
+
 function readAsArrayBuffer(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -404,6 +428,15 @@ async function processFileContent(f) {
       const sizeStr = f.size > 1048576 ? `${(f.size / 1048576).toFixed(2)} MB` : `${(f.size / 1024).toFixed(1)} KB`;
       const ext = f.name.split('.').pop().toUpperCase() || 'AUDIO';
 
+      let transcript = '';
+      if (f.size <= 3 * 1024 * 1024) {
+        toast(`📝 Mentranskripsi audio: ${f.name}...`, 'info');
+        transcript = await transcribeWebAudio(f);
+      }
+      const transcriptBlock = transcript
+        ? `\nTranskripsi Otomatis (Whisper):\n"""\n${transcript}\n"""\n`
+        : '\n(Catatan: transkripsi otomatis tidak tersedia. Analisis berdasarkan metadata audio.)\n';
+
       files.push({
         name: f.name,
         type: 'audio',
@@ -412,11 +445,12 @@ async function processFileContent(f) {
         badgeMeta: `${durStr} · ${ext}`,
         duration: audMeta.duration,
         waveform: audMeta.peaks || [],
-        content: `--- BEGIN AUDIO ATTACHMENT: ${f.name} (Ukuran: ${sizeStr}, Durasi: ${durStr}, Format: ${ext}) ---\nSample Rate: ${audMeta.sampleRate || 44100} Hz (${audMeta.channels === 1 ? 'Mono' : 'Stereo'})\nKarakteristik Audio: Dinamika gelombang suara terdeteksi aktif.\n--- END AUDIO ATTACHMENT ---`,
+        transcript: transcript || '',
+        content: `--- BEGIN AUDIO ATTACHMENT: ${f.name} (Ukuran: ${sizeStr}, Durasi: ${durStr}, Format: ${ext}) ---\nSample Rate: ${audMeta.sampleRate || 44100} Hz (${audMeta.channels === 1 ? 'Mono' : 'Stereo'})${transcriptBlock}--- END AUDIO ATTACHMENT ---`,
         data: ''
       });
       renderAttachBar();
-      toast(`✅ Audio terlampir: ${f.name} (${durStr})`, 'ok');
+      toast(`✅ Audio terlampir: ${f.name} (${durStr})${transcript ? ' + transkripsi' : ''}`, 'ok');
     } catch (err) {
       console.error('Audio analysis failed:', err);
       const sizeStr = f.size > 1048576 ? `${(f.size / 1048576).toFixed(2)} MB` : `${(f.size / 1024).toFixed(1)} KB`;

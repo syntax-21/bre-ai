@@ -8,7 +8,7 @@
 const fs = require('fs');
 const path = require('path');
 const EventEmitter = require('events');
-const { getConfig, saveConfig } = require('../api/_shared');
+const { getConfig } = require('../api/_shared');
 const api = require('./telegram/api');
 const { internalRequests } = require('./httpSecurity');
 
@@ -200,7 +200,6 @@ ATURAN WAJIB:
       'x-client-channel': 'Bre AI Motivasi Engine'
     },
     body: {
-      provider: cfg.telegramModel ? '' : '',
       model: cfg.telegramModel || cfg.model || 'auto',
       messages: [{ role: 'user', content: userPrompt }],
       stream: false,

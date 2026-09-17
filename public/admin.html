@@ -69,6 +69,10 @@
           <span class="sidebar-nav-icon">📜</span>
           <span class="sidebar-nav-label">Details</span>
         </button>
+        <button class="sidebar-nav-item" data-tab="tabAudit" id="tabBtnAudit" onclick="switchTab('tabAudit', this)">
+          <span class="sidebar-nav-icon">🧾</span>
+          <span class="sidebar-nav-label">Audit Log</span>
+        </button>
       </div>
 
       <!-- Group 2: AI Gateway & Routing -->
@@ -1016,6 +1020,38 @@
       </div>
     </div>
 
+    <!-- Tab Audit Log -->
+    <div id="tabAudit" class="tab-content" style="display: none;">
+      <div class="card">
+        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+          <div>
+            <div class="card-title">🧾 Enterprise Admin Audit Trail</div>
+            <div class="card-subtitle">Riwayat seluruh aksi modifikasi pengaturan dan operasi administrator.</div>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-outline" onclick="loadAuditLogs()">🔄 Refresh</button>
+            <button class="btn btn-danger" onclick="clearAuditLogsConfirm()">🗑️ Bersihkan Audit Log</button>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="table" style="width: 100%; border-collapse: collapse; font-size: 12.5px;">
+            <thead>
+              <tr style="text-align: left; border-bottom: 1px solid var(--border-subtle); color: #94a3b8;">
+                <th style="padding: 10px 8px;">WAKTU (WIB)</th>
+                <th style="padding: 10px 8px;">AKSI</th>
+                <th style="padding: 10px 8px;">USER / IP</th>
+                <th style="padding: 10px 8px;">DETAIL PERUBAHAN</th>
+              </tr>
+            </thead>
+            <tbody id="auditLogsBody">
+              <tr><td colspan="4" style="text-align: center; padding: 20px; color: var(--text-muted);">Memuat audit log...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     </main>
   </div>
 </div>
@@ -1084,6 +1120,7 @@
 <script src="/js/admin/telegram.js"></script>
 <script src="/js/admin/cloud.js"></script>
 <script src="/js/admin/tester.js"></script>
+<script src="/js/admin/audit.js"></script>
 <script src="/js/admin/core.js"></script>
 </body>
 </html>

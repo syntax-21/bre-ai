@@ -53,7 +53,10 @@ const {
   checkBlacklist,
   getCachedResponse,
   setCachedResponse,
-  clearResponseCache
+  clearResponseCache,
+  logAdminAction,
+  getAuditLogs,
+  clearAuditLogs
 } = require('../services/shared/telemetry');
 
 const { BoundedMap } = require('../services/shared/boundedMap');
@@ -110,5 +113,8 @@ module.exports = {
   setCachedResponse,
   clearResponseCache,
   BoundedMap,
-  getNextRoundRobinIndex
+  getNextRoundRobinIndex,
+  logAdminAction,
+  getAuditLogs,
+  clearAuditLogs
 };

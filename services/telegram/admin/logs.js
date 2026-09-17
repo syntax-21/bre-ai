@@ -2,7 +2,7 @@
 // Bre AI v3.0 - Telegram Bot Admin: Logs Viewer & Clear
 // Created by Amirun Rayan Ariandi
 // ========================================================
-const { getLogs, clearLogs } = require('../../../api/_shared');
+const { getLogs, clearLogs, getAuditLogs, clearAuditLogs } = require('../../../api/_shared');
 const api = require('../api');
 
 async function handle(cq, botService) {
@@ -16,6 +16,39 @@ async function handle(cq, botService) {
     await api.answerCallback(cq.id, '🗑️ Seluruh log server berhasil dibersihkan!', true, token);
     cq.data = 'adm_logs';
     return handle(cq, botService);
+  }
+
+  if (data === 'adm_clear_audit') {
+    clearAuditLogs();
+    await api.answerCallback(cq.id, '🧾 Audit log berhasil dibersihkan!', true, token);
+    cq.data = 'adm_audit';
+    return handle(cq, botService);
+  }
+
+  if (data === 'adm_audit') {
+    await api.answerCallback(cq.id, null, false, token);
+    const logs = getAuditLogs().slice(0, 8);
+    let text = '🧾 *Enterprise Admin Audit Trail*\n\n';
+    if (!logs.length) {
+      text += '_Belum ada aktivitas admin tercatat._\n';
+    } else {
+      logs.forEach((l, i) => {
+        const time = l.timestamp ? new Date(l.timeMs).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', hour12: false }) : '-';
+        text += `${i+1}. [${time}]\n*${l.action}* · ${l.user} (${l.ip})\n`;
+        if (l.details && l.details.keysUpdated) text += `   Kunci: ${l.details.keysUpdated.join(', ')}\n`;
+      });
+    }
+    const markup = {
+      inline_keyboard: [
+        [
+          { text: '🔄 Refresh', callback_data: 'adm_audit' },
+          { text: '🗑️ Bersihkan', callback_data: 'adm_clear_audit' }
+        ],
+        [{ text: '⬅️ Menu Utama', callback_data: 'adm_main' }]
+      ]
+    };
+    await api.editTelegramMessage(chatId, messageId, text, markup, token);
+    return true;
   }
 
   if (data === 'adm_logs' || data === 'adm_logs_err') {

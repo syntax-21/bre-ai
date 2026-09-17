@@ -14,7 +14,13 @@ module.exports = apiHandler(async (req, res) => {
     const url = body.customEndpoint || cfg.endpoints?.[0]?.url;
     // Never attach a configured provider's key to a different user-supplied URL.
     const configured = cfg.endpoints.find(ep => ep.url === url);
-    const keys = parseKeys(body.customKeys || body.keys || body.key || configured?.keys || '');
+    const rawKeys = body.customKeys || body.keys || body.key || '';
+    let keys = parseKeys(rawKeys);
+    // Jika kunci yang dikirim hanya versi tersamarkan (••••xxxx), gunakan kunci asli dari config.
+    const isMasked = v => typeof v === 'string' && /[\u2022]/.test(v.trim());
+    if (!keys.length || keys.some(isMasked)) {
+      keys = parseKeys(configured?.keys || '');
+    }
     endpoints = keys.map(key => ({ url, keys: [key], models: [body.customModel || cfg.model] }));
   }
   if (!Array.isArray(endpoints) || endpoints.length > 30 || endpoints.some(ep => !ep || typeof ep !== 'object')) throw httpError(400, 'Daftar endpoint tidak valid (maksimal 30)');

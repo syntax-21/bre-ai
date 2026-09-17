@@ -16,14 +16,24 @@ function syncProvidersFromUI() {
   const boxes = document.querySelectorAll('.provider-box');
   if (!boxes || boxes.length === 0) return;
   const list = [];
-  boxes.forEach(box => {
+  const isMaskedVal = v => typeof v === 'string' && /[\u2022]/.test(v);
+  boxes.forEach((box, idx) => {
     const name = box.querySelector('.p-name')?.value?.trim() || '';
     const status = box.querySelector('.p-status')?.value === 'true';
     const weight = parseInt(box.querySelector('.p-weight')?.value) || 1;
     const url = box.querySelector('.p-url')?.value?.trim() || '';
     const models = (box.querySelector('.p-models')?.value || '').split(',').map(m => m.trim()).filter(m => m && m.toLowerCase() !== 'auto');
     const mapping = (box.querySelector('.p-mapping')?.value || '').split(',').map(m => m.trim()).filter(Boolean);
-    const keys = (box.querySelector('.p-keys')?.value || '').split('\n').map(k => k.trim()).filter(Boolean);
+    let keys = (box.querySelector('.p-keys')?.value || '').split('\n').map(k => k.trim()).filter(Boolean);
+    // Abaikan key tersamarkan (••••xxxx) dari textarea agar tidak menimpa key asli di state.
+    if (!keys.length || keys.some(isMaskedVal)) {
+      const prev = endpoints[idx];
+      if (prev && Array.isArray(prev.keys) && prev.keys.some(k => !isMaskedVal(k))) {
+        keys = prev.keys;
+      } else {
+        keys = keys.filter(k => !isMaskedVal(k));
+      }
+    }
     list.push({ name, status, weight, url, models, mapping, keys });
   });
   if (list.length > 0) {
@@ -78,14 +88,25 @@ function renderProviders() {
           <label class="form-label" style="margin-bottom:0;">API Keys (Multi-Key Round Robin)</label>
           <button type="button" class="btn btn-outline" style="font-size:11px; padding:3px 8px;" onclick="toggleKeyMask(${i})" id="keyMaskBtn_${i}">👁️ Tampilkan Kunci</button>
         </div>
-        <textarea class="input-textarea p-keys masked-key" id="pKeys_${i}" rows="3" placeholder="sk_key_1&#10;sk_key_2">${escapeHtml((ep.keys || []).join('\n'))}</textarea>
-        <div class="form-hint">Server otomatis merotasi kunci (Round-Robin) untuk menghindari rate limit.</div>
+        <textarea class="input-textarea p-keys masked-key" id="pKeys_${i}" rows="3" placeholder="Kosongkan bila tidak ingin mengubah.&#10;Tulis kunci baru (satu per baris) untuk mengganti."></textarea>
+        ${keyPreviewHtml(ep, i)}
+        <div class="form-hint">Kunci asli disimpan aman di server dan tidak pernah dikirim ke browser. Server otomatis merotasi kunci (Round-Robin) untuk menghindari rate limit.</div>
       </div>
     </div>
   `;
   }).join('');
   updateTopActiveEndpointsCount();
   if (typeof updateTelegramModelDropdown === 'function') updateTelegramModelDropdown(document.getElementById('cfgTelegramModel')?.value);
+}
+
+function keyPreviewHtml(ep, i) {
+  const keys = Array.isArray(ep.keys) ? ep.keys : [];
+  if (!keys.length) return '<div class="form-hint" style="color:#f59e0b;">⚠️ Belum ada API key terpasang di provider ini.</div>';
+  return `
+    <div id="keyPreviewBox_${i}" style="margin-top:6px; font-size:11.5px; color:#94a3b8; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+      <span style="color:#38bdf8; font-weight:600;">🔑 Terpasang (${keys.length} key):</span>
+      ${keys.map(k => `<code style="background:#0f172a; padding:2px 6px; border-radius:4px; border:1px solid #1e293b; color:#34d399;">${escapeHtml(String(k))}</code>`).join(' ')}
+    </div>`;
 }
 
 function toggleKeyMask(i) {

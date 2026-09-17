@@ -15,6 +15,7 @@ const test = require('./api/test');
 const search = require('./api/search');
 const telegram = require('./api/telegram');
 const motivation = require('./api/motivation');
+const transcribe = require('./api/transcribe');
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC = path.join(__dirname, 'public');
@@ -77,6 +78,7 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/api/search') return search(req, wres);
   if (pathname === '/api/telegram') return telegram(req, wres);
   if (pathname === '/api/motivation') return motivation(req, wres);
+  if (pathname === '/api/transcribe') return transcribe(req, wres);
 
   if (pathname === '/admin') return serve(res, path.join(PUBLIC, 'admin.html'));
 
@@ -127,4 +129,11 @@ server.listen(PORT, () => {
   } catch (e) {
     console.warn('[Telegram] Init skip:', e.message);
   }
+
+  // Cron motivasi global
+  setInterval(() => {
+    try {
+      require('./services/motivation').checkAndSendMotivation();
+    } catch (e) {}
+  }, 60000);
 });

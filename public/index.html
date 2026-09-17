@@ -83,41 +83,6 @@
         <button class="icon-btn sm desktop-only" onclick="openPersonaModal()" title="Custom Personas Builder" style="padding:6px;border-radius:6px;font-size:12px;">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
         </button>
-
-        <!-- Quick Provider Select -->
-        <div class="model-select-wrapper desktop-only" title="Pilih Provider AI">
-          <svg class="model-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polygon points="12 8 8 12 12 16 16 12 12 8"></polygon></svg>
-          <select id="chatProviderSelect" onchange="onChatProviderChange(this.value)">
-            <option value="auto">🌐 Auto Provider</option>
-          </select>
-          <svg class="dropdown-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
-        </div>
-
-        <!-- Quick Model Select -->
-        <div class="model-select-wrapper" title="Pilih Model AI">
-          <svg class="model-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
-          <select id="modelSelect" onchange="setChatModel(this.value)">
-            <option value="auto">✨ Otomatis</option>
-          </select>
-          <svg class="dropdown-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
-        </div>
-
-        <!-- Gaya Bahasa (Dialek & Tone) Select -->
-        <div class="style-select-wrapper" title="Gaya Bahasa &amp; Tone AI">
-          <svg class="style-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-          <select id="styleSelect" onchange="setStyle(this.value)">
-            <option value="santai">✨ Santai &amp; Friendly</option>
-            <option value="jakarta">🗣️ Jakarta / Gaul</option>
-            <option value="jawa_halus">🙏 Jawa Halus (Kromo)</option>
-            <option value="jawa_kasar">😎 Jawa Kasar / Ngoko</option>
-            <option value="sunda">🍃 Sunda (Akrab)</option>
-            <option value="sopan">👔 Sopan &amp; Formal</option>
-            <option value="medan">⚡ Medan / Batak</option>
-            <option value="makassar">🌊 Makassar / Bugis</option>
-            <option value="standar">🤖 Standar Bre AI</option>
-          </select>
-          <svg class="dropdown-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
-        </div>
       </div>
       <div class="topbar-right">
         <!-- Incognito Mode Toggle Button -->
@@ -131,6 +96,7 @@
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           </button>
           <div class="export-menu" id="exportMenu">
+            <button onclick="exportCurrentChat('pdf')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg> Export as PDF (.pdf)</button>
             <button onclick="exportCurrentChat('md')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg> Export as Markdown (.md)</button>
             <button onclick="exportCurrentChat('txt')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg> Export as Text (.txt)</button>
           </div>
@@ -318,6 +284,21 @@
           <span>4096</span>
           <span>16384</span>
         </div>
+      </div>
+
+      <!-- Context Window (Chat History) Slider -->
+      <div class="field" style="margin-bottom: 24px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <label style="font-weight: 600; margin: 0;">🧹 Context Window (Messages)</label>
+          <span id="ctxMsgsDisplay" style="font-size: 12px; font-weight: 600; color: #38bdf8;">30 messages</span>
+        </div>
+        <input type="range" id="ctxMsgsSlider" min="2" max="200" step="2" value="30" class="range-slider" oninput="updateContextMessages(this.value)">
+        <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+          <span>2 (Ringan)</span>
+          <span>30 (Default)</span>
+          <span>200 (Maksimal)</span>
+        </div>
+        <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">Menentukan berapa banyak pesan chat history terakhir yang dikirim ke AI dalam setiap prompt. Lebih banyak = lebih banyak memori percakapan, tapi lebih banyak token.</div>
       </div>
 
       <!-- Data Section -->

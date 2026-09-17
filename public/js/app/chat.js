@@ -238,6 +238,9 @@ function exportCurrentChat(format) {
   }
 
   const title = (activeChat.title || 'conversation').replace(/[^a-zA-Z0-9_\-]/g, '_');
+
+  if (format === 'pdf') return exportCurrentChatPDF();
+
   let content = '';
 
   if (format === 'md') {
@@ -263,6 +266,52 @@ function exportCurrentChat(format) {
   a.download = `${title}.${format}`;
   a.click();
   toast(`Exported conversation as .${format}`, 'ok');
+}
+
+function exportCurrentChatPDF() {
+  const chat = activeChat;
+  if (!chat || !chat.msgs?.length) return;
+  const escHtml = s => String(s || '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const renderBody = txt => {
+    if (typeof marked !== 'undefined') {
+      try { return (window.DOMPurify ? DOMPurify : { sanitize: x => x }).sanitize(marked.parse(String(txt || ''))); } catch (e) {}
+    }
+    return `<pre>${escHtml(txt)}</pre>`;
+  };
+  const rows = chat.msgs.map(m => {
+    const isUser = m.role === 'user';
+    return `<div class="msg ${isUser ? 'user' : 'bot'}">
+      <div class="who">${isUser ? '👤 User' : '⚡ Bre AI'}</div>
+      <div class="body">${renderBody(m.content)}</div>
+    </div>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escHtml(chat.title || 'Bre AI Conversation')}</title>
+  <style>
+    body{font-family:'Segoe UI',Roboto,Arial,sans-serif;color:#111;margin:32px;line-height:1.55;}
+    h1{font-size:20px;margin:0 0 4px;}
+    .meta{color:#666;font-size:12px;margin-bottom:20px;}
+    .msg{margin:0 0 16px;padding:12px 14px;border-radius:10px;page-break-inside:avoid;}
+    .msg.user{background:#eef4ff;border:1px solid #d6e2ff;}
+    .msg.bot{background:#f6f6f7;border:1px solid #e5e5e8;}
+    .who{font-weight:700;font-size:12px;color:#444;margin-bottom:6px;}
+    pre{background:#0f172a;color:#e2e8f0;padding:10px;border-radius:6px;overflow:auto;font-size:11px;}
+    code{background:#eceff3;padding:1px 4px;border-radius:4px;font-size:12px;}
+    img{max-width:100%;}
+    table{border-collapse:collapse;} td,th{border:1px solid #ccc;padding:4px 8px;}
+  </style></head><body>
+  <h1>${escHtml(chat.title || 'Bre AI Conversation')}</h1>
+  <div class="meta">Diekspor dari Bre AI · ${new Date().toLocaleString('id-ID')}</div>
+  ${rows}
+  </body></html>`;
+
+  const w = window.open('', '_blank');
+  if (!w) return toast('Popup diblokir. Izinkan popup untuk ekspor PDF.', 'err');
+  w.document.write(html);
+  w.document.close();
+  setTimeout(() => { try { w.focus(); w.print(); } catch (e) {} }, 350);
+  toast('Pilih "Save as PDF" pada dialog cetak', 'ok');
 }
 
 function toggleIncognito() {
@@ -560,7 +609,7 @@ async function executeBotGeneration(targetBotIdx = null, searchResults = [], gen
 
   const genStartTime = performance.now();
 
-  const msgs = chatToUse.msgs.slice(0, botIdx).slice(-100).map(m => ({
+  const msgs = chatToUse.msgs.slice(0, botIdx).slice(-Math.max(2, Math.min(contextMessages, 200))).map(m => ({
     role: m.role,
     content: m.apiContent || m.content
   }));

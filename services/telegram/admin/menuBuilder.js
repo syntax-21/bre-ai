@@ -115,14 +115,17 @@ function buildMainMenuMarkup(cfg) {
       ],
       [
         { text: '🌅 Motivasi Harian', callback_data: 'adm_motivation' },
-        { text: '🧰 Command Center', callback_data: 'adm_commands' }
+        { text: '🧾 Audit Log', callback_data: 'adm_audit' }
+      ],
+      [
+        { text: '🧰 Command Center', callback_data: 'adm_commands' },
+        { text: '🔄 Refresh Panel', callback_data: 'adm_main' }
       ],
       [
         { text: '📦 Backup & Maintenance', callback_data: 'adm_backup' },
         { text: '📢 Broadcast Pesan', callback_data: 'adm_broadcast' }
       ],
       [
-        { text: '🔄 Refresh Panel', callback_data: 'adm_main' },
         { text: '❌ Tutup Panel', callback_data: 'adm_close' }
       ]
     ]

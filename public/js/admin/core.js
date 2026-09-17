@@ -11,6 +11,7 @@ let metricsTimer = null;
 const TAB_TITLES = {
   'tab9Router': 'Overview',
   'tabDetails': 'Details',
+  'tabAudit': 'Audit Log',
   'tabProviders': '🔌 Endpoints & Routing Strategy',
   'tabEngine': '⚙️ Global AI Engine & Fallback',
   'tabSecurity': '🛡️ Keamanan, Rate Limit & Access',
@@ -44,6 +45,7 @@ function switchTab(tabId, btn) {
     });
   }
   if (tabId === 'tabDetails') load9RouterDetails();
+  if (tabId === 'tabAudit') loadAuditLogs();
   if (tabId === 'tabTester') updateTestModelDropdown();
 if (tabId === 'tabTelegram') {
     loadTelegramStatus();

@@ -591,6 +591,53 @@ function clearResponseCache() {
   responseCache.clear();
 }
 
+const AUDIT_LOGS_PATH = path.join(process.env.BRE_DATA_DIR || (process.env.VERCEL ? path.join(os.tmpdir(), 'bre-data') : path.join(process.cwd(), 'data')), 'admin_audit_logs.json');
+const MAX_AUDIT_LOGS = 200;
+let auditLogs = [];
+
+function loadAuditLogs() {
+  try {
+    if (fs.existsSync(AUDIT_LOGS_PATH)) {
+      const data = JSON.parse(fs.readFileSync(AUDIT_LOGS_PATH, 'utf8'));
+      if (Array.isArray(data)) auditLogs = data.slice(0, MAX_AUDIT_LOGS);
+    }
+  } catch (e) { auditLogs = []; }
+}
+loadAuditLogs();
+
+function saveAuditLogs() {
+  try {
+    const d = path.dirname(AUDIT_LOGS_PATH);
+    if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true });
+    fs.writeFileSync(AUDIT_LOGS_PATH, JSON.stringify(auditLogs.slice(0, MAX_AUDIT_LOGS), null, 2), 'utf8');
+  } catch (e) {}
+}
+
+function logAdminAction(action, details = {}, ip = '127.0.0.1', user = 'admin') {
+  const item = {
+    id: 'aud_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+    timestamp: new Date().toISOString(),
+    timeMs: Date.now(),
+    action: String(action || 'unknown'),
+    details: typeof details === 'object' ? details : { info: String(details) },
+    ip: String(ip || '127.0.0.1'),
+    user: String(user || 'admin')
+  };
+  auditLogs.unshift(item);
+  if (auditLogs.length > MAX_AUDIT_LOGS) auditLogs.pop();
+  saveAuditLogs();
+  return item;
+}
+
+function getAuditLogs() {
+  return auditLogs.map(a => ({ ...a }));
+}
+
+function clearAuditLogs() {
+  auditLogs.length = 0;
+  saveAuditLogs();
+}
+
 module.exports = {
   MODEL_PRICING,
   calculateCost,
@@ -603,5 +650,8 @@ module.exports = {
   checkBlacklist,
   getCachedResponse,
   setCachedResponse,
-  clearResponseCache
+  clearResponseCache,
+  logAdminAction,
+  getAuditLogs,
+  clearAuditLogs
 };

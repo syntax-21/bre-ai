@@ -1,4 +1,4 @@
-const { sanitizeOutput } = require('../../api/_shared');
+const { sanitizeOutput } = require('./prompt');
 
 // ========================================================
 // Bre AI Multilingual Ownership & Identity Enforcement Layer
